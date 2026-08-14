@@ -27,6 +27,7 @@
 #include "net_multicast_engine.h"
 #include "mms_mem_mgr.h"
 #include "mms_mem_allocator.h"
+#include "mms_notify_shm_server.h"
 #include "mms_cache.h"
 #include "cm.h"
 
@@ -62,18 +63,14 @@ public:
     BResult Delete(DeleteItems *itemList, uint32_t itemNum);
     BResult Replace(ReplaceItems *itemList, uint32_t itemNum);
 
-    BResult GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum);
-    BResult GetValuesByRange(const char *start, const char *end, ValueInfo **valueInfoItems, uint64_t *itemNum);
-    BResult BatchDeleteByRange(const char *start, const char *end);
-    void FreeResources(ValueInfo **valueInfoItems, uint64_t itemNum);
-
     void NotifyServiceable(bool serviceable);
     void NotifyPtMigrate(uint16_t ptId);
-    void RemoveNotifyClient(uint32_t pid);
 
     static thread_local std::vector<DecodePutItem> itemListPut;
     static thread_local std::vector<DecodeUpdateItem> itemListUpdate;
     static thread_local std::vector<DecodeDeleteItem> itemListDelete;
+    static thread_local std::vector<NotifyShmPublishItem> notifyPutItems;
+    static thread_local std::vector<NotifyShmPublishItem> notifyDeleteItems;
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
@@ -81,7 +78,7 @@ private:
     void RegisterOpcode();
     BResult HandleBasic(ServiceContext &ctx);
     BResult HandleServiceable(ServiceContext &ctx);
-    BResult HandleNotifySubscribe(ServiceContext &ctx);
+    bool IsIoCtxRequestValid(const IoCtrlRequest &req, uint64_t minLength) const;
 
     BResult HandlePut(ServiceContext &ctx);
     BResult HandlePutDefImpl(void *ioBuff, uint32_t ioLen);
@@ -110,13 +107,6 @@ private:
     void DeleteRemote(uint16_t remoteId[], int32_t remoteNum, void *ioBuff, uint32_t ioLen, Callback &callback);
     BResult DeleteLocal(void *ioBuff, uint32_t ioLen, bool notifyDataChange = false);
 
-    BResult HandleRangeDeleteDefImpl(void *ioBuff, uint32_t ioLen);
-    BResult HandleRangeDeleteMultiImpl(void *ioBuff, uint32_t ioLen);
-    BResult HandleRangeDeleteRemote(ServiceContext &ctx);
-    BResult HandleRangeDeleteRemoteMulti(ServiceContext &ctx);
-    void RangeDeleteRemote(uint16_t remoteId[], int32_t remoteNum, void *ioBuff, uint32_t ioLen, Callback &callback);
-    BResult RangeDeleteLocal(void *ioBuff, uint32_t ioLen);
-
     BResult HandleReplace(ServiceContext &ctx);
     BResult HandleReplaceDefImpl(void *ioBuff, uint32_t ioLen);
     BResult HandleReplaceMultiImpl(void *ioBuff, uint32_t ioLen);
@@ -136,17 +126,14 @@ private:
                          void **data, uint32_t &len);
     BResult PutSeqNoData(uint64_t negoSeqNo, uint16_t negoLocId, CmPtInfo &ptInfo, uint16_t groupIndex,
                          void *data, uint32_t len);
+    void ReplyPeerRequest(ServiceContext &ctx, int32_t retCode, void *resp, uint32_t respSize);
     BResult HandleGetSeqNoList(ServiceContext &ctx);
     BResult HandleGetSeqNoData(ServiceContext &ctx);
     BResult HandleUpdatePtVersion(ServiceContext &ctx);
 
-    BResult HandlePrefixSearch(ServiceContext &ctx);
-    BResult HandleRangeSearch(ServiceContext &ctx);
-    BResult HandleRangeDelete(ServiceContext &ctx);
-    BResult HandleSearch(ServiceContext &ctx, MmsOpCode opCode);
-    BResult ReplySearchResult(ServiceContext &ctx, ValueInfo *valueInfoItems, uint64_t itemNum);
-    void AddNotifyClient(uint32_t pid, uint32_t groupIndex);
-    void NotifyRemoteClientBatch(const NotifyEvent *events, uint16_t eventNum);
+    void AppendNotifyItem(std::vector<NotifyShmPublishItem> &items, uint32_t &itemNum,
+        const char *key, uint16_t keyLen, OperateType opType);
+    void NotifyDataChangeBatch(const NotifyShmPublishItem *items, uint32_t itemNum);
 
 private:
     bool mStarted = false;
@@ -161,12 +148,11 @@ private:
     CmPtr mCm = nullptr;
     MmsNotifyDispatcher *mNotifyDispatcher = nullptr;
     bool mDataChangeCallbackSwitch = false;
-    bool mArtQuerySwitch = false;
-    bool mRemoteNotifyEnable = false;
-    std::atomic<uint32_t> mNotifyClientPid{0};
-    std::atomic<uint32_t> mNotifyClientGroupIndex{0};
+    bool mSeparateMode = false;
+    MmsNotifyShmPublisher mNotifyShmPublisher;
     uint32_t mIoTimeOut = NO_60;
     uint32_t mIoCtxBuffLen;
+    uint64_t mIoCtxMemSize = 0;
 
     static uint32_t mMaxPutItemNum;
     static uint32_t mMaxUpdateItemNum;

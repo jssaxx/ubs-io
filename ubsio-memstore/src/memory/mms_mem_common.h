@@ -26,7 +26,7 @@
 namespace ock {
 namespace mms {
 
-constexpr uint64_t META_SHM_IOCTX_SIZE = 256 * 1024 * 1024;
+constexpr uint64_t META_SHM_IOCTX_SIZE = 512 * 1024 * 1024;
 constexpr uint64_t META_SHM_INDEX_SIZE = 64 * 1024 * 1024;
 constexpr uint16_t MAX_BLOCK_NUM = 4;
 

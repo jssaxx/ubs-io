@@ -57,14 +57,13 @@ inline static bool KeyValid(const char *key, uint16_t keyLen)
     return true;
 }
 
-inline static bool KeyValid(const char *key)
+inline static bool GetItemValid(const GetItems &item)
 {
-    return key != nullptr && strlen(key) != 0 && strlen(key) < MAX_KEY_SIZE;
-}
-
-inline static bool RangeValid(const char *start, const char *end)
-{
-    return KeyValid(start) && KeyValid(end) && strcmp(start, end) <= 0;
+    if (UNLIKELY(!KeyValid(item.key, item.keyLen) || item.value == nullptr || item.realLength == nullptr ||
+                 item.result == nullptr)) {
+        return false;
+    }
+    return *item.value == nullptr || item.length != 0;
 }
 
 CResult Mms::Initialize(const MmsOptions &options, ServiceCallback service)
@@ -76,13 +75,13 @@ CResult Mms::Initialize(const MmsOptions &options, ServiceCallback service)
     return ToCResult(gClient->Initialize(options, service));
 }
 
-CResult Mms::RegisterCallback(NotifyCallback callback)
+CResult Mms::RegisterCallback(NotifyCallback callback, void *lpUserData)
 {
     if (UNLIKELY(gClient == nullptr)) {
         CLIENT_LOG_ERROR("Get client instance failed.");
         return RET_MMS_ERROR;
     }
-    return ToCResult(gClient->RegisterNotifyCallback(callback));
+    return ToCResult(gClient->RegisterNotifyCallback(callback, lpUserData));
 }
 
 void Mms::Exit()
@@ -122,9 +121,7 @@ CResult Mms::Get(GetItems *itemList, uint32_t itemNum)
     }
 
     for (uint32_t i = 0; i < itemNum; i++) {
-        if (UNLIKELY(!KeyValid(itemList[i].key, itemList[i].keyLen) || itemList[i].length == 0 ||
-                     itemList[i].value == nullptr || itemList[i].realLength == nullptr ||
-                     itemList[i].result == nullptr)) {
+        if (UNLIKELY(!GetItemValid(itemList[i]))) {
             return RET_MMS_EPERM;
         }
         *itemList[i].result = static_cast<int32_t>(MMS_OK);
@@ -136,51 +133,6 @@ CResult Mms::Get(GetItems *itemList, uint32_t itemNum)
     }
     MMS_TRACE_END(SDK_TRACE_GET, ret);
     return ret;
-}
-
-CResult Mms::GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum)
-{
-    if (UNLIKELY(!KeyValid(prefix) || valueInfoItems == nullptr || itemNum == nullptr)) {
-        return RET_MMS_EPERM;
-    }
-
-    MMS_TRACE_START(SDK_TRACE_PREFIX_SEARCH);
-    CResult ret = ToCResult(gClient->GetValuesByPrefix(prefix, valueInfoItems, itemNum));
-    MMS_TRACE_END(SDK_TRACE_PREFIX_SEARCH, ret);
-    return ret;
-}
-
-CResult Mms::GetValuesByRange(const char *start, const char *end, ValueInfo **valueInfoItems, uint64_t *itemNum)
-{
-    if (UNLIKELY(!RangeValid(start, end) || valueInfoItems == nullptr || itemNum == nullptr)) {
-        return RET_MMS_EPERM;
-    }
-
-    MMS_TRACE_START(SDK_TRACE_RANGE_SEARCH);
-    CResult ret = ToCResult(gClient->GetValuesByRange(start, end, valueInfoItems, itemNum));
-    MMS_TRACE_END(SDK_TRACE_RANGE_SEARCH, ret);
-    return ret;
-}
-
-CResult Mms::BatchDeleteByRange(const char *start, const char *end)
-{
-    if (UNLIKELY(!RangeValid(start, end))) {
-        return RET_MMS_EPERM;
-    }
-
-    MMS_TRACE_START(SDK_TRACE_RANGE_DELETE);
-    CResult ret = ToCResult(gClient->BatchDeleteByRange(start, end));
-    MMS_TRACE_END(SDK_TRACE_RANGE_DELETE, ret);
-    return ret;
-}
-
-void Mms::FreeResources(ValueInfo **valueInfoItems, uint64_t itemNum)
-{
-    if (valueInfoItems == nullptr || *valueInfoItems == nullptr || itemNum == 0) {
-        return;
-    }
-
-    gClient->FreeResources(valueInfoItems, itemNum);
 }
 
 CResult Mms::Update(UpdateItems *itemList, uint32_t itemNum)
@@ -267,9 +219,9 @@ CResult MmsInitialize(const MmsOptions *options, ServiceCallback service)
     return ock::mms::Mms::Initialize(*options, service);
 }
 
-CResult MmsRegisterNotifyCallback(NotifyCallback callback)
+CResult MmsRegisterNotifyCallback(NotifyCallback callback, void *lpUserData)
 {
-    return ock::mms::Mms::RegisterCallback(callback);
+    return ock::mms::Mms::RegisterCallback(callback, lpUserData);
 }
 
 void MmsExit()
@@ -287,21 +239,6 @@ CResult MmsGet(GetItems *itemList, uint32_t itemNum)
     return ock::mms::Mms::Get(itemList, itemNum);
 }
 
-CResult MmsGetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum)
-{
-    return ock::mms::Mms::GetValuesByPrefix(prefix, valueInfoItems, itemNum);
-}
-
-CResult MmsGetValuesByRange(const char *start, const char *end, ValueInfo **valueInfoItems, uint64_t *itemNum)
-{
-    return ock::mms::Mms::GetValuesByRange(start, end, valueInfoItems, itemNum);
-}
-
-void MmsFreeResources(ValueInfo **valueInfoItems, uint64_t itemNum)
-{
-    return ock::mms::Mms::FreeResources(valueInfoItems, itemNum);
-}
-
 CResult MmsUpdate(UpdateItems *itemList, uint32_t itemNum)
 {
     return ock::mms::Mms::Update(itemList, itemNum);
@@ -310,11 +247,6 @@ CResult MmsUpdate(UpdateItems *itemList, uint32_t itemNum)
 CResult MmsDelete(DeleteItems *itemList, uint32_t itemNum)
 {
     return ock::mms::Mms::Delete(itemList, itemNum);
-}
-
-CResult MmsBatchDeleteByRange(const char *start, const char *end)
-{
-    return ock::mms::Mms::BatchDeleteByRange(start, end);
 }
 
 CResult MmsReplace(ReplaceItems *itemList, uint32_t itemNum)

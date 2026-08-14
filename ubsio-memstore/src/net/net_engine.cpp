@@ -98,8 +98,7 @@ static BResult AddWorkerGroups(UBSHcomService *service, const WorkerGroupConfig 
     return MMS_OK;
 }
 
-static BResult AddExtraIpcWorkerGroups(UBSHcomService *service, const WorkerGroupConfig &ipcConfig,
-                                       const WorkerGroupConfig &notifyConfig)
+static BResult AddExtraIpcWorkerGroups(UBSHcomService *service, const WorkerGroupConfig &ipcConfig)
 {
     WorkerGroupConfig extraIpcConfig;
     if (ipcConfig.groups.size() > NO_1) {
@@ -107,15 +106,10 @@ static BResult AddExtraIpcWorkerGroups(UBSHcomService *service, const WorkerGrou
         extraIpcConfig.cpuSets.assign(ipcConfig.cpuSets.begin() + NO_1, ipcConfig.cpuSets.end());
     }
 
-    auto ret = AddWorkerGroups(service, extraIpcConfig, NO_1);
-    if (ret != MMS_OK) {
-        return ret;
-    }
-    return AddWorkerGroups(service, notifyConfig, static_cast<uint32_t>(ipcConfig.groups.size()));
+    return AddWorkerGroups(service, extraIpcConfig, NO_1);
 }
 
-BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32_t queueSize, NetLogFunc func,
-    NetMemList &memList)
+BResult NetEngine::Initialize(const NetEngineInitOptions &options)
 {
     std::lock_guard<std::mutex> guard(mMutex);
     if (mStarted) {
@@ -123,10 +117,10 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
         return MMS_OK;
     }
 
-    mMemList = memList;
+    mMemList = options.memList;
 
-    NetLog::Instance()->SetLogFuncFunc(func);
-    mTimeout = timeoutSec;
+    NetLog::Instance()->SetLogFuncFunc(options.logFunc);
+    mTimeout = options.timeoutSec;
 
     mChannelMgr = MakeRef<NetChannelMgr>();
     if (mChannelMgr == nullptr) {
@@ -135,18 +129,21 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
     }
     mChannelMgr->Initialize();
 
-    mConnector = MakeRef<NetConnector>(this);
-    if (mConnector == nullptr) {
-        NET_LOG_ERROR("Make net connector failed.");
-        return MMS_ALLOC_FAIL;
-    }
-    BResult ret = mConnector->Start();
-    if (ret != MMS_OK) {
-        NET_LOG_ERROR("Failed to start net connector, ret:" << ret << ".");
-        return ret;
+    BResult ret = MMS_OK;
+    if (options.startConnector) {
+        mConnector = MakeRef<NetConnector>(this);
+        if (mConnector == nullptr) {
+            NET_LOG_ERROR("Make net connector failed.");
+            return MMS_ALLOC_FAIL;
+        }
+        ret = mConnector->Start();
+        if (ret != MMS_OK) {
+            NET_LOG_ERROR("Failed to start net connector, ret:" << ret << ".");
+            return ret;
+        }
     }
 
-    mReqExecutorNum = coreThreadNum;
+    mReqExecutorNum = options.startRequestExecutor ? options.coreThreadNum : 0;
     if (mReqExecutorNum != 0) {
         mRequestExecutor = MakeRef<NetExecutorPool>("NetExecutor");
         if (mRequestExecutor == nullptr) {
@@ -154,7 +151,7 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
             return MMS_ALLOC_FAIL;
         }
 
-        ret = mRequestExecutor->Start(mReqExecutorNum, queueSize);
+        ret = mRequestExecutor->Start(mReqExecutorNum, options.queueSize);
         if (ret != MMS_OK) {
             NET_LOG_ERROR("Failed to start request executor, ret:" << ret << ".");
             return ret;
@@ -407,8 +404,7 @@ BResult NetEngine::PrepareIpcTls(const NetOptions &opt)
     return result;
 }
 
-BResult NetEngine::AddIpcWorkerGroups(bool isOobSvr, const WorkerGroupConfig &ipcConfig,
-                                      const WorkerGroupConfig &notifyConfig)
+BResult NetEngine::AddIpcWorkerGroups(bool isOobSvr, const WorkerGroupConfig &ipcConfig)
 {
     if (!isOobSvr) {
         return MMS_OK;
@@ -424,7 +420,7 @@ BResult NetEngine::AddIpcWorkerGroups(bool isOobSvr, const WorkerGroupConfig &ip
         return MMS_OK;
     }
 
-    auto ret = AddExtraIpcWorkerGroups(mIpcService, ipcConfig, notifyConfig);
+    auto ret = AddExtraIpcWorkerGroups(mIpcService, ipcConfig);
     if (ret != MMS_OK) {
         NET_LOG_ERROR("Add extra ipc worker groups failed, ret:" << ret << ".");
     }
@@ -462,17 +458,11 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
     WorkerGroupConfig ipcConfig;
     auto ret = SplitWorkerGroupConfig(opt.workerGroups, opt.workerGroupsCpuSet, ipcConfig, "ipc");
     ChkTrue(ret == MMS_OK, ret, "Split ipc worker group config failed, ret:" << ret << ".");
-    WorkerGroupConfig notifyConfig;
-    if (opt.notifyWorkerGroupsEnable) {
-        ret = SplitWorkerGroupConfig(opt.notifyWorkerGroups, opt.notifyWorkerGroupsCpuSet, notifyConfig, "notify");
-        ChkTrue(ret == MMS_OK, ret, "Split notify worker group config failed, ret:" << ret << ".");
-    }
-
     ret = CreateIpcService(opt, isOobSvr, ipcConfig);
     ChkTrue(ret == MMS_OK, ret, "Create ipc service failed, ret:" << ret << ".");
     ret = PrepareIpcTls(opt);
     ChkTrue(ret == MMS_OK, ret, "Prepare ipc tls failed, ret:" << ret << ".");
-    ret = AddIpcWorkerGroups(isOobSvr, ipcConfig, notifyConfig);
+    ret = AddIpcWorkerGroups(isOobSvr, ipcConfig);
     ChkTrue(ret == MMS_OK, ret, "Add ipc worker groups failed, ret:" << ret << ".");
 
     return StartCreatedIpcService(opt, isOobSvr);
@@ -682,26 +672,41 @@ int32_t NetEngine::RequestReceived(ServiceContext &ctx)
         NET_LOG_ERROR("Net request executor not ready.");
         return MMS_NOT_READY;
     }
-    if (UNLIKELY(ctx.OpCode() >= MAX_NEW_REQ_HANDLER)) {
-        NET_LOG_ERROR("Net engine received a message with invalid opCode " << ctx.OpCode());
+    if (UNLIKELY(ctx.MessageData() == nullptr || ctx.MessageDataLen() < sizeof(ReqHead))) {
+        NET_LOG_ERROR("Net engine received an invalid message.");
         return MMS_ERR;
     }
-    auto &handler = mHandlers[ctx.OpCode()];
+
+    auto head = static_cast<ReqHead *>(ctx.MessageData());
+    if (UNLIKELY(head->opcode >= MAX_NEW_REQ_HANDLER)) {
+        NET_LOG_ERROR("Net engine received a message with invalid opCode " << head->opcode << ".");
+        return MMS_ERR;
+    }
+
+    auto &handler = mHandlers[head->opcode];
     if (UNLIKELY(handler == nullptr)) {
-        NET_LOG_ERROR("Net engine received a message with invalid opCode " << ctx.OpCode() <<
-            " as no handler registered");
+        NET_LOG_ERROR("Net engine received a message with unregistered opCode " << head->opcode << ".");
         return MMS_ERR;
     }
-    auto ret = mRequestExecutor->AddTask(handler, ctx);
-    return ret;
+    return mRequestExecutor->AddTask(handler, ctx);
 }
 
 int32_t NetEngine::RequestInnerReceived(ServiceContext &ctx)
 {
-    ReqHead *head = (ReqHead *)ctx.MessageData();
+    if (UNLIKELY(ctx.MessageData() == nullptr || ctx.MessageDataLen() < sizeof(ReqHead))) {
+        NET_LOG_ERROR("Net engine received an invalid message.");
+        return MMS_ERR;
+    }
+
+    auto head = static_cast<ReqHead *>(ctx.MessageData());
+    if (UNLIKELY(head->opcode >= MAX_NEW_REQ_HANDLER)) {
+        NET_LOG_ERROR("Net engine received a message with invalid opCode " << head->opcode << ".");
+        return MMS_ERR;
+    }
+
     auto &handler = mHandlers[head->opcode];
     if (UNLIKELY(handler == nullptr)) {
-        NET_LOG_ERROR("Net engine received a message with invalid opCode " << head->opcode << ".");
+        NET_LOG_ERROR("Net engine received a message with unregistered opCode " << head->opcode << ".");
         return MMS_ERR;
     }
 

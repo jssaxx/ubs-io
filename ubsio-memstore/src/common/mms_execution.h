@@ -172,6 +172,11 @@ public:
         mCpuSetStartIdx = idx;
     }
 
+    inline void SetCpuIds(const std::vector<uint16_t> &cpuIds)
+    {
+        mCpuIds = cpuIds;
+    }
+
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
@@ -184,13 +189,16 @@ private:
           mStartedThreadNum(0)
     {}
 
-    void RunInThread(int16_t cpuId);
+    inline int32_t GetThreadCpuId(uint16_t threadIndex) const;
+    bool CheckCpuIds() const;
+    void RunInThread(int32_t cpuId);
     void DoRunnable(bool &flag);
 
 private:
     RingBufferBlockingQueue<Runnable *> mRunnableQueue;
     uint16_t mThreadNum = 0;
     int16_t mCpuSetStartIdx = -1;
+    std::vector<uint16_t> mCpuIds;
     std::vector<std::thread *> mThreads;
 
     std::atomic<bool> mStarted;
@@ -208,6 +216,10 @@ inline bool ExecutorService::Start()
         return true;
     }
 
+    if (!CheckCpuIds()) {
+        return false;
+    }
+
     /* init ring buffer blocking queue */
     int result = 0;
     result = mRunnableQueue.Initialize();
@@ -217,7 +229,7 @@ inline bool ExecutorService::Start()
     }
 
     for (uint16_t i = 0; i < mThreadNum; i++) {
-        auto cpuId = mCpuSetStartIdx < 0 ? -1 : mCpuSetStartIdx + i;
+        int32_t cpuId = GetThreadCpuId(i);
         std::thread *thr = nullptr;
         thr = new (std::nothrow) std::thread(&ExecutorService::RunInThread, this, cpuId);
         if (thr == nullptr) {
@@ -267,6 +279,28 @@ inline void ExecutorService::Stop()
     mRunnableQueue.UnInitialize();
 }
 
+inline int32_t ExecutorService::GetThreadCpuId(uint16_t threadIndex) const
+{
+    if (!mCpuIds.empty()) {
+        return static_cast<int32_t>(mCpuIds[threadIndex]);
+    }
+    return mCpuSetStartIdx < 0 ? -1 : static_cast<int32_t>(mCpuSetStartIdx) + static_cast<int32_t>(threadIndex);
+}
+
+inline bool ExecutorService::CheckCpuIds() const
+{
+    if (mCpuIds.empty()) {
+        return true;
+    }
+
+    if (mCpuIds.size() == static_cast<size_t>(mThreadNum)) {
+        return true;
+    }
+
+    LOG_ERROR("Executor cpu count mismatch, cpu count:" << mCpuIds.size() << ", thread num:" << mThreadNum << ".");
+    return false;
+}
+
 inline void ExecutorService::DoRunnable(bool &flag)
 {
     try {
@@ -292,7 +326,7 @@ inline void ExecutorService::DoRunnable(bool &flag)
     }
 }
 
-inline void ExecutorService::RunInThread(int16_t cpuId)
+inline void ExecutorService::RunInThread(int32_t cpuId)
 {
     bool runFlag = true;
     uint16_t threadIndex = mStartedThreadNum++;
@@ -302,19 +336,19 @@ inline void ExecutorService::RunInThread(int16_t cpuId)
     if (cpuId != -1) {
         cpu_set_t cpuSet;
         CPU_ZERO(&cpuSet);
-        CPU_SET(cpuId, &cpuSet);
+        CPU_SET(static_cast<int>(cpuId), &cpuSet);
         if (pthread_setaffinity_np(pthread_self(), sizeof(cpuSet), &cpuSet) != 0) {
-            LOG_WARN("Failed to bind executor thread" << threadName << " << to cpu " << cpuId);
+            LOG_WARN("Failed to bind executor thread, name:" << threadName << ", cpu:" << cpuId << ".");
         }
     }
 
     pthread_setname_np(pthread_self(), threadName.c_str());
-    LOG_TRACE("Thread is started for executor service <" << threadName << "> cpuId " << cpuId);
+    LOG_TRACE("Thread is started for executor service <" << threadName << ">, cpuId:" << cpuId << ".");
 
     while (runFlag) {
         DoRunnable(runFlag);
     }
-    LOG_INFO("Thread for executor service <" << threadName << "> cpuId " << cpuId << "> exiting");
+    LOG_INFO("Thread for executor service <" << threadName << ">, cpuId:" << cpuId << " exiting.");
 }
 }
 }

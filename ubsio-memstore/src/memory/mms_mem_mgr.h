@@ -15,6 +15,7 @@
 
 #include <atomic>
 #include <unordered_map>
+#include <unistd.h>
 #include "mms_ref.h"
 #include "mms_lock.h"
 #include "mms_err.h"
@@ -116,6 +117,7 @@ private:
     MmapMode mAreaMode[MMAP_AREA_BUTT];
 
     bool mIsCreated = false;
+    bool mNeedPrefault = false;
 
     DEFINE_REF_COUNT_VARIABLE;
 };

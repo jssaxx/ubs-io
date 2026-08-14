@@ -12,6 +12,8 @@
 #ifndef NET_CONNECTOR_H
 #define NET_CONNECTOR_H
 
+#include <condition_variable>
+
 #include "net_common.h"
 #include "mms_execution.h"
 

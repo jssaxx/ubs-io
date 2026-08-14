@@ -33,6 +33,7 @@
       "mms.net.ipc.worker.groups.cpuset": "1-1,3-3",
       "mms.net.publisher.worker.cpuset": "10-17",
       "mms.net.subscriber.worker.cpuset": "18-18",
+      "mms.net.subscriber.connect.count": "1",
       "mms.net.request.executor.thread.num": "8",
       "mms.net.request.executor.queue.size": "1024",
       "mms.net.message.max_buff_size": "70",

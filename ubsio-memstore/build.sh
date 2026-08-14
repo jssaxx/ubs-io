@@ -12,7 +12,7 @@
 #
 
 usage() {
-    echo "usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--cli=diagnose] [--ut=UT] [--tp=tracepoint]"
+    echo "usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--cli=diagnose] [--ut=UT] [--tp=tracepoint] [--zk]"
     echo "build_type: [debug, release, clean]"
     echo "examples:"
     echo " 1 ./build.sh -t release [--cli] // 禁止添加tp功能，对外发布包禁止添加cli功能"
@@ -28,6 +28,7 @@ BUILD_DIR=${PROJ_DIR}/build
 BUILD_UT=OFF
 CLI_FLAG=OFF
 TP_FLAG=OFF
+ZK_FLAG=OFF
 BUILD_TYPE=debug
 arch=$(uname -m)
 if [ ! -d "${BUILD_DIR}" ]; then
@@ -60,6 +61,9 @@ while true; do
         --tp )
             TP_FLAG=ON
             shift ;;
+        --zk )
+            ZK_FLAG=ON
+            shift ;;
 		    -h | -help )
             usage
             exit 0
@@ -68,6 +72,13 @@ while true; do
             break;;
     esac
 done
+
+has_system_zookeeper()
+{
+    [[ -f /usr/include/zookeeper/zookeeper.h ]] || return 1
+    ldconfig -p 2>/dev/null | grep -q 'libzookeeper_mt.so' && return 0
+    [[ -e /usr/lib64/libzookeeper_mt.so || -e /usr/lib/libzookeeper_mt.so ]]
+}
 
 if [ "$BUILD_TYPE" == "clean" ]; then
     cd $BUILD_DIR
@@ -82,6 +93,11 @@ if [ "$BUILD_TYPE" == "clean" ]; then
     echo "clean mmscore successful."
     rm -rf ${PROJ_DIR}/output
     exit 0
+fi
+
+if [[ "$ZK_FLAG" != "ON" ]] && ! has_system_zookeeper; then
+    echo "system zookeeper not found, build bundled zookeeper"
+    ZK_FLAG=ON
 fi
 
 if [ "$BUILD_TYPE" == "release" ]; then
@@ -108,6 +124,12 @@ else
 	  CMAKE_FLAGS+="-DDEBUG_UT=OFF "
 fi
 
+if [[ "$ZK_FLAG" == "ON" ]]; then
+    CMAKE_FLAGS+="-DOPEN_ZK=ON "
+else
+    CMAKE_FLAGS+="-DOPEN_ZK=OFF "
+fi
+
 CPU_PROCESSOR_NUM=$(($(grep processor /proc/cpuinfo | wc -l) -2))
 CMAKE_CMD="cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE $CMAKE_FLAGS $PROJ_DIR"
 BUILD_CMD="make install -j 16"
@@ -123,9 +145,11 @@ $BUILD_CMD || {
 	  exit 1
 }
 cd ${PROJ_DIR}/output
-\cp 3rdparty/zookeeper/lib/* mms/lib/
 if compgen -G "3rdparty/ubs-comm/lib/libhcom.so*" > /dev/null; then
     \cp -d 3rdparty/ubs-comm/lib/libhcom.so* mms/lib/
+fi
+if [[ "$ZK_FLAG" == "ON" ]] && compgen -G "3rdparty/zookeeper/lib/libzookeeper_mt.so*" > /dev/null; then
+    \cp -d 3rdparty/zookeeper/lib/libzookeeper_mt.so* mms/lib/
 fi
 \cp ./3rdparty/libboundscheck/lib/libboundscheck.so mms/lib/
 \cp -r ../scripts mms/.
