@@ -822,7 +822,12 @@ void NetEngine::FillConnectOption(ConnectMode mode, ConnectInfo &info, uint32_t 
     op.serverGroupId = static_cast<uint8_t>(groupIndex);
     prefix = (oneSide ? CONN_ONESIDE_PAYLOAD_PREFIX : CONN_PAYLOAD_PREFIX) + "-" +
         std::to_string(groupIndex) + "-";
-    if (info.isSelfPoll || oneSide) {
+    bool useSelfPoll = info.isSelfPoll || oneSide;
+    // TCP one-side progress depends on HCOM's event worker processing inbound data and acknowledgements.
+    if (mode == CONNECT_RPC && mRpcOptions.protocol == ServiceProtocol::TCP) {
+        useSelfPoll = false;
+    }
+    if (useSelfPoll) {
         op.mode = UBSHcomClientPollingMode::SELF_POLL_BUSY;
     }
 
