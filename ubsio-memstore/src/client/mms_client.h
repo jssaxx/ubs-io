@@ -92,14 +92,6 @@ public:
         return mKvClient->MmsReplace(itemList, itemNum);
     }
 
-    BResult IsRemoteKey(const char *key, bool &remoteKey)
-    {
-        if (UNLIKELY(!mServiceable)) {
-            return MMS_NOT_READY;
-        }
-        return mKvClient->IsRemoteKey(key, remoteKey);
-    }
-
     BResult MmsStartCatchUpTask(void);
     BResult RegisterNotifyCallback(NotifyCallback callback, void *lpUserData);
 

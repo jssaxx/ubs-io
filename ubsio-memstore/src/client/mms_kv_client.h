@@ -82,8 +82,6 @@ public:
 
     BResult MmsReplace(ReplaceItems *itemList, uint32_t itemNum);
 
-    BResult IsRemoteKey(const char *key, bool &remoteKey);
-
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:

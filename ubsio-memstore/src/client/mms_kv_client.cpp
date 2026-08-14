@@ -793,21 +793,6 @@ BResult MmsKvClient::ResolveGetRouteWithRefresh(const char *key, uint16_t keyLen
     return ResolveGetRoute(LoadRouteView(), key, keyLen, localNid, targetNid, ptId, ptv, localOwner);
 }
 
-BResult MmsKvClient::IsRemoteKey(const char *key, bool &remoteKey)
-{
-    uint16_t localNid = INVALID_NID;
-    uint16_t targetNid = INVALID_NID;
-    uint16_t ptId = 0;
-    uint64_t ptv = 0;
-    bool localOwner = false;
-    uint16_t keyLen = key == nullptr ? 0 : static_cast<uint16_t>(strnlen(key, MAX_KEY_SIZE));
-    auto ret = ResolveGetRouteWithRefresh(key, keyLen, localNid, targetNid, ptId, ptv, localOwner);
-    if (LIKELY(ret == MMS_OK)) {
-        remoteKey = !localOwner;
-    }
-    return ret;
-}
-
 BResult MmsKvClient::SendGetByProxy(GetItems &item, GetValueRequest &req)
 {
     bool useOneSide = item.length > MMS_TWOSIDE_IO_THRESHOLD;

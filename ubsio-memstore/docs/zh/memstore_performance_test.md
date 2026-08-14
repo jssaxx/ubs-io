@@ -89,10 +89,10 @@ notify: io里数据变更通知字段的填充值
     mms notify [open/close]
 
 perf: 批量操作命令
-    mms perf [put/get/update/replace/delete/mixes] [bs(Kb)] [ioDepth] [batchNum] [size(Mb)] [numaNum] [cpuNum] [cpuStart] [remote]
+    mms perf [put/get/update/replace/delete/mixes] [bs(Kb)] [ioDepth] [batchNum] [size(Mb)] [numaNum] [cpuNum] [cpuStart]
 
 perfcheck: 数据一致性校验
-    mms perfcheck [bs(Kb)] [ioDepth] [batchNum] [size(Mb)] [numaNum] [cpuNum] [cpuStart] [remote]
+    mms perfcheck [bs(Kb)] [ioDepth] [batchNum] [size(Mb)] [numaNum] [cpuNum] [cpuStart]
 
 exit
     exit console

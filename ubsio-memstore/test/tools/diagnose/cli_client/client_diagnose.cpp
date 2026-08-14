@@ -115,80 +115,15 @@ struct PerfTestParam {
     sem_t sem;
     uint32_t length;
     uint32_t count;
-    bool remoteOnly;
     bool consistency;
-    uint32_t *keyIndexes;
 };
 
-static void FormatPerfKey(const PerfTestParam *param, const char *key, uint32_t keyIndex)
+static void FormatPerfKey(const PerfTestParam *param, char *key, uint32_t keyIndex)
 {
     const char *prefix = param->consistency ? "check_key" : "key";
-    int ret = snprintf(const_cast<char *>(key), DIAG_KEY_BUFFER_LEN, "%s_%u_%u_%u", prefix, param->id, param->cpu,
-                       keyIndex);
+    int ret = snprintf(key, DIAG_KEY_BUFFER_LEN, "%s_%u_%u_%u", prefix, param->id, param->cpu, keyIndex);
     if (ret < 0) {
         cli_print_buffer("Format key failed.\n");
-    }
-}
-
-static void FillPerfKey(const PerfTestParam *param, const char *key, uint32_t keyIndex)
-{
-    uint32_t actualIndex = keyIndex;
-    if (param->remoteOnly && param->keyIndexes != nullptr) {
-        actualIndex = param->keyIndexes[keyIndex];
-    }
-    FormatPerfKey(param, key, actualIndex);
-}
-
-static BResult PrepareRemotePerfKeys(PerfTestParam &param)
-{
-    if (!param.remoteOnly) {
-        return MMS_OK;
-    }
-
-    uint64_t keyNum = static_cast<uint64_t>(param.count) * param.batchNum;
-    if (keyNum == 0 || keyNum > std::numeric_limits<uint32_t>::max()) {
-        return MMS_INVALID_PARAM;
-    }
-
-    param.keyIndexes = new (std::nothrow) uint32_t[keyNum];
-    if (param.keyIndexes == nullptr) {
-        return MMS_ALLOC_FAIL;
-    }
-
-    constexpr uint32_t remoteKeySearchLimit = 65536;
-    uint64_t candidate = 0;
-    char key[DIAG_KEY_BUFFER_LEN] = {};
-    for (uint64_t index = 0; index < keyNum; ++index) {
-        bool found = false;
-        for (uint32_t attempt = 0; attempt < remoteKeySearchLimit; ++attempt) {
-            if (UNLIKELY(candidate > std::numeric_limits<uint32_t>::max())) {
-                return MMS_INVALID_PARAM;
-            }
-            FormatPerfKey(&param, key, static_cast<uint32_t>(candidate));
-            bool remoteKey = false;
-            auto ret = MmsClient::Instance()->IsRemoteKey(key, remoteKey);
-            if (UNLIKELY(ret != MMS_OK)) {
-                return ret;
-            }
-            if (remoteKey) {
-                param.keyIndexes[index] = static_cast<uint32_t>(candidate++);
-                found = true;
-                break;
-            }
-            candidate++;
-        }
-        if (UNLIKELY(!found)) {
-            return MMS_NOT_EXISTS;
-        }
-    }
-    return MMS_OK;
-}
-
-static void ReleaseRemotePerfKeys(PerfTestParam *params, uint32_t ioDepth)
-{
-    for (uint32_t index = 0; index < ioDepth; ++index) {
-        delete[] params[index].keyIndexes;
-        params[index].keyIndexes = nullptr;
     }
 }
 
@@ -542,7 +477,7 @@ static void *PerfTestPutImpl(void *param)
 
     for (uint32_t idx = 0; idx < getParam->count; idx++) {
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            FillPerfKey(getParam, itemList[i].key, keyIndex);
+            FormatPerfKey(getParam, itemList[i].key, keyIndex);
             keyIndex++;
         }
         RefreshKeyLen(itemList, getParam->batchNum);
@@ -593,7 +528,7 @@ static void *PerfTestGetImpl(void *param)
 
     for (uint32_t idx = 0; idx < getParam->count; idx++) {
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            FillPerfKey(getParam, itemList[i].key, keyIndex);
+            FormatPerfKey(getParam, itemList[i].key, keyIndex);
             keyIndex++;
         }
         RefreshKeyLen(itemList, getParam->batchNum);
@@ -672,7 +607,7 @@ static void *PerfTestConsistencyImpl(void *param)
     uint32_t keyIndex = 0;
     for (uint32_t round = 0; round < testParam->count; ++round) {
         for (uint32_t index = 0; index < batchNum; ++index) {
-            FillPerfKey(testParam, keys[index].get(), keyIndex);
+            FormatPerfKey(testParam, keys[index].get(), keyIndex);
             FillConsistencyValue(putValues[index].get(), testParam->length, testParam->id, keyIndex);
             putItems[index].keyLen = GetKeyLen(keys[index].get());
             getItems[index].keyLen = putItems[index].keyLen;
@@ -762,7 +697,7 @@ static void *PerfTestUpdateImpl(void *param)
 
     for (uint32_t idx = 0; idx < getParam->count; idx++) {
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            FillPerfKey(getParam, itemList[i].key, keyIndex);
+            FormatPerfKey(getParam, itemList[i].key, keyIndex);
             keyIndex++;
         }
         RefreshKeyLen(itemList, getParam->batchNum);
@@ -808,7 +743,7 @@ static void *PerfTestReplaceImpl(void *param)
 
     for (uint32_t idx = 0; idx < getParam->count; idx++) {
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            FillPerfKey(getParam, itemList[i].key, keyIndex);
+            FormatPerfKey(getParam, itemList[i].key, keyIndex);
             keyIndex++;
         }
         RefreshKeyLen(itemList, getParam->batchNum);
@@ -850,7 +785,7 @@ static void *PerfTestDeleteImpl(void *param)
 
     for (uint32_t idx = 0; idx < getParam->count; idx++) {
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            FillPerfKey(getParam, itemList[i].key, keyIndex);
+            FormatPerfKey(getParam, itemList[i].key, keyIndex);
             keyIndex++;
         }
         RefreshKeyLen(itemList, getParam->batchNum);
@@ -913,7 +848,7 @@ static void *PerfTestMixesImpl(void *param)
 
     for (uint32_t idx = 0; idx < 10; idx++) {
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            FillPerfKey(getParam, putList[i].key, keyIndex);
+            FormatPerfKey(getParam, putList[i].key, keyIndex);
             keyIndex++;
         }
         RefreshKeyLen(putList, getParam->batchNum);
@@ -928,7 +863,7 @@ static void *PerfTestMixesImpl(void *param)
         int32_t randnum = rand();
         if (randnum % 10 >= 7) {
             for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            FillPerfKey(getParam, putList[i].key, keyIndex);
+                FormatPerfKey(getParam, putList[i].key, keyIndex);
                 keyIndex++;
             }
             RefreshKeyLen(putList, getParam->batchNum);
@@ -939,7 +874,7 @@ static void *PerfTestMixesImpl(void *param)
             }
         } else {
             for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            FillPerfKey(getParam, getList[i].key, randnum % keyIndex);
+                FormatPerfKey(getParam, getList[i].key, randnum % keyIndex);
             }
             RefreshKeyLen(getList, getParam->batchNum);
             auto ret = MmsGet(getList, getParam->batchNum);
@@ -970,7 +905,6 @@ static void *PerfTestMixesImpl(void *param)
 
 static void HandlePerf(const std::vector<std::string> &cmds)
 {
-    bool remoteOnly = cmds.size() == 10;
     auto rw = cmds[1].c_str();
     uint32_t bsKb = 0;
     uint32_t ioDepth = 0;
@@ -1023,9 +957,9 @@ static void HandlePerf(const std::vector<std::string> &cmds)
         return;
     }
 
-    cli_print_buffer("Perf test start, operate:%s, bs:%u, ioDepth:%u, batchNum:%u, size:%llu, count:%llu, "
-                     "route:%s.\n", rw, bs, ioDepth, batchNum, static_cast<unsigned long long>(size),
-                     static_cast<unsigned long long>(count), remoteOnly ? "remote" : "default");
+    cli_print_buffer("Perf test start, operate:%s, bs:%u, ioDepth:%u, batchNum:%u, size:%llu, count:%llu.\n",
+                     rw, bs, ioDepth, batchNum, static_cast<unsigned long long>(size),
+                     static_cast<unsigned long long>(count));
     pthread_t *th = (pthread_t *)malloc(sizeof(pthread_t) * ioDepth);
     PerfTestParam *param = (PerfTestParam *)malloc(sizeof(PerfTestParam) * ioDepth);
     if (th == nullptr || param == nullptr) {
@@ -1053,9 +987,7 @@ static void HandlePerf(const std::vector<std::string> &cmds)
             sem_init(&param[index].sem, 0, 0);
             param[index].length = bs;
             param[index].count = static_cast<uint32_t>(count);
-            param[index].remoteOnly = remoteOnly;
             param[index].consistency = consistency;
-            param[index].keyIndexes = nullptr;
             index++;
             if (index == ioDepth) {
                 break;
@@ -1063,19 +995,6 @@ static void HandlePerf(const std::vector<std::string> &cmds)
         }
         if (index == ioDepth) {
             break;
-        }
-    }
-
-    if (remoteOnly) {
-        for (uint32_t i = 0; i < ioDepth; ++i) {
-            auto ret = PrepareRemotePerfKeys(param[i]);
-            if (UNLIKELY(ret != MMS_OK)) {
-                cli_print_buffer("Prepare remote keys failed, tid:%u, ret:%d.\n", i, ret);
-                ReleaseRemotePerfKeys(param, ioDepth);
-                free(param);
-                free(th);
-                return;
-            }
         }
     }
 
@@ -1120,7 +1039,6 @@ static void HandlePerf(const std::vector<std::string> &cmds)
     for (uint32_t k = 0; k < ioDepth; k++) {
         if (param[k].result != 0) {
             cli_print_buffer("Perf test return failed, tid:%u, ret:%d.\n", k, param[k].result);
-            ReleaseRemotePerfKeys(param, ioDepth);
             free(param);
             free(th);
             return;
@@ -1133,12 +1051,10 @@ static void HandlePerf(const std::vector<std::string> &cmds)
     uint64_t totalCount = static_cast<uint64_t>(count) * ioDepth * batchNum;
     if (consistency) {
         cli_print_buffer("Consistency Test Result: PASS, valueSize:%u, ioDepth:%u, batchNum:%u, rounds:%llu, "
-                         "items:%llu, route:%s, spent:%.2f ms.\n", bs, ioDepth, batchNum,
+                         "items:%llu, spent:%.2f ms.\n", bs, ioDepth, batchNum,
                          static_cast<unsigned long long>(count),
-                         static_cast<unsigned long long>(totalCount), remoteOnly ? "remote" : "default",
-                         time_use / 1000U);
+                         static_cast<unsigned long long>(totalCount), time_use / 1000U);
         mIsReady = false;
-        ReleaseRemotePerfKeys(param, ioDepth);
         free(param);
         free(th);
         return;
@@ -1163,7 +1079,6 @@ static void HandlePerf(const std::vector<std::string> &cmds)
 
     mIsReady = false;
 
-    ReleaseRemotePerfKeys(param, ioDepth);
     free(param);
     free(th);
 }
@@ -1180,10 +1095,8 @@ static void MmsClientDebugHelp(char *, int) noexcept
     cli_print_buffer("\tnotify: mms notify [open/close]\n");
     cli_print_buffer("\tperf: mms perf [put/get/update/replace/delete/mixes] [bs(Kb)] [ioDepth] [batchNum] [size(Mb)] "
                  "[numaNum] [cpuNum] [cpuStart]\n");
-    cli_print_buffer("\tremote perf: mms perf [put/get/update/replace/delete/mixes] [bs(Kb)] [ioDepth] [batchNum] "
-                 "[size(Mb)] [numaNum] [cpuNum] [cpuStart] remote\n");
     cli_print_buffer("\tconsistency: mms perfcheck [bs(Kb)] [ioDepth] [batchNum] [size(Mb)] "
-                 "[numaNum] [cpuNum] [cpuStart] [remote]\n");
+                 "[numaNum] [cpuNum] [cpuStart]\n");
     cli_print_buffer("\texit: exit console\n");
 }
 
@@ -1257,13 +1170,13 @@ static void MmsClientDebugProcess(int argc, char *argv[]) noexcept
         }
         HandleTrace(cmds);
     } else if (cmdType == "perf") {
-        if (cmds.size() != 9 && (cmds.size() != 10 || cmds[9] != "remote")) {
+        if (cmds.size() != 9) {
             cli_print_buffer("Input parameters failed!, num:%zu\n", cmds.size());
             return;
         }
         HandlePerf(cmds);
     } else if (cmdType == "perfcheck") {
-        if (cmds.size() != 8 && (cmds.size() != 9 || cmds[8] != "remote")) {
+        if (cmds.size() != 8) {
             cli_print_buffer("Input parameters failed!, num:%zu\n", cmds.size());
             return;
         }
