@@ -48,3 +48,7 @@ if (${DEBUG_UT} MATCHES "ON")
 endif()
 
 add_subdirectory(src)
+
+if (${DEBUG_UT} MATCHES "ON")
+    add_subdirectory(test)
+endif()
