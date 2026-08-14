@@ -80,10 +80,7 @@ include_directories(
         ${SRC_DIR}/security/expiration_check
         ${SRC_DIR}/security/openssl_tools
         ${PROJECT_3RDPARTY_BIN_DIR}/libboundscheck/include
-        ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/include
-        ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/include/hcom
         ${PROJECT_ZOOKEEPER_INCLUDE_DIR}
-        /usr/include/hcom
 )
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")

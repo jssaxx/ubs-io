@@ -18,16 +18,20 @@
 #include <utility>
 #include <vector>
 #include "mms_c.h"
-#include "mms_ref.h"
+#include "mms_cache.h"
 #include "mms_err.h"
 #include "mms_lock.h"
-#include "mms_sequence.h"
+#include "mms_mem_allocator.h"
+#include "mms_mem_mgr.h"
 #include "mms_message.h"
+#include "mms_ref.h"
+#include "mms_sequence.h"
 #include "net_engine.h"
 #include "net_multicast_engine.h"
 #include "mms_mem_mgr.h"
 #include "mms_mem_allocator.h"
 #include "mms_notify_shm_server.h"
+#include "mms_client_ioctx_mgr.h"
 #include "mms_cache.h"
 #include "cm.h"
 
@@ -56,6 +60,8 @@ public:
     void FreeBlocks(std::vector<IOCtxItem> &ctxItems);
     BResult SendSingleReq(const IoHandle &handle, IOCtxItem &item);
     BResult HandleSendReqs(std::vector<IOCtxItem> &ctxItems, const IoHandle &handle, bool freeBlocks = true);
+    BResult SelectPtForIo(void *ioBuff, uint32_t ioLen, bool rangeDelete, uint16_t &ptId, uint64_t &ptv,
+                          uint16_t remoteId[], uint16_t &remoteNum);
     BResult PutLocal(void *ioBuff, uint32_t ioLen, bool notifyDataChange = false);
     BResult Put(PutItems *itemList, uint32_t itemNum);
     BResult Get(GetItems *itemList, uint32_t itemNum);
@@ -78,27 +84,44 @@ private:
     void RegisterOpcode();
     BResult HandleBasic(ServiceContext &ctx);
     BResult HandleServiceable(ServiceContext &ctx);
-    bool IsIoCtxRequestValid(const IoCtrlRequest &req, uint64_t minLength) const;
+    BResult ResolveClientIoCtx(ServiceContext &ctx, uint64_t generation, uint64_t offset, uint64_t length,
+                               ClientIoCtxPtr &ioCtx, uintptr_t &address) const;
+    bool IsIoCtxRequestValid(ServiceContext &ctx, const IoCtrlRequest &req, uint64_t minLength,
+                             ClientIoCtxPtr &ioCtx, uintptr_t &address) const;
+    BResult HandleClientIoBuffer(void *ioBuff, uint32_t ioLen, const IoHandle &handle);
+    BResult HandleGet(ServiceContext &ctx);
+    BResult HandleBatchGet(ServiceContext &ctx);
+    BResult HandleGetLocal(ServiceContext &ctx, const GetValueRequest &req);
+    BResult HandleGetLocalProxy(ServiceContext &ctx, const GetValueRequest &req);
+    BResult HandleGetLocalOneSide(ServiceContext &ctx, const GetValueRequest &req);
+    BResult PrepareGetProxyForward(ServiceContext &ctx, GetValueRequest &req, ClientIoCtxPtr &clientIoCtx);
+    BResult ForwardGet(ServiceContext &ctx, GetValueRequest &req, uint16_t remoteId);
+    BResult GetByRoute(GetItems &item);
 
     BResult HandlePut(ServiceContext &ctx);
+    BResult HandlePutRoutedBatch(void *ioBuff, uint32_t ioLen);
     BResult HandlePutDefImpl(void *ioBuff, uint32_t ioLen);
     BResult HandlePutMultiImpl(void *ioBuff, uint32_t ioLen);
     BResult HandlePutRemote(ServiceContext &ctx);
     BResult HandlePutRemoteMulti(ServiceContext &ctx);
+    BResult HandlePutRemoteOneSide(ServiceContext &ctx);
 
     void SendRemoteMulticast(void *ioBuff, uint32_t ioLen, Callback &callback);
     void PutRemote(uint16_t remoteId[], int32_t remoteNum, void *ioBuff, uint32_t ioLen, Callback &callback);
 
     BResult HandleUpdate(ServiceContext &ctx);
+    BResult HandleUpdateRoutedBatch(void *ioBuff, uint32_t ioLen);
     BResult HandleUpdateDefImpl(void *ioBuff, uint32_t ioLen);
     BResult HandleUpdateMultiImpl(void *ioBuff, uint32_t ioLen);
     BResult HandleUpdateRemote(ServiceContext &ctx);
     BResult HandleUpdateRemoteMulti(ServiceContext &ctx);
+    BResult HandleUpdateRemoteOneSide(ServiceContext &ctx);
 
     void UpdateRemote(uint16_t remoteId[], int32_t remoteNum, void *ioBuff, uint32_t ioLen, Callback &callback);
     BResult UpdateLocal(void *ioBuff, uint32_t ioLen);
 
     BResult HandleDelete(ServiceContext &ctx);
+    BResult HandleDeleteRoutedBatch(void *ioBuff, uint32_t ioLen);
     BResult HandleDeleteDefImpl(void *ioBuff, uint32_t ioLen);
     BResult HandleDeleteMultiImpl(void *ioBuff, uint32_t ioLen);
     BResult HandleDeleteRemote(ServiceContext &ctx);
@@ -108,18 +131,20 @@ private:
     BResult DeleteLocal(void *ioBuff, uint32_t ioLen, bool notifyDataChange = false);
 
     BResult HandleReplace(ServiceContext &ctx);
+    BResult HandleReplaceRoutedBatch(void *ioBuff, uint32_t ioLen);
     BResult HandleReplaceDefImpl(void *ioBuff, uint32_t ioLen);
     BResult HandleReplaceMultiImpl(void *ioBuff, uint32_t ioLen);
     BResult HandleReplaceRemote(ServiceContext &ctx);
     BResult HandleReplaceRemoteMulti(ServiceContext &ctx);
+    BResult HandleReplaceRemoteOneSide(ServiceContext &ctx);
     void ReplaceRemote(uint16_t remoteId[], int32_t remoteNum, void *ioBuff, uint32_t ioLen, Callback &callback);
     BResult ReplaceLocal(void *ioBuff, uint32_t ioLen);
 
     BResult NotifyPtMigrateImpl(uint16_t ptId);
-    BResult GetSeqNoList(uint64_t seqList[], uint32_t &seqNum, uint16_t ptId, uint64_t ptv,
-                         uint16_t groupIndex, uint16_t nid);
-    BResult MergeSeqNoList(uint64_t negoSeqList[], uint16_t negoLocList[], uint32_t &negoSeqNum,
-                           uint64_t seqList[], uint32_t seqNum, uint16_t remoteId);
+    BResult GetSeqNoList(uint64_t seqList[], uint32_t &seqNum, uint16_t ptId, uint64_t ptv, uint16_t groupIndex,
+                         uint16_t nid);
+    BResult MergeSeqNoList(uint64_t negoSeqList[], uint16_t negoLocList[], uint32_t &negoSeqNum, uint64_t seqList[],
+                           uint32_t seqNum, uint16_t remoteId);
     BResult SyncSeqNoData(uint64_t negoSeqNo, uint16_t negoLocId, uint64_t seqList[], uint32_t seqNum,
                           uint16_t remoteId, CmPtInfo &ptInfo, uint16_t groupIndex);
     BResult GetSeqNoData(uint64_t negoSeqNo, uint16_t negoLocId, CmPtInfo &ptInfo, uint16_t groupIndex,
@@ -130,10 +155,15 @@ private:
     BResult HandleGetSeqNoList(ServiceContext &ctx);
     BResult HandleGetSeqNoData(ServiceContext &ctx);
     BResult HandleUpdatePtVersion(ServiceContext &ctx);
+    BResult HandleGetRouteView(ServiceContext &ctx);
 
     void AppendNotifyItem(std::vector<NotifyShmPublishItem> &items, uint32_t &itemNum,
         const char *key, uint16_t keyLen, OperateType opType);
     void NotifyDataChangeBatch(const NotifyShmPublishItem *items, uint32_t itemNum);
+    bool ShouldUseRemoteOneSide(uint32_t ioLen, uint16_t remoteNum) const;
+    BResult SendRemoteOneSideAndWait(uint16_t remoteId[], uint16_t remoteNum, MmsOpCode opCode,
+                                     void *ioBuff, uint32_t ioLen, bool applyRemoteResults);
+    BResult HandleRemoteOneSide(ServiceContext &ctx, const IoHandle &handle);
 
 private:
     bool mStarted = false;
@@ -153,17 +183,20 @@ private:
     uint32_t mIoTimeOut = NO_60;
     uint32_t mIoCtxBuffLen;
     uint64_t mIoCtxMemSize = 0;
+    uint16_t mReplicaNum = 0;
+    uint16_t mRpcWorkerGroupNum = 1;
 
     static uint32_t mMaxPutItemNum;
     static uint32_t mMaxUpdateItemNum;
     static uint32_t mMaxDeleteItemNum;
 
     bool mMulticast = false;
+    bool mKeyRouteEnabled = false;
     std::atomic<bool> mServiceable{false};
     AllocFunc allocFunc = nullptr;
 
     DEFINE_REF_COUNT_VARIABLE;
 };
-} // mms
-} // ock
+} // namespace mms
+} // namespace ock
 #endif

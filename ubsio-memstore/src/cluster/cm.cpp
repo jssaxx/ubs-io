@@ -197,6 +197,7 @@ int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
 {
     Cm *cm = static_cast<Cm *>(ctx);
     WriteLocker<ReadWriteLock> lock(&cm->mPLock);
+    cm->mPtViewVersion = ptList->globalVersion;
 
     static CmCopyState s_copystate[PT_COPY_STATE_BUTT] = {
         CM_COPY_INIT,
@@ -255,4 +256,3 @@ int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
 }
 }
 }
-

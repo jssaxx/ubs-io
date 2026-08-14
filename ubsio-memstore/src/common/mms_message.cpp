@@ -78,6 +78,59 @@ static BResult CopyKey(uintptr_t buff, uint64_t offset, uint64_t keyLen, uint32_
     return MMS_OK;
 }
 
+static BResult PrepareDecode(uint64_t buff, uint64_t realLen, uint32_t capacity, uint32_t &itemNum)
+{
+    itemNum = 0;
+    if (UNLIKELY(buff == 0 || realLen < sizeof(IoDataRequest))) {
+        return MMS_INVALID_PARAM;
+    }
+
+    auto *req = reinterpret_cast<IoDataRequest *>(buff);
+    itemNum = req->num;
+    if (UNLIKELY(itemNum > capacity)) {
+        return MMS_INVALID_PARAM;
+    }
+
+    if (gCrcSwitch) {
+        static const uint32_t skip = sizeof(req->head) + sizeof(req->seqNo) + sizeof(req->negoSeqNo) +
+            sizeof(req->crc);
+        uint32_t crc = MmsCrcUtil::Crc32(reinterpret_cast<void *>(buff + skip), realLen - skip);
+        if (UNLIKELY(req->crc != crc)) {
+            return MMS_CRC_ERR;
+        }
+    }
+    return MMS_OK;
+}
+
+static BResult DecodeItemLayout(uint64_t buff, uint64_t realLen, uint64_t &offset, bool withValue,
+                                IoLocDesc *&desc, char *&key, char *&value)
+{
+    if (UNLIKELY(offset > realLen || sizeof(IoLocDesc) > realLen - offset)) {
+        return MMS_INVALID_PARAM;
+    }
+
+    desc = reinterpret_cast<IoLocDesc *>(buff + offset);
+    uint64_t keyLen = desc->keyLen;
+    uint64_t valueLen = withValue ? desc->valueLen : 0;
+    if (UNLIKELY(keyLen == 0 || keyLen > MAX_KEY_SIZE || (!withValue && desc->valueLen != 0))) {
+        return MMS_INVALID_PARAM;
+    }
+
+    offset += sizeof(IoLocDesc);
+    if (UNLIKELY(keyLen > realLen - offset || valueLen > realLen - offset - keyLen)) {
+        return MMS_INVALID_PARAM;
+    }
+
+    key = reinterpret_cast<char *>(buff + offset);
+    if (UNLIKELY(key[keyLen - NO_1] != '\0')) {
+        return MMS_INVALID_PARAM;
+    }
+    offset += keyLen;
+    value = withValue ? reinterpret_cast<char *>(buff + offset) : nullptr;
+    offset += valueLen;
+    return MMS_OK;
+}
+
 BResult EncodeSinglePutKV(uintptr_t buff, uint64_t &offset, uint64_t keyLen, uint32_t ioCtxBuffLen,
                           const PutItems &item)
 {
@@ -146,38 +199,28 @@ BResult EncodePutRequest(PutItems *itemList, uint32_t itemNum, std::vector<IOCtx
 
 BResult DeCodePutRequest(std::vector<DecodePutItem> &itemList, uint32_t &itemNum, uint64_t buff, uint64_t realLen)
 {
-    IoDataRequest *req = reinterpret_cast<IoDataRequest *>(buff);
-    itemNum = req->num;
-    static uint32_t maxSize = static_cast<uint32_t>(itemList.size());
-    if (itemNum > maxSize) {
-        return MMS_INVALID_PARAM;
-    }
-
-    if (gCrcSwitch) {
-        static uint32_t skip = sizeof(req->head) + sizeof(req->seqNo) + sizeof(req->negoSeqNo) + sizeof(req->crc);
-        uint32_t crc = MmsCrcUtil::Crc32(reinterpret_cast<void *>(buff + skip), realLen - skip);
-        if (req->crc != crc) {
-            return MMS_CRC_ERR;
-        }
+    auto ret = PrepareDecode(buff, realLen, static_cast<uint32_t>(itemList.size()), itemNum);
+    if (UNLIKELY(ret != MMS_OK)) {
+        return ret;
     }
 
     uint64_t offset = sizeof(IoDataRequest);
     for (uint32_t index = 0; index < itemNum; index++) {
-        auto desc = reinterpret_cast<IoLocDesc *>(buff + offset);
-        offset += sizeof(IoLocDesc);
-        itemList[index].key = reinterpret_cast<char *>(buff + offset);
+        IoLocDesc *desc = nullptr;
+        char *key = nullptr;
+        char *value = nullptr;
+        ret = DecodeItemLayout(buff, realLen, offset, true, desc, key, value);
+        if (UNLIKELY(ret != MMS_OK)) {
+            return ret;
+        }
+        itemList[index].key = key;
         itemList[index].keyLen = static_cast<uint16_t>(desc->keyLen - NO_1);
-        offset += desc->keyLen;
-        itemList[index].value = reinterpret_cast<char *>(buff + offset);
+        itemList[index].value = value;
         itemList[index].valueLen = desc->valueLen;
         itemList[index].isNotify = static_cast<uint16_t>(desc->offset);
         itemList[index].version = desc->version;
         itemList[index].result = &desc->result;
         itemList[index].valueAddr = &desc->valueAddr;
-        offset += desc->valueLen;
-        if (offset > realLen) {
-            return MMS_ERR;
-        }
     }
 
     return MMS_OK;
@@ -251,37 +294,27 @@ BResult EncodeUpdateRequest(UpdateItems *itemList, uint32_t itemNum, std::vector
 BResult DeCodeUpdateRequest(std::vector<DecodeUpdateItem> &itemList, uint32_t &itemNum, uint64_t buff,
                             uint64_t realLen)
 {
-    IoDataRequest *req = reinterpret_cast<IoDataRequest *>(buff);
-    itemNum = req->num;
-    static uint32_t maxSize = static_cast<uint32_t>(itemList.size());
-    if (itemNum > maxSize) {
-        return MMS_INVALID_PARAM;
-    }
-
-    if (gCrcSwitch) {
-        static uint32_t skip = sizeof(req->head) + sizeof(req->seqNo) + sizeof(req->negoSeqNo) + sizeof(req->crc);
-        uint32_t crc = MmsCrcUtil::Crc32(reinterpret_cast<void *>(buff + skip), realLen - skip);
-        if (req->crc != crc) {
-            return MMS_CRC_ERR;
-        }
+    auto ret = PrepareDecode(buff, realLen, static_cast<uint32_t>(itemList.size()), itemNum);
+    if (UNLIKELY(ret != MMS_OK)) {
+        return ret;
     }
 
     uint64_t offset = sizeof(IoDataRequest);
     for (uint32_t index = 0; index < itemNum; index++) {
-        auto desc = reinterpret_cast<IoLocDesc *>(buff + offset);
-        offset += sizeof(IoLocDesc);
-        itemList[index].key = reinterpret_cast<char *>(buff + offset);
+        IoLocDesc *desc = nullptr;
+        char *key = nullptr;
+        char *value = nullptr;
+        ret = DecodeItemLayout(buff, realLen, offset, true, desc, key, value);
+        if (UNLIKELY(ret != MMS_OK)) {
+            return ret;
+        }
+        itemList[index].key = key;
         itemList[index].keyLen = static_cast<uint16_t>(desc->keyLen - NO_1);
-        offset += desc->keyLen;
-        itemList[index].value = reinterpret_cast<char *>(buff + offset);
+        itemList[index].value = value;
         itemList[index].offset = desc->offset;
         itemList[index].valueLen = desc->valueLen;
         itemList[index].version = desc->version;
         itemList[index].result = &desc->result;
-        offset += desc->valueLen;
-        if (offset > realLen) {
-            return MMS_ERR;
-        }
     }
 
     return MMS_OK;
@@ -371,34 +404,25 @@ BResult EncodeDeleteRequest(DeleteItems *itemList, uint32_t itemNum, std::vector
 BResult DeCodeDeleteRequest(std::vector<DecodeDeleteItem> &itemList, uint32_t &itemNum, uint64_t buff,
                             uint64_t realLen)
 {
-    IoDataRequest *req = reinterpret_cast<IoDataRequest *>(buff);
-    itemNum = req->num;
-    static uint32_t maxSize = static_cast<uint32_t>(itemList.size());
-    if (itemNum > maxSize) {
-        return MMS_INVALID_PARAM;
-    }
-
-    if (gCrcSwitch) {
-        static uint32_t skip = sizeof(req->head) + sizeof(req->seqNo) + sizeof(req->negoSeqNo) + sizeof(req->crc);
-        uint32_t crc = MmsCrcUtil::Crc32(reinterpret_cast<void *>(buff + skip), realLen - skip);
-        if (req->crc != crc) {
-            return MMS_CRC_ERR;
-        }
+    auto ret = PrepareDecode(buff, realLen, static_cast<uint32_t>(itemList.size()), itemNum);
+    if (UNLIKELY(ret != MMS_OK)) {
+        return ret;
     }
 
     uint64_t offset = sizeof(IoDataRequest);
     for (uint32_t index = 0; index < itemNum; index++) {
-        auto desc = reinterpret_cast<IoLocDesc *>(buff + offset);
-        offset += sizeof(IoLocDesc);
-        itemList[index].key = reinterpret_cast<char *>(buff + offset);
+        IoLocDesc *desc = nullptr;
+        char *key = nullptr;
+        char *value = nullptr;
+        ret = DecodeItemLayout(buff, realLen, offset, false, desc, key, value);
+        if (UNLIKELY(ret != MMS_OK)) {
+            return ret;
+        }
+        itemList[index].key = key;
         itemList[index].keyLen = static_cast<uint16_t>(desc->keyLen - NO_1);
         itemList[index].isNotify = static_cast<uint16_t>(desc->offset);
         itemList[index].version = desc->version;
         itemList[index].result = &desc->result;
-        offset += desc->keyLen;
-        if (offset > realLen) {
-            return MMS_ERR;
-        }
     }
     return MMS_OK;
 }

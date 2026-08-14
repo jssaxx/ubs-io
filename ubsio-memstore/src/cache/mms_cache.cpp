@@ -510,6 +510,49 @@ BResult Cache::Get(const GetPara &para)
     return MMS_NOT_EXISTS;
 }
 
+BResult Cache::GetDirect(const GetPara &para, const std::function<BResult(const char *, uint64_t)> &handler)
+{
+    if (UNLIKELY(para.key == nullptr || para.keyLen == 0 || para.length == 0 || para.realLength == nullptr ||
+                 !handler)) {
+        return MMS_INVALID_PARAM;
+    }
+
+    uint32_t hashCode = HashKey(para.key, para.keyLen);
+    CacheShard &shard = SelectShard(hashCode);
+    uint32_t bucketIndex = hashCode % shard.bucketCount;
+    uint64_t bucketAddr = GetBucketAddr(shard, bucketIndex);
+    BucketNode *bucketNode = reinterpret_cast<BucketNode *>(bucketAddr);
+
+    CacheReadLock(&bucketNode->status);
+    IndexNode *node = GetBucketSlot(bucketNode, hashCode);
+    while (node->valid == FLAG_VALID) {
+        uint64_t indexAddr;
+        mMemMgr->Trans2Addr(MMAP_AREA_INDEX, node->numaOffset, indexAddr);
+        IndexValue *indexValue = reinterpret_cast<IndexValue *>(indexAddr);
+        if (node->hashCode != hashCode || !IsSameKey(indexValue, para.key, para.keyLen)) {
+            node = &indexValue->next;
+            continue;
+        }
+
+        char *value = nullptr;
+        uint64_t realLen = GetDataAddrFromBlock(indexValue, &value, para.offset, para.length);
+        if (UNLIKELY(realLen == 0)) {
+            CacheReadUnLock(&bucketNode->status);
+            CACHE_LOG_ERROR("Get direct data failed.");
+            return MMS_INNER_ERR;
+        }
+
+        *para.realLength = realLen;
+        auto ret = handler(value, realLen);
+        CacheReadUnLock(&bucketNode->status);
+        return ret;
+    }
+
+    CacheReadUnLock(&bucketNode->status);
+    *para.realLength = 0;
+    return MMS_NOT_EXISTS;
+}
+
 BResult Cache::ReviveDataBlock(IndexValue *indexValue, const char *data, uint64_t offset, uint64_t dataLen,
                                uint16_t preferNumaId)
 {

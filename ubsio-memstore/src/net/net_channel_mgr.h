@@ -54,6 +54,14 @@ public:
     BResult AddChannel(const NetNode &dstNid, ChannelPtr &ch, uint32_t groupIndex);
     BResult RemoveChannel(const NetNode &dstNid, const ChannelPtr &ch, uint32_t groupIndex);
 
+    inline bool HasChannel(uint32_t dstNid, uint32_t pid)
+    {
+        ReadLocker<ReadWriteLock> locker(&lock);
+        NetNode node(dstNid, pid);
+        auto iter = mChannelMgr.find(node.whole);
+        return iter != mChannelMgr.end() && iter->second->num != 0;
+    }
+
     inline BResult GetChannel(uint32_t dstNid, uint32_t pid, ChannelPtr &ch, uint32_t groupIndex)
     {
         ReadLocker<ReadWriteLock> locker(&lock);
@@ -122,4 +130,3 @@ using NetChannelMgrPtr = Ref<NetChannelMgr>;
 }
 }
 #endif // NET_CHANNEL_MGR_H
-

@@ -13,6 +13,151 @@
 
 namespace ock {
 namespace mms {
+namespace {
+constexpr uint32_t NET_TASK_SMALL_BUFFER_SIZE = 512;
+constexpr uint32_t NET_TASK_SMALL_BUFFER_CACHE = 1024;
+constexpr uint32_t NET_TASK_LARGE_BUFFER_SIZE = IO_SIZE_64K;
+constexpr uint32_t NET_TASK_LARGE_BUFFER_CACHE = 256;
+
+class NetTaskBufferPool {
+public:
+    static NetTaskBufferPool &Instance()
+    {
+        static NetTaskBufferPool instance;
+        return instance;
+    }
+
+    void *Acquire(uint32_t size, uint32_t &capacity)
+    {
+        if (size <= mSmall.capacity) {
+            return Acquire(mSmall, capacity);
+        }
+        if (size <= mLarge.capacity) {
+            return Acquire(mLarge, capacity);
+        }
+        capacity = size;
+        return malloc(size);
+    }
+
+    void Release(void *data, uint32_t capacity)
+    {
+        if (data == nullptr) {
+            return;
+        }
+        if (capacity == mSmall.capacity) {
+            Release(mSmall, data);
+            return;
+        }
+        if (capacity == mLarge.capacity) {
+            Release(mLarge, data);
+            return;
+        }
+        free(data);
+    }
+
+private:
+    struct Bucket {
+        Bucket(uint32_t bufferCapacity, uint32_t cacheLimit) : capacity(bufferCapacity), limit(cacheLimit) {}
+
+        uint32_t capacity;
+        uint32_t limit;
+        std::mutex lock;
+        std::vector<void *> buffers;
+    };
+
+    NetTaskBufferPool()
+        : mSmall(NET_TASK_SMALL_BUFFER_SIZE, NET_TASK_SMALL_BUFFER_CACHE),
+          mLarge(NET_TASK_LARGE_BUFFER_SIZE, NET_TASK_LARGE_BUFFER_CACHE)
+    {}
+
+    ~NetTaskBufferPool()
+    {
+        Clear(mSmall);
+        Clear(mLarge);
+    }
+
+    static void *Acquire(Bucket &bucket, uint32_t &capacity)
+    {
+        capacity = bucket.capacity;
+        {
+            std::lock_guard<std::mutex> lock(bucket.lock);
+            if (!bucket.buffers.empty()) {
+                void *data = bucket.buffers.back();
+                bucket.buffers.pop_back();
+                return data;
+            }
+        }
+        return malloc(bucket.capacity);
+    }
+
+    static void Release(Bucket &bucket, void *data)
+    {
+        std::lock_guard<std::mutex> lock(bucket.lock);
+        if (bucket.buffers.size() < bucket.limit) {
+            bucket.buffers.push_back(data);
+            return;
+        }
+        free(data);
+    }
+
+    static void Clear(Bucket &bucket)
+    {
+        for (auto data : bucket.buffers) {
+            free(data);
+        }
+        bucket.buffers.clear();
+    }
+
+    Bucket mSmall;
+    Bucket mLarge;
+};
+} // namespace
+
+NetTaskContext::~NetTaskContext()
+{
+    ReleaseData();
+}
+
+void NetTaskContext::ReleaseData()
+{
+    if (mData != nullptr) {
+        NetTaskBufferPool::Instance().Release(mData, mDataCapacity);
+    }
+    mData = nullptr;
+    mDataLen = 0;
+    mDataCapacity = 0;
+    mDataType = INVALID_DATA;
+}
+
+BResult NetTaskContext::Clone(ServiceContext &oldCtx)
+{
+    ReleaseData();
+    auto ret = ServiceContext::Clone(*this, oldCtx, false);
+    if (UNLIKELY(ret != MMS_OK)) {
+        return MMS_ALLOC_FAIL;
+    }
+
+    uint32_t dataLen = oldCtx.MessageDataLen();
+    if (dataLen == 0) {
+        return MMS_OK;
+    }
+
+    void *data = NetTaskBufferPool::Instance().Acquire(dataLen, mDataCapacity);
+    if (UNLIKELY(data == nullptr)) {
+        mDataCapacity = 0;
+        return MMS_ALLOC_FAIL;
+    }
+    if (UNLIKELY(memcpy_s(data, mDataCapacity, oldCtx.MessageData(), dataLen) != EOK)) {
+        NetTaskBufferPool::Instance().Release(data, mDataCapacity);
+        mDataCapacity = 0;
+        return MMS_ERR;
+    }
+    mData = data;
+    mDataLen = dataLen;
+    mDataType = OUTER_DATA;
+    return MMS_OK;
+}
+
 BResult NetExecutorPool::Start(uint32_t coreThreadNum, uint32_t queueSize)
 {
     std::lock_guard<std::mutex> guard(mMutex);

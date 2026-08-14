@@ -66,11 +66,15 @@ const auto NET_TLS_OPENSSL_LIB_PATH = std::make_pair("mms.net.tls.openssl.lib.pa
 const auto MEM_NUMA_ID = std::make_pair("mms.mem.numa.id", "0,1");
 const auto MEM_NUMA_SIZE = std::make_pair("mms.mem.numa.size", "32,32");
 const auto MEM_VALUE_BLOCK_SIZE = std::make_pair("mms.mem.value.unit.size", 2);
+const auto MEM_FORWARD_SIZE_PER_NUMA = std::make_pair("mms.mem.forward.size.per_numa", 512);
+const auto MEM_CLIENT_IOCTX_SIZE_PER_NUMA = std::make_pair("mms.mem.client.ioctx.size.per_numa", 512);
 
 const auto CM_NODE_NUM = std::make_pair("mms.cm.node.num", 3);
 const auto CM_NODE_ID = std::make_pair("mms.cm.node.id", NO_MAX_VALUE16);
 const auto CM_NODE_REGISTER_TIMEOUT = std::make_pair("mms.cm.register_timeout_sec", 30);
 const auto CM_ZK_HOST = std::make_pair("mms.cm.zk_host", "127.0.0.1:2181");
+const auto CM_REPLICA_NUM = std::make_pair("mms.cm.replica.num", 0);
+const auto CM_PT_NUM = std::make_pair("mms.cm.pt.num", 0);
 
 class MmsConfig;
 using MmsConfigPtr = Ref<MmsConfig>;
@@ -117,6 +121,8 @@ public:
 
     struct CmConfig {
         int32_t nodeNum = 3;
+        int32_t replicaNum = 3;
+        int32_t ptNum = 3;
         int32_t nodeId = 0;
         int32_t registeredTimeoutSec = 30;
         std::string zkHost = "127.0.0.1:2181";
@@ -127,6 +133,8 @@ public:
         uint16_t numaId[MAX_NUMAS_NUM];
         uint64_t numaSize[MAX_NUMAS_NUM];
         uint32_t valueBlockSize;
+        uint64_t forwardMemSizePerNuma = 512 * IO_SIZE_1M;
+        uint64_t clientIoCtxSizePerNuma = 512 * IO_SIZE_1M;
     };
 
     struct BasicConfig {

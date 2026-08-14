@@ -115,7 +115,6 @@ BResult MmsMemMgr::Initialize(MemMgrOptions &options, MemLogFunc func, bool isSe
             if (ret != MMS_OK) {
                 return ret;
             }
-            mIsCreated = true;
         }
         ret = CreateShmMmapAddress(mAreaFd[area], options.numaId, options.areaSize[area], mNumaNum, mAreaMode[area],
                                    mAreaAddr[area]);

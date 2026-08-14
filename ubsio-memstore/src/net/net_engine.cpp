@@ -37,6 +37,12 @@ static void HcomLog(int level, const char *msg)
     NET_BASE_LOG(level, msg);
 }
 
+bool NetEngine::IsRpcProtocolSupported(ServiceProtocol protocol)
+{
+    return protocol == ServiceProtocol::TCP || protocol == ServiceProtocol::RDMA ||
+        protocol == ServiceProtocol::UBC;
+}
+
 static BResult SplitWorkerGroupConfig(const std::string &groups, const std::string &cpuSets,
                                       WorkerGroupConfig &config, const std::string &type)
 {
@@ -129,6 +135,13 @@ BResult NetEngine::Initialize(const NetEngineInitOptions &options)
     }
     mChannelMgr->Initialize();
 
+    mOneSideChannelMgr = MakeRef<NetChannelMgr>();
+    if (mOneSideChannelMgr == nullptr) {
+        NET_LOG_ERROR("Make one-side channel manager failed.");
+        return MMS_ALLOC_FAIL;
+    }
+    mOneSideChannelMgr->Initialize();
+
     BResult ret = MMS_OK;
     if (options.startConnector) {
         mConnector = MakeRef<NetConnector>(this);
@@ -172,7 +185,7 @@ BResult NetEngine::Start(const NetOptions &opt)
             return result;
         }
     }
-    if (opt.protocol == ServiceProtocol::TCP || opt.protocol == ServiceProtocol::RDMA) {
+    if (IsRpcProtocolSupported(opt.protocol)) {
         result = StartRpcService(opt);
         if (result != MMS_OK) {
             return result;
@@ -205,6 +218,9 @@ void NetEngine::StopInner()
 
     mChannelMgr->UnInitialize();
     mChannelMgr = nullptr;
+
+    mOneSideChannelMgr->UnInitialize();
+    mOneSideChannelMgr = nullptr;
 
     if (mRpcService != nullptr) {
         uint16_t index;
@@ -241,6 +257,61 @@ BResult NetEngine::InitMemoryRegister(void)
         LOG_INFO("Register memory success, address:" << mMemList.address[index] <<
             ", size:" << mMemList.size[index] << ", key:" << mMemList.mr[index].GetHcomMrs()[0]->GetLKey() << ".");
     }
+    return MMS_OK;
+}
+
+BResult NetEngine::RegisterMemoryRegion(uintptr_t address, uint64_t size, MemoryRegion &mr)
+{
+    if (address == 0 || size == 0) {
+        return MMS_INVALID_PARAM;
+    }
+    if (mRpcService == nullptr) {
+        return MMS_OK;
+    }
+    auto ret = mRpcService->RegisterMemoryRegion(address, size, mr);
+    BResult result = NetResult(static_cast<hcom::SerResult>(ret));
+    if (result != MMS_OK || mr.GetHcomMrs().empty()) {
+        return result;
+    }
+
+    RegisteredMemoryInfo info;
+    info.address = address;
+    info.size = size;
+    info.localKey = mr.GetHcomMrs()[0]->GetLKey();
+    ock::hcom::UBSHcomMemoryKey hcomKey{};
+    mr.GetMemoryKey(hcomKey);
+    std::memcpy(info.memoryKey.keys, hcomKey.keys, sizeof(info.memoryKey.keys));
+    std::memcpy(info.memoryKey.tokens, hcomKey.tokens, sizeof(info.memoryKey.tokens));
+    std::memcpy(info.memoryKey.eid, hcomKey.eid, sizeof(info.memoryKey.eid));
+    {
+        std::lock_guard<std::mutex> lock(mRegisteredMemoryMutex);
+        mDynamicMemoryRegions[address] = info;
+    }
+    return MMS_OK;
+}
+
+void NetEngine::DestroyMemoryRegion(MemoryRegion &mr)
+{
+    if (mRpcService != nullptr && !mr.GetHcomMrs().empty()) {
+        uintptr_t address = mr.GetAddress();
+        {
+            std::lock_guard<std::mutex> lock(mRegisteredMemoryMutex);
+            mDynamicMemoryRegions.erase(address);
+        }
+        mRpcService->DestroyMemoryRegion(mr);
+    }
+}
+
+BResult NetEngine::GetMemoryKey(MemoryRegion &mr, MmsMemoryKey &key) const
+{
+    if (mr.GetHcomMrs().empty()) {
+        return MMS_NOT_READY;
+    }
+    ock::hcom::UBSHcomMemoryKey hcomKey{};
+    mr.GetMemoryKey(hcomKey);
+    std::memcpy(key.keys, hcomKey.keys, sizeof(key.keys));
+    std::memcpy(key.tokens, hcomKey.tokens, sizeof(key.tokens));
+    std::memcpy(key.eid, hcomKey.eid, sizeof(key.eid));
     return MMS_OK;
 }
 
@@ -360,7 +431,7 @@ BResult NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr)
     mIpcService->SetTlsOptions(tlsOpt);
     mIpcService->RegisterChannelBrokenHandler(std::bind(&NetEngine::ChannelBroken, this, std::placeholders::_1),
                                               UBSHcomChannelBrokenPolicy::BROKEN_ALL);
-    mIpcService->RegisterRecvHandler(std::bind(&NetEngine::RequestInnerReceived, this, std::placeholders::_1));
+    mIpcService->RegisterRecvHandler(std::bind(&NetEngine::IpcRequestReceived, this, std::placeholders::_1));
     mIpcService->RegisterSendHandler(std::bind(&NetEngine::RequestPosted, this, std::placeholders::_1));
     mIpcService->RegisterOneSideHandler(std::bind(&NetEngine::OneSideDone, this, std::placeholders::_1));
     return MMS_OK;
@@ -511,7 +582,7 @@ BResult NetEngine::AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr)
     mRpcService->SetTlsOptions(tlsOpt);
     mRpcService->RegisterChannelBrokenHandler(std::bind(&NetEngine::ChannelBroken, this, std::placeholders::_1),
                                               UBSHcomChannelBrokenPolicy::BROKEN_ALL);
-    mRpcService->RegisterRecvHandler(std::bind(&NetEngine::RequestInnerReceived, this, std::placeholders::_1));
+    mRpcService->RegisterRecvHandler(std::bind(&NetEngine::RequestReceived, this, std::placeholders::_1));
     mRpcService->RegisterSendHandler(std::bind(&NetEngine::RequestPosted, this, std::placeholders::_1));
     mRpcService->RegisterOneSideHandler(std::bind(&NetEngine::OneSideDone, this, std::placeholders::_1));
     return MMS_OK;
@@ -528,7 +599,7 @@ BResult NetEngine::CreateRpcService(const NetOptions &opt, bool isOobSvr, const 
     UBSHcomServiceOptions options;
     options.workerGroupMode = opt.isBusyPolling ? UBSHcomNetDriverWorkingMode::NET_BUSY_POLLING :
                               UBSHcomNetDriverWorkingMode::NET_EVENT_POLLING;
-    options.maxSendRecvDataSize = isOobSvr ? (NO_256 * NO_1024) : (NO_16 * NO_1024);
+    options.maxSendRecvDataSize = NO_512 * NO_1024;
     options.workerGroupId = 0;
     options.workerThreadPriority = 0;
     if (UNLIKELY(!StrUtil::StrToUint16(rpcConfig.groups[0], options.workerGroupThreadCount) ||
@@ -626,12 +697,13 @@ int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newCh
 
     NetConnPayload netPayload;
     uint32_t groupIndex = 0;
-    if (netPayload.FromPayloadStr(payload, groupIndex) != MMS_OK) {
+    bool oneSide = false;
+    if (netPayload.FromPayloadStr(payload, groupIndex, &oneSide) != MMS_OK) {
         NET_LOG_ERROR("Failed to parse payload:" << payload << ".");
         return MMS_ERR;
     }
 
-    NetChannelUpCtx ctx(netPayload.srcNodeId, groupIndex, true);
+    NetChannelUpCtx ctx(netPayload.srcNodeId, groupIndex, true, oneSide);
     newChannel->SetUpCtx(ctx.whole);
     newChannel->SetChannelTimeOut(mTimeout, mTimeout);
 
@@ -642,7 +714,8 @@ int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newCh
         return MMS_OK;
     }
 
-    mChannelMgr->AddChannel(netPayload.srcNodeId, const_cast<ChannelPtr &>(newChannel), groupIndex);
+    auto &channelMgr = oneSide ? mOneSideChannelMgr : mChannelMgr;
+    channelMgr->AddChannel(netPayload.srcNodeId, const_cast<ChannelPtr &>(newChannel), groupIndex);
     NET_LOG_INFO("Receive new channel " << newChannel->GetId() << ", nodeId:" << netPayload.srcNodeId.nid << ", pid:" <<
         netPayload.srcNodeId.pid << ", ip:" << ipPort << ", payload:" << payload << ".");
     return MMS_OK;
@@ -660,7 +733,8 @@ void NetEngine::ChannelBroken(const ChannelPtr &ch)
     NET_LOG_WARN("Receive broken channel " << ch->GetId() << ", nodeId:" << dstNid.nid << ", pid:" << dstNid.pid <<
         ", groupIndex:" << ctx.GetGroupIndex() << ".");
 
-    mChannelMgr->RemoveChannel(dstNid, ch, ctx.GetGroupIndex());
+    auto &channelMgr = ctx.IsOneSide() ? mOneSideChannelMgr : mChannelMgr;
+    channelMgr->RemoveChannel(dstNid, ch, ctx.GetGroupIndex());
     if (mHandlerBroken != nullptr) {
         mHandlerBroken(dstNid.nid, dstNid.pid);
     }
@@ -668,27 +742,44 @@ void NetEngine::ChannelBroken(const ChannelPtr &ch)
 
 int32_t NetEngine::RequestReceived(ServiceContext &ctx)
 {
+    uint16_t opCode = ctx.OpCode();
+    bool oneSide = opCode == MMS_OP_S_PUT_ONESIDE || opCode == MMS_OP_S_UPDATE_ONESIDE ||
+        opCode == MMS_OP_S_REPLACE_ONESIDE || opCode == MMS_OP_C_BATCH_GET;
+    if (!oneSide && opCode == MMS_OP_C_GET && ctx.MessageData() != nullptr &&
+        ctx.MessageDataLen() == sizeof(GetValueRequest)) {
+        auto *req = static_cast<GetValueRequest *>(ctx.MessageData());
+        oneSide = (req->flags & MMS_GET_FLAG_ONESIDE) != 0;
+    }
+    if (!oneSide) {
+        MMS_TRACE_START(NET_TRACE_RPC_HDL);
+        auto ret = RequestInnerReceived(ctx);
+        MMS_TRACE_END(NET_TRACE_RPC_HDL, ret);
+        return ret;
+    }
+
     if (UNLIKELY(mRequestExecutor == nullptr)) {
         NET_LOG_ERROR("Net request executor not ready.");
         return MMS_NOT_READY;
     }
-    if (UNLIKELY(ctx.MessageData() == nullptr || ctx.MessageDataLen() < sizeof(ReqHead))) {
-        NET_LOG_ERROR("Net engine received an invalid message.");
+    if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
+        NET_LOG_ERROR("Net engine received a message with invalid opCode " << opCode);
         return MMS_ERR;
     }
-
-    auto head = static_cast<ReqHead *>(ctx.MessageData());
-    if (UNLIKELY(head->opcode >= MAX_NEW_REQ_HANDLER)) {
-        NET_LOG_ERROR("Net engine received a message with invalid opCode " << head->opcode << ".");
-        return MMS_ERR;
-    }
-
-    auto &handler = mHandlers[head->opcode];
+    auto &handler = mHandlers[opCode];
     if (UNLIKELY(handler == nullptr)) {
-        NET_LOG_ERROR("Net engine received a message with unregistered opCode " << head->opcode << ".");
+        NET_LOG_ERROR("Net engine received a message with invalid opCode " << opCode <<
+            " as no handler registered");
         return MMS_ERR;
     }
     return mRequestExecutor->AddTask(handler, ctx);
+}
+
+int32_t NetEngine::IpcRequestReceived(ServiceContext &ctx)
+{
+    MMS_TRACE_START(NET_TRACE_IPC_HDL);
+    auto ret = RequestInnerReceived(ctx);
+    MMS_TRACE_END(NET_TRACE_IPC_HDL, ret);
+    return ret;
 }
 
 int32_t NetEngine::RequestInnerReceived(ServiceContext &ctx)
@@ -710,10 +801,7 @@ int32_t NetEngine::RequestInnerReceived(ServiceContext &ctx)
         return MMS_ERR;
     }
 
-    MMS_TRACE_START(NET_TRACE_IPC_HDL);
-    auto ret = handler(ctx);
-    MMS_TRACE_END(NET_TRACE_IPC_HDL, ret);
-    return ret;
+    return handler(ctx);
 }
 
 int32_t NetEngine::RequestPosted(const ServiceContext &ctx)
@@ -726,8 +814,8 @@ int32_t NetEngine::OneSideDone(const ServiceContext &ctx)
     return MMS_OK;
 }
 
-void NetEngine::FillConnectOption(ConnectMode mode, ConnectInfo &info, uint32_t groupIndex, std::string &prefix,
-                                  ock::hcom::UBSHcomConnectOptions &op)
+void NetEngine::FillConnectOption(ConnectMode mode, ConnectInfo &info, uint32_t groupIndex, bool oneSide,
+                                  std::string &prefix, ock::hcom::UBSHcomConnectOptions &op)
 {
     if (mode == CONNECT_IPC) {
         op.linkCount = mIpcOptions.connCount;
@@ -737,8 +825,13 @@ void NetEngine::FillConnectOption(ConnectMode mode, ConnectInfo &info, uint32_t 
     }
 
     op.serverGroupId = static_cast<uint8_t>(groupIndex);
-    prefix = CONN_PAYLOAD_PREFIX + "-" + std::to_string(groupIndex) + "-";
-    if (info.isSelfPoll) {
+    prefix = (oneSide ? CONN_ONESIDE_PAYLOAD_PREFIX : CONN_PAYLOAD_PREFIX) + "-" +
+        std::to_string(groupIndex) + "-";
+    bool useSelfPoll = info.isSelfPoll || oneSide;
+    if (mode == CONNECT_RPC && mRpcOptions.protocol == ServiceProtocol::TCP) {
+        useSelfPoll = false;
+    }
+    if (useSelfPoll) {
         op.mode = UBSHcomClientPollingMode::SELF_POLL_BUSY;
     }
 
@@ -746,7 +839,8 @@ void NetEngine::FillConnectOption(ConnectMode mode, ConnectInfo &info, uint32_t 
     op.payload = payload.ToPayloadStr(prefix);
 }
 
-BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, uint32_t groupIndex, ChannelPtr &ch)
+BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, uint32_t groupIndex, ChannelPtr &ch,
+                                 bool oneSide)
 {
     UBSHcomService *netService = (mode == CONNECT_IPC) ? mIpcService : mRpcService;
     if (netService == nullptr) {
@@ -756,7 +850,7 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, uint32_t g
 
     UBSHcomConnectOptions options;
     std::string prefix;
-    FillConnectOption(mode, info, groupIndex, prefix, options);
+    FillConnectOption(mode, info, groupIndex, oneSide, prefix, options);
     int32_t result = 0;
     for (uint16_t i = 0; i < info.retryTimes; ++i) {
         NetConnPayload payload(info.srcId);
@@ -779,7 +873,7 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, uint32_t g
         return result;
     }
 
-    NetChannelUpCtx ctx(info.peerId, groupIndex, false);
+    NetChannelUpCtx ctx(info.peerId, groupIndex, false, oneSide);
     ch->SetUpCtx(ctx.whole);
     ch->SetChannelTimeOut(mTimeout, mTimeout);
     return MMS_OK;

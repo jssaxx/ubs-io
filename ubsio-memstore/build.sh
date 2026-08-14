@@ -147,11 +147,17 @@ $BUILD_CMD || {
 cd ${PROJ_DIR}/output
 if compgen -G "3rdparty/ubs-comm/lib/libhcom.so*" > /dev/null; then
     \cp -d 3rdparty/ubs-comm/lib/libhcom.so* mms/lib/
+elif compgen -G "/usr/lib64/libhcom.so*" > /dev/null; then
+    \cp -d /usr/lib64/libhcom.so* mms/lib/
+fi
+if [ -f "./3rdparty/libboundscheck/lib/libboundscheck.so" ]; then
+    \cp ./3rdparty/libboundscheck/lib/libboundscheck.so mms/lib/
+elif [ -f "/usr/lib64/libboundscheck.so" ]; then
+    \cp /usr/lib64/libboundscheck.so mms/lib/
 fi
 if [[ "$ZK_FLAG" == "ON" ]] && compgen -G "3rdparty/zookeeper/lib/libzookeeper_mt.so*" > /dev/null; then
     \cp -d 3rdparty/zookeeper/lib/libzookeeper_mt.so* mms/lib/
 fi
-\cp ./3rdparty/libboundscheck/lib/libboundscheck.so mms/lib/
 \cp -r ../scripts mms/.
 
 if [ -d mmscore ]; then

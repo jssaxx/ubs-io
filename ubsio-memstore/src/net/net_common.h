@@ -158,6 +158,7 @@ struct NetOptions {
 };
 
 const std::string CONN_PAYLOAD_PREFIX = "mms-idx";
+const std::string CONN_ONESIDE_PAYLOAD_PREFIX = "mms-data";
 const std::string UDS_NAME = "MMS_SHM_UDS";
 const std::string RPC_SERVICE_NAME_SERVER = "MMS_RPC_SERVER";
 const std::string RPC_SERVICE_NAME_CLIENT = "MMS_RPC_CLIENT";
@@ -177,13 +178,17 @@ union NetConnPayload {
         return prefix + std::to_string(whole);
     }
 
-    BResult FromPayloadStr(const std::string &payload, uint32_t &groupIndex)
+    BResult FromPayloadStr(const std::string &payload, uint32_t &groupIndex, bool *oneSide = nullptr)
     {
         std::vector<std::string> splitVec;
         StrUtil::Split(payload, "-", splitVec);
 
         if (splitVec.size() != NO_4) {
             return MMS_INVALID_PARAM;
+        }
+
+        if (oneSide != nullptr) {
+            *oneSide = splitVec[NO_1] == "data";
         }
 
         long value;
@@ -210,23 +215,30 @@ union NetChannelUpCtx {
         uint64_t procId : 32;    /* peer process id */
         uint64_t isAccepted : 1; /* accepted from other */
         uint64_t groupIndex : 5; /* group index, 0-31 */
-        uint64_t reserved : 10;  /* reserved */
+        uint64_t isOneSide : 1;  /* dedicated one-side data channel */
+        uint64_t reserved : 9;   /* reserved */
     };
     uint64_t whole = 0;
 
     NetChannelUpCtx() = default;
     explicit NetChannelUpCtx(uint64_t w) : whole(w) {}
-    NetChannelUpCtx(const NetNode &pId, uint32_t groupIndex, bool accepted) : whole(0)
+    NetChannelUpCtx(const NetNode &pId, uint32_t groupIndex, bool accepted, bool oneSide = false) : whole(0)
     {
         peerId = static_cast<uint16_t>(pId.nid);
         procId = pId.pid;
         this->groupIndex = groupIndex;
         isAccepted = accepted ? 1 : 0;
+        isOneSide = oneSide ? 1 : 0;
     }
 
     inline uint32_t GetGroupIndex() const
     {
         return static_cast<uint32_t>(groupIndex);
+    }
+
+    inline bool IsOneSide() const
+    {
+        return isOneSide != 0;
     }
 };
 

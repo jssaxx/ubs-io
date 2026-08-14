@@ -111,13 +111,40 @@ TEST_F(TestMms, test_mms_put_invalid_parameter)
     auto ret = MmsPut(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 
+    items[0] = MakePut("key1", "value1", length, 0);
+    items[0].key = nullptr;
+    items[0].keyLen = 1;
+    ret = MmsPut(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+
+    std::string oversizedKey(MAX_KEY_LENGTH + 1, 'k');
+    items[0] = MakePut(oversizedKey.c_str(), "value1", length, 0);
+    ret = MmsPut(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+
     // invalid value
     items[0] = MakePut("key1", nullptr, length, 0);
     ret = MmsPut(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 
+    items[0] = MakePut("key1", "value1", length, 0);
+    items[0].valueAddr = nullptr;
+    ret = MmsPut(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+
+    items[0] = MakePut("key1", "value1", length, 0);
+    items[0].result = nullptr;
+    ret = MmsPut(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+
     // invalid length
     length = 0;
+    items[0] = MakePut("key1", "value1", length, 0);
+    ret = MmsPut(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+
+    // value exceeds the public 4 MiB limit
+    length = MAX_VALUE_SIZE + 1;
     items[0] = MakePut("key1", "value1", length, 0);
     ret = MmsPut(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
@@ -150,8 +177,35 @@ TEST_F(TestMms, test_mms_get_invalid_batch)
     uint32_t itemNum = 0;
 
     gServer->NotifyServiceable(true);
-    auto ret = MmsPut(nullptr, itemNum);
+    auto ret = MmsGet(nullptr, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
+}
+
+TEST_F(TestMms, test_mms_max_key_length_parameter)
+{
+    LOG_INFO("test_mms_max_key_length_parameter");
+    std::string key(MAX_KEY_LENGTH, 'k');
+    char value = 'v';
+    char getValue = 0;
+    char *valueAddr = nullptr;
+    char *getValueAddr = &getValue;
+    uint32_t realLength = 0;
+    int32_t result = RET_MMS_OK;
+
+    PutItems putItem = {key.c_str(), &value, 1, MAX_KEY_LENGTH, 0, &valueAddr, &result};
+    EXPECT_NE(MmsPut(&putItem, NO_1), RET_MMS_EPERM);
+
+    GetItems getItem = {key.c_str(), MAX_KEY_LENGTH, 0, 1, &getValueAddr, &realLength, &result};
+    EXPECT_NE(MmsGet(&getItem, NO_1), RET_MMS_EPERM);
+
+    UpdateItems updateItem = {key.c_str(), &value, MAX_KEY_LENGTH, 1, 0, &result};
+    EXPECT_NE(MmsUpdate(&updateItem, NO_1), RET_MMS_EPERM);
+
+    ReplaceItems replaceItem = {key.c_str(), &value, MAX_KEY_LENGTH, 1, 0, &result};
+    EXPECT_NE(MmsReplace(&replaceItem, NO_1), RET_MMS_EPERM);
+
+    DeleteItems deleteItem = {key.c_str(), MAX_KEY_LENGTH, 0, &result};
+    EXPECT_NE(MmsDelete(&deleteItem, NO_1), RET_MMS_EPERM);
 }
 
 TEST_F(TestMms, test_mms_get_invalid_parameter)
@@ -170,11 +224,31 @@ TEST_F(TestMms, test_mms_get_invalid_parameter)
     auto ret = MmsGet(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 
+    items[0] = MakeGet("key1", offset, length, &value1, &realLen1);
+    items[0].key = nullptr;
+    items[0].keyLen = 1;
+    ret = MmsGet(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+
+    std::string oversizedKey(MAX_KEY_LENGTH + 1, 'k');
+    items[0] = MakeGet(oversizedKey.c_str(), offset, length, &value1, &realLen1);
+    ret = MmsGet(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+
     // invalid value
     realLen1 = 0;
     offset = 0;
     length = 7;
     items[0] = MakeGet("aaa", offset, length, nullptr, &realLen1);
+    ret = MmsGet(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+
+    items[0] = MakeGet("aaa", offset, length, &value1, nullptr);
+    ret = MmsGet(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+
+    items[0] = MakeGet("aaa", offset, length, &value1, &realLen1);
+    items[0].result = nullptr;
     ret = MmsGet(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 
@@ -185,6 +259,16 @@ TEST_F(TestMms, test_mms_get_invalid_parameter)
     items[0] = MakeGet("aaa", offset, length, &value1, &realLen1);
     ret = MmsGet(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
+
+    items[0] = MakeGet("aaa", 0, MAX_VALUE_SIZE + 1, &value1, &realLen1);
+    ret = MmsGet(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+
+    items[0] = MakeGet("aaa", MAX_VALUE_SIZE, 1, &value1, &realLen1);
+    ret = MmsGet(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+
+    free(value1);
 }
 
 TEST_F(TestMms, test_mms_update)
@@ -226,14 +310,39 @@ TEST_F(TestMms, test_mms_update_invalid_parameter)
     auto ret = MmsUpdate(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 
+    items[0] = MakeUpdate("key1", "value1", offset, length);
+    items[0].key = nullptr;
+    items[0].keyLen = 1;
+    ret = MmsUpdate(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+
+    std::string oversizedKey(MAX_KEY_LENGTH + 1, 'k');
+    items[0] = MakeUpdate(oversizedKey.c_str(), "value1", offset, length);
+    ret = MmsUpdate(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+
     // invalid value
     items[0] = MakeUpdate("key1", nullptr, offset, length);
+    ret = MmsUpdate(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+
+    items[0] = MakeUpdate("key1", "value1", offset, length);
+    items[0].result = nullptr;
     ret = MmsUpdate(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 
     // invalid length
     length = 0;
     items[0] = MakeUpdate("key1", "value1", offset, length);
+    ret = MmsUpdate(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+
+    // value or resulting range exceeds the public 4 MiB limit
+    length = MAX_VALUE_SIZE + 1;
+    items[0] = MakeUpdate("key1", "value1", 0, length);
+    ret = MmsUpdate(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+    items[0] = MakeUpdate("key1", "value1", MAX_VALUE_SIZE, 1);
     ret = MmsUpdate(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 }
@@ -271,6 +380,22 @@ TEST_F(TestMms, test_mms_delete_invalid_parameter)
     items[0] = MakeDelete("");
     uint32_t itemNum = 1;
     auto ret = MmsDelete(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+
+    items[0] = MakeDelete("key1");
+    items[0].key = nullptr;
+    items[0].keyLen = 1;
+    ret = MmsDelete(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+
+    std::string oversizedKey(MAX_KEY_LENGTH + 1, 'k');
+    items[0] = MakeDelete(oversizedKey.c_str());
+    ret = MmsDelete(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+
+    items[0] = MakeDelete("key1");
+    items[0].result = nullptr;
+    ret = MmsDelete(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 }
 
@@ -314,8 +439,24 @@ TEST_F(TestMms, test_mms_replace_invalid_parameter)
     auto ret = MmsReplace(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 
+    items[0] = MakeReplace("key1", "value1", offset, length);
+    items[0].key = nullptr;
+    items[0].keyLen = 1;
+    ret = MmsReplace(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+
+    std::string oversizedKey(MAX_KEY_LENGTH + 1, 'k');
+    items[0] = MakeReplace(oversizedKey.c_str(), "value1", offset, length);
+    ret = MmsReplace(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+
     // invalid value
     items[0] = MakeReplace("key1", nullptr, offset, length);
+    ret = MmsReplace(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+
+    items[0] = MakeReplace("key1", "value1", offset, length);
+    items[0].result = nullptr;
     ret = MmsReplace(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 
@@ -323,6 +464,15 @@ TEST_F(TestMms, test_mms_replace_invalid_parameter)
     offset = 1;
     length = 0;
     items[0] = MakeReplace("key1", "value1", offset, length);
+    ret = MmsReplace(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+
+    // value or resulting range exceeds the public 4 MiB limit
+    length = MAX_VALUE_SIZE + 1;
+    items[0] = MakeReplace("key1", "value1", 0, length);
+    ret = MmsReplace(items, itemNum);
+    EXPECT_EQ(ret, RET_MMS_EPERM);
+    items[0] = MakeReplace("key1", "value1", MAX_VALUE_SIZE, 1);
     ret = MmsReplace(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 }

@@ -30,6 +30,27 @@
 
 namespace ock {
 namespace mms {
+
+class NetReplyCallback final : public ock::hcom::Callback {
+public:
+    void Run(ock::hcom::UBSHcomServiceContext &) override
+    {
+        delete this;
+    }
+
+private:
+    void SetTime(uint64_t time) override
+    {
+        mStartTime = time;
+    }
+
+    uint64_t GetTime() override
+    {
+        return mStartTime;
+    }
+
+    uint64_t mStartTime{0};
+};
 constexpr size_t KEYPASS_MAX_LEN = 10000;
 
 using PrivateKeyCallback =
@@ -57,9 +78,99 @@ public:
     NetEngine() = default;
     ~NetEngine() = default;
 
+    static bool IsRpcProtocolSupported(ServiceProtocol protocol);
     BResult Initialize(const NetEngineInitOptions &options);
     BResult Start(const NetOptions &opt);
     void Stop();
+    BResult RegisterMemoryRegion(uintptr_t address, uint64_t size, MemoryRegion &mr);
+    void DestroyMemoryRegion(MemoryRegion &mr);
+    BResult GetMemoryKey(MemoryRegion &mr, MmsMemoryKey &key) const;
+    bool HasChannel(uint32_t nodeId, uint32_t pid) const
+    {
+        return mChannelMgr != nullptr && mChannelMgr->HasChannel(nodeId, pid);
+    }
+
+    BResult GetRegisteredMemoryKey(uintptr_t address, uint64_t size, uint64_t &key)
+    {
+        if (UNLIKELY(size == 0)) {
+            return MMS_INVALID_PARAM;
+        }
+
+        uintptr_t end = address + size;
+        if (UNLIKELY(end < address)) {
+            return MMS_INVALID_PARAM;
+        }
+
+        for (uint16_t index = 0; index < mMemList.num; ++index) {
+            uintptr_t base = mMemList.address[index];
+            uintptr_t limit = base + mMemList.size[index];
+            if (UNLIKELY(limit < base)) {
+                continue;
+            }
+            if (address >= base && end <= limit && !mMemList.mr[index].GetHcomMrs().empty()) {
+                key = mMemList.mr[index].GetHcomMrs()[0]->GetLKey();
+                return MMS_OK;
+            }
+        }
+
+        std::lock_guard<std::mutex> lock(mRegisteredMemoryMutex);
+        auto iter = mDynamicMemoryRegions.upper_bound(address);
+        if (iter != mDynamicMemoryRegions.begin()) {
+            --iter;
+            const auto &region = iter->second;
+            uintptr_t limit = region.address + region.size;
+            if (limit >= region.address && address >= region.address && end <= limit) {
+                key = region.localKey;
+                return MMS_OK;
+            }
+        }
+
+        NET_LOG_ERROR("No registered memory region contains address:" << address << ", size:" << size << ".");
+        return MMS_INVALID_PARAM;
+    }
+
+    BResult GetRegisteredMemoryKey(uintptr_t address, uint64_t size, MmsMemoryKey &key)
+    {
+        if (UNLIKELY(size == 0)) {
+            return MMS_INVALID_PARAM;
+        }
+
+        uintptr_t end = address + size;
+        if (UNLIKELY(end < address)) {
+            return MMS_INVALID_PARAM;
+        }
+
+        for (uint16_t index = 0; index < mMemList.num; ++index) {
+            uintptr_t base = mMemList.address[index];
+            uintptr_t limit = base + mMemList.size[index];
+            if (UNLIKELY(limit < base)) {
+                continue;
+            }
+            if (address >= base && end <= limit && !mMemList.mr[index].GetHcomMrs().empty()) {
+                ock::hcom::UBSHcomMemoryKey hcomKey{};
+                mMemList.mr[index].GetMemoryKey(hcomKey);
+                std::memcpy(key.keys, hcomKey.keys, sizeof(key.keys));
+                std::memcpy(key.tokens, hcomKey.tokens, sizeof(key.tokens));
+                std::memcpy(key.eid, hcomKey.eid, sizeof(key.eid));
+                return MMS_OK;
+            }
+        }
+
+        std::lock_guard<std::mutex> lock(mRegisteredMemoryMutex);
+        auto iter = mDynamicMemoryRegions.upper_bound(address);
+        if (iter != mDynamicMemoryRegions.begin()) {
+            --iter;
+            const auto &region = iter->second;
+            uintptr_t limit = region.address + region.size;
+            if (limit >= region.address && address >= region.address && end <= limit) {
+                key = region.memoryKey;
+                return MMS_OK;
+            }
+        }
+
+        NET_LOG_ERROR("No registered memory region contains address:" << address << ", size:" << size << ".");
+        return MMS_INVALID_PARAM;
+    }
 
     void Show(uint32_t &executorNum, NetOptions &rpcOption, NetOptions &ipcOption)
     {
@@ -77,6 +188,11 @@ public:
             return;
         }
         ock::hcom::UBSHcomNetOutLogger::Instance()->SetLogLevel(level);
+    }
+
+    void UpdateMemList(const NetMemList &memList)
+    {
+        mMemList = memList;
     }
 
     void UpdateTimeOut(int16_t timeoutSec)
@@ -102,8 +218,13 @@ public:
 
     BResult CheckConnect(const MmsNodeId targetNodeId)
     {
+        return CheckConnect(targetNodeId, NO_0);
+    }
+
+    BResult CheckConnect(const MmsNodeId targetNodeId, uint32_t groupIndex)
+    {
         ChannelPtr ch;
-        auto ret = GetChanel(targetNodeId, ch, 0);
+        auto ret = GetChanel(targetNodeId, ch, groupIndex);
         if (UNLIKELY(ret != MMS_OK)) {
             return MMS_NET_RETRY;
         }
@@ -211,6 +332,25 @@ public:
 
         ret = SyncCall(opCode, req, resp, respLen, ch);
         return ret;
+    }
+
+    template <typename TReq>
+    BResult SyncCall(const MmsNodeId &targetNodeId, uint32_t groupIndex, uint16_t opCode, TReq &req, void *resp,
+                     uint64_t respCap, uint64_t &respLen)
+    {
+        if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER || resp == nullptr || respCap == 0)) {
+            NET_LOG_ERROR("Invalid sync call param, opCode:" << opCode << ", resp:" << resp << ", cap:" << respCap);
+            return MMS_INVALID_PARAM;
+        }
+
+        ChannelPtr ch{ nullptr };
+        auto ret = GetChanel(targetNodeId, ch, groupIndex);
+        if (UNLIKELY(ret != MMS_OK || ch == nullptr)) {
+            NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
+            return MMS_NET_RETRY;
+        }
+
+        return SyncCall(opCode, req, resp, respCap, respLen, ch);
     }
 
     template <typename TResp>
@@ -365,6 +505,20 @@ public:
         return NetResult(ret);
     }
 
+    BResult SyncReadOneSide(const MmsNodeId &targetNodeId, uint32_t groupIndex, const NetRequest &req)
+    {
+        using namespace ock::hcom;
+        ChannelPtr ch{ nullptr };
+        auto ret = mOneSideChannelMgr->GetChannel(targetNodeId, ch, groupIndex);
+        if (UNLIKELY(ret != MMS_OK || ch == nullptr)) {
+            NET_LOG_ERROR("Failed to get one-side channel for read by target node id " << targetNodeId
+                                                                                         << ", result " << ret);
+            return MMS_NET_RETRY;
+        }
+        ret = ch->Get(req, nullptr);
+        return NetResult(ret);
+    }
+
     BResult SyncWrite(const MmsNodeId &targetNodeId, uint32_t groupIndex, uint32_t pid, const NetRequest &req)
     {
         using namespace ock::hcom;
@@ -406,8 +560,7 @@ public:
         using namespace ock::hcom;
         int32_t result = MMS_ERR;
 
-        NetCallback *callback = UBSHcomNewCallback([this](UBSHcomServiceContext &context) {
-            }, std::placeholders::_1);
+        NetCallback *callback = new (std::nothrow) NetReplyCallback();
 
         UBSHcomReplyContext replyCtx;
         replyCtx.errorCode = static_cast<int16_t>(retCode);
@@ -473,13 +626,9 @@ public:
         return mChannelMgr;
     }
 
-    ServiceProtocol GetNetProtocol(ConnectMode mode)
+    NetChannelMgrPtr &GetOneSideChannelMgr()
     {
-        if (mode == CONNECT_IPC) {
-            return mIpcOptions.protocol;
-        } else {
-            return mRpcOptions.protocol;
-        }
+        return mOneSideChannelMgr;
     }
 
     uint16_t GetConnectCount(ConnectMode mode)
@@ -526,15 +675,33 @@ public:
         return req;
     }
 
-    void FillConnectOption(ConnectMode mode, ConnectInfo &info, uint32_t groupIndex, std::string &prefix,
-                           ock::hcom::UBSHcomConnectOptions &op);
-    BResult ConnectToPeer(ConnectMode mode, ConnectInfo &info, uint32_t groupIndex, ChannelPtr &ch);
+    inline NetRequest InitNetRequest(uintptr_t la, uintptr_t ra, const MmsMemoryKey &lk, const MmsMemoryKey &rk,
+                                     uint32_t size)
+    {
+        NetRequest req;
+        std::memcpy(req.lKey.keys, lk.keys, sizeof(req.lKey.keys));
+        std::memcpy(req.lKey.tokens, lk.tokens, sizeof(req.lKey.tokens));
+        std::memcpy(req.lKey.eid, lk.eid, sizeof(req.lKey.eid));
+        std::memcpy(req.rKey.keys, rk.keys, sizeof(req.rKey.keys));
+        std::memcpy(req.rKey.tokens, rk.tokens, sizeof(req.rKey.tokens));
+        std::memcpy(req.rKey.eid, rk.eid, sizeof(req.rKey.eid));
+        req.lAddress = la;
+        req.rAddress = ra;
+        req.size = size;
+        return req;
+    }
+
+    void FillConnectOption(ConnectMode mode, ConnectInfo &info, uint32_t groupIndex, bool oneSide,
+                           std::string &prefix, ock::hcom::UBSHcomConnectOptions &op);
+    BResult ConnectToPeer(ConnectMode mode, ConnectInfo &info, uint32_t groupIndex, ChannelPtr &ch,
+                          bool oneSide = false);
 
     BResult InitMemoryRegister(void);
 
     int32_t NewChannel(const std::string &ipPort, const ChannelPtr &newChannel, const std::string &payload);
     void ChannelBroken(const ChannelPtr &ch);
     int32_t RequestReceived(ServiceContext &ctx);
+    int32_t IpcRequestReceived(ServiceContext &ctx);
     int32_t RequestInnerReceived(ServiceContext &ctx);
     int RequestPosted(const ServiceContext &ctx);
     int OneSideDone(const ServiceContext &ctx);
@@ -671,6 +838,28 @@ private:
         return MMS_OK;
     }
 
+    template <typename TReq>
+    BResult SyncCall(uint16_t opCode, TReq &req, void *resp, uint64_t respCap, uint64_t &respLen, ChannelPtr &ch)
+    {
+        using namespace ock::hcom;
+        UBSHcomRequest reqMsg(static_cast<void *>(&req), sizeof(TReq), opCode);
+        UBSHcomResponse respMsg(resp, respCap);
+
+        auto result = ch->Call(reqMsg, respMsg);
+        if (UNLIKELY(result != MMS_OK)) {
+            NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", result " << UBSHcomNetErrStr(result));
+            return NetResult(result);
+        }
+
+        if (NN_UNLIKELY(respMsg.errorCode != MMS_OK)) {
+            NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", error code " << respMsg.errorCode);
+            return respMsg.errorCode;
+        }
+
+        respLen = respMsg.size;
+        return MMS_OK;
+    }
+
     template <typename TReq> BResult AsyncCallWithoutResponse(uint16_t opCode, TReq &req, ChannelPtr &ch)
     {
         using namespace ock::hcom;
@@ -730,10 +919,6 @@ private:
         return MMS_OK;
     }
 
-    inline void AsyncCallDone(int32_t result, uint64_t ts)
-    {
-    }
-
     template <typename TReq>
     void AsyncCall(uint16_t opCode, TReq &req, ChannelPtr &ch, Callback callback)
     {
@@ -741,15 +926,12 @@ private:
         int32_t result = MMS_ERR;
         UBSHcomRequest reqMsg(static_cast<void *>(&req), sizeof(TReq), opCode);
         UBSHcomResponse respMsg{};
-        uint64_t ts = Monotonic::TimeNs();
 
         auto *netCallback = UBSHcomNewCallback(
-            [this, ts, callback](UBSHcomServiceContext &context) {
+            [callback](UBSHcomServiceContext &context) {
                 if (context.Result() != SER_OK) {
-                    AsyncCallDone(context.Result(), ts);
                     callback.cb(callback.cbCtx, nullptr, 0, NetResult(context.Result()));
                 } else {
-                    AsyncCallDone(context.ErrorCode(), ts);
                     callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(), context.ErrorCode());
                 }
             },
@@ -761,25 +943,18 @@ private:
         }
     }
 
-    inline void AsyncCallBuffDone(int32_t result, uint64_t ts)
-    {
-    }
-
     void AsyncCallBuffInner(uint16_t opCode, void *req, uint32_t reqLen, ChannelPtr &ch, Callback callback)
     {
         using namespace ock::hcom;
         int32_t result = MMS_ERR;
         UBSHcomRequest reqMsg(req, reqLen, opCode);
         UBSHcomResponse respMsg{};
-        uint64_t ts = Monotonic::TimeNs();
 
         auto *netCallback = UBSHcomNewCallback(
-            [this, ts, callback](UBSHcomServiceContext &context) {
+            [callback](UBSHcomServiceContext &context) {
                 if (context.Result() != SER_OK) {
-                    AsyncCallBuffDone(context.Result(), ts);
                     callback.cb(callback.cbCtx, nullptr, 0, NetResult(context.Result()));
                 } else {
-                    AsyncCallBuffDone(context.ErrorCode(), ts);
                     callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(), context.ErrorCode());
                 }
             },
@@ -792,9 +967,17 @@ private:
     }
 
 private:
+    struct RegisteredMemoryInfo {
+        uintptr_t address = 0;
+        uint64_t size = 0;
+        uint64_t localKey = 0;
+        MmsMemoryKey memoryKey{};
+    };
+
     bool mStarted = false;
     int16_t mTimeout = -1;
     NetChannelMgrPtr mChannelMgr = nullptr;
+    NetChannelMgrPtr mOneSideChannelMgr = nullptr;
     NewRequestHandler mHandlers[MAX_NEW_REQ_HANDLER]{};
     NetConnectorPtr mConnector = nullptr;
     NewChannelHandler mHandleNewChannel = nullptr;
@@ -808,6 +991,8 @@ private:
     NetExecutorPoolPtr mRequestExecutor = nullptr;
     uint32_t mReqExecutorNum;
     NetMemList mMemList;
+    mutable std::mutex mRegisteredMemoryMutex;
+    std::map<uintptr_t, RegisteredMemoryInfo> mDynamicMemoryRegions;
     DecryptFunc mDecryptHandler;
 
     DEFINE_REF_COUNT_VARIABLE;

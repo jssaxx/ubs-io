@@ -133,6 +133,7 @@ void MmsExit(void);
  *
  * For each item, PutItems::valueAddr is used to return the memory address where the data is written, and
  * PutItems::result is used to return the per-item execution result.
+ * keyLen must be in [1, 128], and valueLen must be in [1, 4 MiB].
  *
  * @param[in/out]: itemList: Key/value descriptor list.
  * @param[in]: itemNum: Number of items in itemList.
@@ -148,6 +149,7 @@ CResult MmsPut(PutItems *itemList, uint32_t itemNum);
  *
  * For each item, GetItems::realLength is used to return the real value length, and GetItems::result is used to return
  * the per-item execution result.
+ * keyLen must be in [1, 128]. When the caller supplies a value buffer, offset + length must not exceed 4 MiB.
  *
  * @param[in/out]: itemList: Key/value descriptor list.
  * @param[in]: itemNum: Number of items in itemList.
@@ -160,6 +162,7 @@ CResult MmsGet(GetItems *itemList, uint32_t itemNum);
  * @brief: Update key/value items.
  *
  * For each item, UpdateItems::result is used to return the per-item execution result.
+ * keyLen must be in [1, 128], valueLen must be in [1, 4 MiB], and offset + valueLen must not exceed 4 MiB.
  *
  * @param[in/out]: itemList: Key/value descriptor list.
  * @param[in]: itemNum: Number of items in itemList.
@@ -171,6 +174,7 @@ CResult MmsUpdate(UpdateItems *itemList, uint32_t itemNum);
  * @brief: Delete key/value items.
  *
  * For each item, DeleteItems::result is used to return the per-item execution result.
+ * keyLen must be in [1, 128].
  *
  * @param[in/out]: itemList: Key descriptor list.
  * @param[in]: itemNum: Number of items in itemList.
@@ -182,6 +186,7 @@ CResult MmsDelete(DeleteItems *itemList, uint32_t itemNum);
  * @brief: Replace key/value items.
  *
  * For each item, ReplaceItems::result is used to return the per-item execution result.
+ * keyLen must be in [1, 128], valueLen must be in [1, 4 MiB], and offset + valueLen must not exceed 4 MiB.
  *
  * @param[in/out]: itemList: Key/value descriptor list.
  * @param[in]: itemNum: Number of items in itemList.

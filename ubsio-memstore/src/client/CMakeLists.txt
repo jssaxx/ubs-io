@@ -1,6 +1,10 @@
 file(GLOB_RECURSE MMS_CLIENT_SRCS *.cpp *.h)
 
 add_library(mms_client SHARED ${MMS_CLIENT_SRCS})
+if (OPEN_CLI STREQUAL "ON")
+    target_sources(mms_client PRIVATE
+            ${SRC_DIR}/../test/tools/diagnose/cli_client/client_diagnose.cpp)
+endif()
 install(TARGETS mms_client DESTINATION ${TARGET_INSTALL_LIB_DIR}/ PERMISSIONS OWNER_WRITE OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 
 if (OPEN_CLI STREQUAL "ON")

@@ -173,10 +173,10 @@ public:
 
     BResult Put(const PutPara &para);
     BResult Get(const GetPara &para);
+    BResult GetDirect(const GetPara &para, const std::function<BResult(const char *, uint64_t)> &handler);
     BResult Update(const UpdatePara &para);
     BResult Delete(const char *key, uint16_t keyLen, uint32_t version);
     BResult Replace(const ReplacePara &para);
-
     // 返回实际读取到的字节数
     uint64_t GetDataFromBlock(IndexValue *indexValue, char *data, uint64_t offset, uint64_t dataLen);
     uint64_t GetDataAddrFromBlock(IndexValue *indexValue, char **data, uint64_t offset, uint64_t dataLen);

@@ -828,7 +828,7 @@ int32_t CmServerViewInitPool(uint16_t poolId)
     memset_s(spool->ptEntryList, len, 0, len);
 
     uint16_t copyNum = pool->redundanceNum;
-    uint16_t minCopyNum = pool->redundanceNum - 1;
+    uint16_t minCopyNum = (pool->redundanceNum > 1) ? (pool->redundanceNum - 1) : 1;
 
     spool->calcOps = CmPtCalcOpsGet(PT_NUM_LIMIT_FIXED);
     spool->calculator = spool->calcOps->createCalculator(pool->maxNodeNum, pool->maxPtNum, copyNum, minCopyNum);
@@ -962,4 +962,3 @@ void CmServerViewExit(void)
     CM_LOGINFO("Cm server view exit succeed.");
     return;
 }
-

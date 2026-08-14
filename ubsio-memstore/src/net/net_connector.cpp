@@ -51,6 +51,27 @@ BResult ConnectTask::DoConnect()
             NET_LOG_INFO("Exist connect by target node id " << mConnectInfo.peerId.nid << ", pid:" <<
                 mConnectInfo.peerId.pid << ", groupIndex:" << groupIndex << ".");
         }
+
+        if (mode != CONNECT_RPC || mConnectInfo.srcId.pid != 0) {
+            continue;
+        }
+
+        ChannelPtr oneSideChannel = nullptr;
+        auto &oneSideMgr = mEngine->GetOneSideChannelMgr();
+        ret = oneSideMgr->GetChannel(mConnectInfo.peerId, oneSideChannel, groupIndex);
+        if (ret == MMS_NOT_EXISTS) {
+            ret = mEngine->ConnectToPeer(mode, mConnectInfo, groupIndex, oneSideChannel, true);
+            if (ret != MMS_OK) {
+                NET_LOG_ERROR("Failed to connect one-side channel to peer, dstNid:" << mConnectInfo.peerId.nid
+                    << ", groupIndex:" << groupIndex << ".");
+                return MMS_ERR;
+            }
+            oneSideMgr->AddChannel(mConnectInfo.peerId, oneSideChannel, groupIndex);
+        } else if (ret != MMS_OK) {
+            NET_LOG_ERROR("Failed to query one-side channel, dstNid:" << mConnectInfo.peerId.nid
+                << ", groupIndex:" << groupIndex << ", ret:" << ret << ".");
+            return ret;
+        }
     }
 
     return MMS_OK;

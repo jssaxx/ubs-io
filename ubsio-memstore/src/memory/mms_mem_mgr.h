@@ -15,6 +15,7 @@
 
 #include <atomic>
 #include <unordered_map>
+#include <sys/mman.h>
 #include <unistd.h>
 #include "mms_ref.h"
 #include "mms_lock.h"
@@ -63,13 +64,27 @@ public:
 
     inline BResult Reset(void)
     {
+        for (uint16_t area = 0; area < MMAP_AREA_BUTT; ++area) {
+            uint64_t totalSize = 0;
+            for (uint16_t index = 0; index < mNumaNum; ++index) {
+                totalSize += mAreaSize[area][index];
+                mAreaSize[area][index] = 0;
+            }
+            if (mAreaAddr[area] != 0 && totalSize != 0) {
+                munmap(reinterpret_cast<void *>(mAreaAddr[area]), totalSize);
+                mAreaAddr[area] = 0;
+            }
+        }
         for (uint16_t &numaId: mNumaId) {
             numaId = -1;
         }
         for (auto &fd: mAreaFd) {
-            close(fd);
+            if (fd >= 0) {
+                close(fd);
+            }
             fd = -1;
         }
+        mNumaNum = 0;
         return MMS_OK;
     }
 
@@ -104,19 +119,18 @@ private:
 
 private:
 
-    uint16_t mNumaNum;
-    uint16_t mNumaId[MAX_NUMAS_NUM];
-    uint64_t mNumaSize[MAX_NUMAS_NUM];
+    uint16_t mNumaNum = 0;
+    uint16_t mNumaId[MAX_NUMAS_NUM] = {0};
+    uint64_t mNumaSize[MAX_NUMAS_NUM] = {0};
 
-    int32_t mAreaFd[MMAP_AREA_BUTT];
+    int32_t mAreaFd[MMAP_AREA_BUTT] = {-1, -1, -1, -1};
 
-    uint64_t mAreaSize[MMAP_AREA_BUTT][MAX_NUMAS_NUM];
+    uint64_t mAreaSize[MMAP_AREA_BUTT][MAX_NUMAS_NUM] = {{0}};
 
-    uint64_t mAreaAddr[MMAP_AREA_BUTT];
+    uint64_t mAreaAddr[MMAP_AREA_BUTT] = {0};
 
     MmapMode mAreaMode[MMAP_AREA_BUTT];
 
-    bool mIsCreated = false;
     bool mNeedPrefault = false;
 
     DEFINE_REF_COUNT_VARIABLE;

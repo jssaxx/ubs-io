@@ -26,6 +26,7 @@
 #include "cm.h"
 #include "mms_crb_scheduler.h"
 #include "mms_kv_server.h"
+#include "mms_client_ioctx_mgr.h"
 
 namespace ock {
 namespace mms {
@@ -216,6 +217,11 @@ public:
         return mIoCtxMemAllocator;
     }
 
+    inline MmsMemAllocatorPtr GetForwardMemAllocator()
+    {
+        return mForwardMemAllocator;
+    }
+
     inline CachePtr GetCache()
     {
         return mCache;
@@ -241,6 +247,13 @@ public:
         return mCrbSchedulerPtr;
     }
 
+    BResult AcquireClientIoCtx(uint32_t clientPid, ClientIoCtxPtr &ioCtx);
+    BResult ResolveClientIoCtx(uint32_t clientPid, uint64_t generation, uint64_t offset, uint64_t length,
+                               ClientIoCtxPtr &ioCtx, uintptr_t &address) const;
+    std::vector<ClientIoCtxInfo> GetClientIoCtxInfos() const;
+    ClientIoCtxStats GetClientIoCtxStats() const;
+    void ReleaseClientIoCtx(uint32_t clientPid);
+
     DEFINE_REF_COUNT_FUNCTIONS;
 
 protected:
@@ -256,6 +269,7 @@ protected:
     BResult InitIndexMemAllocator();
     BResult InitValueMemAllocator();
     BResult InitIOCtxMemAllocator();
+    BResult InitForwardMemAllocator();
     BResult MmsMemInit();
     void MmsMemExit();
     BResult MmsMulticastNetInit();
@@ -300,7 +314,11 @@ private:
     MmsMemMgrPtr mMemMgr = nullptr;
     MmsMemAllocatorPtr mMemAllocator = nullptr;
     MmsMemAllocatorPtr mIoCtxMemAllocator = nullptr;
+    MmsMemAllocatorPtr mForwardMemAllocator = nullptr;
     MmsMemAllocatorPtr mIndexMemAllocator = nullptr;
+    ClientIoCtxManager mClientIoCtxManager;
+    uintptr_t mForwardMemAddress = 0;
+    uint64_t mForwardMemSize = 0;
     CachePtr mCache = nullptr;
     CmPtr mCm = nullptr;
     MmsKvServerPtr mKvServer = nullptr;
@@ -314,7 +332,7 @@ private:
 
     CrbSchedulerPtr mCrbSchedulerPtr = nullptr;
 #ifdef USE_CLI_TOOLS
-    void *mServerDiagnoseHandler = nullptr;
+    bool mServerDiagnoseInited = false;
 #endif
 
     DEFINE_REF_COUNT_VARIABLE;

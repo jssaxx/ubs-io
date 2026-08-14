@@ -10,6 +10,11 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include <algorithm>
+#include <array>
+#include <cstring>
+#include <memory>
+
 #include "mms_log.h"
 #include "mms_comm.h"
 #include "mms_functions.h"
@@ -25,6 +30,9 @@ namespace mms {
 
 static thread_local uint16_t g_groupIndex = NumaGroupIndex::Instance()->GetGroupIndex(); // one-time execution
 static constexpr uint16_t IO_LOC_DESC_LEN = sizeof(IoLocDesc);
+static constexpr uint64_t GET_RSP_BUFFER_SIZE = IO_SIZE_256K;
+static constexpr uint32_t PT_GROUP_HASH_FACTOR = 0x9E3779B1U;
+static thread_local std::array<char, GET_RSP_BUFFER_SIZE> g_getRspBuffer;
 
 uint32_t MmsKvServer::mMaxPutItemNum = 0;
 uint32_t MmsKvServer::mMaxUpdateItemNum = 0;
@@ -35,6 +43,237 @@ struct SendResultContext {
     BResult failedRet;
     bool withValue;
 };
+
+struct IoItemResultResponse {
+    uint32_t itemNum;
+    int32_t results[0];
+};
+
+struct RemoteIoCbCtx {
+    std::atomic<uint16_t> quota;
+    std::atomic<int32_t> result;
+    void *ioBuff;
+    uint32_t ioLen;
+    bool withValue;
+    bool applyResults;
+
+    RemoteIoCbCtx(uint16_t q, void *buff, uint32_t len, bool hasValue, bool apply)
+        : quota(q), result(MMS_OK), ioBuff(buff), ioLen(len), withValue(hasValue), applyResults(apply)
+    {}
+};
+
+struct RoutedPutTask {
+    uint16_t ptId{0};
+    std::vector<uint32_t> itemIndexes;
+    std::vector<PutItems> items;
+    std::vector<char *> valueAddrs;
+    std::vector<IOCtxItem> ctxItems;
+};
+
+struct RoutedPutAsyncOp {
+    RoutedPutTask *task{nullptr};
+    IOCtxItem *ctxItem{nullptr};
+    uint16_t ptId{0};
+    uint16_t groupIndex{0};
+    uint64_t seqNo{0};
+    uint16_t remoteNum{0};
+    std::array<uint16_t, MAX_NODES_NUM> remoteIds{};
+    bool localCopy{false};
+    bool sequenceApplied{false};
+    bool oneSide{false};
+    BResult result{MMS_OK};
+    std::unique_ptr<RemoteIoCbCtx> callbackCtx;
+    std::vector<OneSideIoRequest> oneSideReqs;
+};
+
+static constexpr uint32_t ROUTED_PUT_MAX_INFLIGHT = NO_32;
+
+struct RoutedBatchGroups {
+    std::array<std::vector<uint32_t>, MMS_ROUTE_MAX_PT_NUM> itemIndexes;
+    std::vector<uint16_t> ptIds;
+
+    void Reset()
+    {
+        for (auto ptId : ptIds) {
+            itemIndexes[ptId].clear();
+        }
+        ptIds.clear();
+    }
+};
+
+static thread_local RoutedBatchGroups g_routedBatchGroups;
+
+static uint16_t SelectPtWorkerGroup(uint16_t ptId, uint16_t groupNum)
+{
+    if (groupNum <= NO_1) {
+        return NO_0;
+    }
+    uint32_t mixed = static_cast<uint32_t>(ptId) * PT_GROUP_HASH_FACTOR;
+    mixed ^= mixed >> 16;
+    return static_cast<uint16_t>(mixed % groupNum);
+}
+
+struct ServerDirectBufferCache {
+    MmsMemAllocatorPtr allocator{nullptr};
+    uintptr_t buff{0};
+    uint64_t size{0};
+    uint16_t numaId{0};
+
+    ~ServerDirectBufferCache()
+    {
+        Reset();
+    }
+
+    void Reset()
+    {
+        if (buff != 0 && allocator != nullptr) {
+            allocator->MmsFreeDirect(buff);
+        }
+        allocator = nullptr;
+        buff = 0;
+        size = 0;
+        numaId = 0;
+    }
+
+    BResult Reserve(const MmsMemAllocatorPtr &curAllocator, uint64_t reqSize, uintptr_t &blockAddr)
+    {
+        if (UNLIKELY(curAllocator == nullptr || reqSize == 0)) {
+            return MMS_ALLOC_FAIL;
+        }
+        if (buff != 0 && (allocator != curAllocator || size < reqSize)) {
+            Reset();
+        }
+        if (buff == 0) {
+            auto ret = curAllocator->MmsAllocDirect(reqSize, numaId, buff);
+            if (UNLIKELY(ret != MMS_OK)) {
+                return ret;
+            }
+            allocator = curAllocator;
+            size = reqSize;
+        }
+        blockAddr = buff;
+        return MMS_OK;
+    }
+};
+
+template<typename Item>
+static BResult BuildRoutedPtGroups(const CmPtr &cm, const std::vector<Item> &items, uint32_t itemNum,
+                                   RoutedBatchGroups &groups)
+{
+    groups.Reset();
+    groups.ptIds.reserve(std::min<uint32_t>(itemNum, MMS_ROUTE_MAX_PT_NUM));
+
+    static thread_local std::vector<uint16_t> ptIds;
+    ptIds.resize(itemNum);
+    auto ret = cm->ResolveBatchPtIdsFromItems(items.data(), itemNum, ptIds.data());
+    if (UNLIKELY(ret != MMS_OK)) {
+        return ret;
+    }
+
+    for (uint32_t index = 0; index < itemNum; ++index) {
+        uint16_t ptId = ptIds[index];
+        if (UNLIKELY(ptId >= MMS_ROUTE_MAX_PT_NUM)) {
+            return MMS_INVALID_PARAM;
+        }
+
+        auto &itemIndexes = groups.itemIndexes[ptId];
+        if (itemIndexes.empty()) {
+            groups.ptIds.push_back(ptId);
+        }
+        itemIndexes.push_back(index);
+    }
+    return MMS_OK;
+}
+
+template<typename Visitor>
+static BResult WalkIoItemDescs(void *ioBuff, uint32_t ioLen, bool withValue, Visitor &&visitor)
+{
+    if (UNLIKELY(ioBuff == nullptr || ioLen < sizeof(IoDataRequest))) {
+        return MMS_INVALID_PARAM;
+    }
+
+    auto *req = static_cast<IoDataRequest *>(ioBuff);
+    uint64_t offset = sizeof(IoDataRequest);
+    for (uint32_t index = 0; index < req->num; ++index) {
+        if (UNLIKELY(offset > ioLen || sizeof(IoLocDesc) > ioLen - offset)) {
+            return MMS_INVALID_PARAM;
+        }
+        auto *desc = reinterpret_cast<IoLocDesc *>(static_cast<uint8_t *>(ioBuff) + offset);
+        uint64_t itemLen = sizeof(IoLocDesc) + desc->keyLen + (withValue ? desc->valueLen : 0);
+        if (UNLIKELY(itemLen > ioLen - offset)) {
+            return MMS_INVALID_PARAM;
+        }
+        visitor(index, *desc);
+        offset += itemLen;
+    }
+    return MMS_OK;
+}
+
+static BResult BuildIoItemResultResponse(void *ioBuff, uint32_t ioLen, bool withValue,
+                                         std::vector<uint8_t> &response)
+{
+    if (UNLIKELY(ioBuff == nullptr || ioLen < sizeof(IoDataRequest))) {
+        return MMS_INVALID_PARAM;
+    }
+    auto *req = static_cast<IoDataRequest *>(ioBuff);
+    uint64_t responseLen = sizeof(IoItemResultResponse) + static_cast<uint64_t>(req->num) * sizeof(int32_t);
+    if (UNLIKELY(responseLen > UINT32_MAX)) {
+        return MMS_INVALID_PARAM;
+    }
+    response.resize(static_cast<size_t>(responseLen));
+    auto *rsp = reinterpret_cast<IoItemResultResponse *>(response.data());
+    rsp->itemNum = req->num;
+    return WalkIoItemDescs(ioBuff, ioLen, withValue,
+        [rsp](uint32_t index, IoLocDesc &desc) { rsp->results[index] = desc.result; });
+}
+
+static BResult ApplyIoItemResultResponse(void *ioBuff, uint32_t ioLen, bool withValue,
+                                         const void *response, uint32_t responseLen)
+{
+    if (UNLIKELY(ioBuff == nullptr || response == nullptr || ioLen < sizeof(IoDataRequest) ||
+                 responseLen < sizeof(IoItemResultResponse))) {
+        return MMS_INVALID_PARAM;
+    }
+    auto *req = static_cast<IoDataRequest *>(ioBuff);
+    auto *rsp = static_cast<const IoItemResultResponse *>(response);
+    uint64_t expectedLen = sizeof(IoItemResultResponse) + static_cast<uint64_t>(rsp->itemNum) * sizeof(int32_t);
+    if (UNLIKELY(rsp->itemNum != req->num || expectedLen != responseLen)) {
+        return MMS_INVALID_PARAM;
+    }
+    return WalkIoItemDescs(ioBuff, ioLen, withValue,
+        [rsp](uint32_t index, IoLocDesc &desc) { desc.result = rsp->results[index]; });
+}
+
+static void HandleRemoteIoCallback(void *ctx, void *resp, uint32_t len, int32_t result)
+{
+    auto *cbCtx = static_cast<RemoteIoCbCtx *>(ctx);
+    int32_t callbackResult = result;
+    if (cbCtx->applyResults && resp != nullptr) {
+        auto applyRet = ApplyIoItemResultResponse(cbCtx->ioBuff, cbCtx->ioLen, cbCtx->withValue, resp, len);
+        if (UNLIKELY(applyRet != MMS_OK && callbackResult == MMS_OK)) {
+            callbackResult = applyRet;
+        }
+    } else if (cbCtx->applyResults && callbackResult == MMS_OK) {
+        callbackResult = MMS_INNER_ERR;
+    }
+    if (UNLIKELY(callbackResult != MMS_OK)) {
+        int32_t expected = MMS_OK;
+        cbCtx->result.compare_exchange_strong(expected, callbackResult, std::memory_order_relaxed);
+    }
+    cbCtx->quota.fetch_sub(NO_1, std::memory_order_release);
+}
+
+template<typename Reply>
+static void ReplyIoItemResults(Reply &&reply, BResult result, void *ioBuff, uint32_t ioLen, bool withValue)
+{
+    static thread_local std::vector<uint8_t> response;
+    auto buildRet = BuildIoItemResultResponse(ioBuff, ioLen, withValue, response);
+    if (UNLIKELY(buildRet != MMS_OK)) {
+        reply((result == MMS_OK) ? buildRet : result, nullptr, 0);
+        return;
+    }
+    reply(result, response.data(), static_cast<uint32_t>(response.size()));
+}
 
 static uint32_t FillPutItemResultsAfterSend(PutItems *itemList, const std::vector<IOCtxItem> &ctxItems,
                                             const SendResultContext &context)
@@ -105,8 +344,8 @@ BResult MmsKvServer::Initialize()
     mNetEngine = MmsServer::Instance()->GetNetEngine();
     mMulticastEngine = MmsServer::Instance()->GetMulticastEngine();
     mMemMgr = MmsServer::Instance()->GetMemMgr();
-    mMemAllocator = MmsServer::Instance()->GetMemAllocator();
     mCache = MmsServer::Instance()->GetCache();
+    mCm = MmsServer::Instance()->GetCm();
     mNotifyDispatcher = &MmsNotifyDispatcher::Instance();
     mDataChangeCallbackSwitch = MmsServer::Instance()->GetConfig()->GetBasicConfig().dataChangeCallbackSwitch;
     bool isSeparate = MmsServer::Instance()->GetConfig()->GetBasicConfig().isSeparateMode;
@@ -119,16 +358,27 @@ BResult MmsKvServer::Initialize()
         }
     }
 
-    allocFunc = [this](uint64_t size, uint16_t &numaId, uintptr_t &blockAddr) {
-        return mMemAllocator->MmsAlloc(size, numaId, blockAddr);
-    };
-
     mIoTimeOut = MmsServer::Instance()->GetConfig()->GetCmConfig().registeredTimeoutSec * IO_RETRY_NUM;
     mMulticast = !config->IsSingleNode() && config->GetBasicConfig().multicastSwitch;
+    mMemAllocator = mMulticast ? MmsServer::Instance()->GetMemAllocator() :
+                                 MmsServer::Instance()->GetForwardMemAllocator();
+    if (UNLIKELY(mMemAllocator == nullptr)) {
+        LOG_ERROR("IO staging memory allocator is not initialized, multicast:" << mMulticast << ".");
+        return MMS_NOT_INITIALIZED;
+    }
+    allocFunc = [this](uint64_t size, uint16_t &numaId, uintptr_t &blockAddr) {
+        return mMulticast ? mMemAllocator->MmsAlloc(size, numaId, blockAddr) :
+                            mMemAllocator->MmsAllocDirect(size, numaId, blockAddr);
+    };
+
+    const auto &cmConfig = config->GetCmConfig();
+    mKeyRouteEnabled = cmConfig.replicaNum < cmConfig.nodeNum;
+    mReplicaNum = static_cast<uint16_t>(cmConfig.replicaNum);
+    mRpcWorkerGroupNum = std::max<uint16_t>(NO_1, config->GetNetConfig().rpcWorkerGroupsNum);
     uint32_t ioCtxBuffLen = MmsServer::Instance()->GetConfig()->GetNetConfig().msgMaxBuffSize;
     mIoCtxBuffLen = ioCtxBuffLen;
-    mIoCtxMemSize = static_cast<uint64_t>(MmsServer::Instance()->GetConfig()->GetMemConfig().numaNum) *
-                    META_SHM_IOCTX_SIZE;
+    const auto &memConfig = MmsServer::Instance()->GetConfig()->GetMemConfig();
+    mIoCtxMemSize = static_cast<uint64_t>(memConfig.numaNum) * memConfig.clientIoCtxSizePerNuma;
     MmsKvServer::mMaxPutItemNum =
         (ioCtxBuffLen - sizeof(IoDataRequest)) / (sizeof(IoLocDesc) + MIN_KEY_SIZE + MIN_VALUE_SIZE);
     MmsKvServer::mMaxUpdateItemNum = MmsKvServer::mMaxPutItemNum;
@@ -139,6 +389,33 @@ BResult MmsKvServer::Initialize()
     return MMS_OK;
 }
 
+BResult MmsKvServer::SelectPtForIo(void *ioBuff, uint32_t ioLen, bool rangeDelete, uint16_t &ptId, uint64_t &ptv,
+                                   uint16_t remoteId[], uint16_t &remoteNum)
+{
+    if (!mKeyRouteEnabled) {
+        return mCm->GetPtInfo(ptId, ptv, remoteId, remoteNum);
+    }
+
+    if (UNLIKELY(rangeDelete)) {
+        return MMS_INVALID_PARAM;
+    }
+
+    if (UNLIKELY(ioBuff == nullptr || ioLen <= sizeof(IoDataRequest))) {
+        return MMS_INVALID_PARAM;
+    }
+
+    uint64_t offset = sizeof(IoDataRequest);
+    auto *desc = reinterpret_cast<IoLocDesc *>(reinterpret_cast<uintptr_t>(ioBuff) + offset);
+    offset += sizeof(IoLocDesc);
+    if (UNLIKELY(desc->keyLen == 0 || offset + desc->keyLen > ioLen)) {
+        return MMS_INVALID_PARAM;
+    }
+
+    const char *key = reinterpret_cast<const char *>(reinterpret_cast<uintptr_t>(ioBuff) + offset);
+    return mCm->GetPtInfoByKey(key, static_cast<uint16_t>(desc->keyLen - NO_1),
+                               ptId, ptv, remoteId, remoteNum);
+}
+
 void MmsKvServer::RegisterOpcode()
 {
     mNetEngine->RegisterNewRequestHandler(MMS_OP_C_BASIC,
@@ -147,11 +424,20 @@ void MmsKvServer::RegisterOpcode()
     mNetEngine->RegisterNewRequestHandler(MMS_OP_C_SERVICEABLE,
         std::bind(&MmsKvServer::HandleServiceable, this, std::placeholders::_1));
 
+    mNetEngine->RegisterNewRequestHandler(MMS_OP_C_GET,
+        std::bind(&MmsKvServer::HandleGet, this, std::placeholders::_1));
+
+    mNetEngine->RegisterNewRequestHandler(MMS_OP_C_BATCH_GET,
+        std::bind(&MmsKvServer::HandleBatchGet, this, std::placeholders::_1));
+
     mNetEngine->RegisterNewRequestHandler(MMS_OP_C_PUT,
         std::bind(&MmsKvServer::HandlePut, this, std::placeholders::_1));
 
     mNetEngine->RegisterNewRequestHandler(MMS_OP_S_PUT,
         std::bind(&MmsKvServer::HandlePutRemote, this, std::placeholders::_1)); // 处理单点put
+
+    mNetEngine->RegisterNewRequestHandler(MMS_OP_S_PUT_ONESIDE,
+        std::bind(&MmsKvServer::HandlePutRemoteOneSide, this, std::placeholders::_1)); // 处理单点put单边拉取
 
     mNetEngine->RegisterNewRequestHandler(MMS_OP_S_MULTI_PUT,
         std::bind(&MmsKvServer::HandlePutRemoteMulti, this, std::placeholders::_1)); // 处理组播put
@@ -161,6 +447,9 @@ void MmsKvServer::RegisterOpcode()
 
     mNetEngine->RegisterNewRequestHandler(MMS_OP_S_UPDATE,
         std::bind(&MmsKvServer::HandleUpdateRemote, this, std::placeholders::_1)); // 处理单点update
+
+    mNetEngine->RegisterNewRequestHandler(MMS_OP_S_UPDATE_ONESIDE,
+        std::bind(&MmsKvServer::HandleUpdateRemoteOneSide, this, std::placeholders::_1)); // 处理单点update单边拉取
 
     mNetEngine->RegisterNewRequestHandler(MMS_OP_S_MULTI_UPDATE,
         std::bind(&MmsKvServer::HandleUpdateRemoteMulti, this, std::placeholders::_1)); // 处理组播update
@@ -173,6 +462,9 @@ void MmsKvServer::RegisterOpcode()
 
     mNetEngine->RegisterNewRequestHandler(MMS_OP_S_REPLACE,
         std::bind(&MmsKvServer::HandleReplaceRemote, this, std::placeholders::_1)); // 处理单点replace
+
+    mNetEngine->RegisterNewRequestHandler(MMS_OP_S_REPLACE_ONESIDE,
+        std::bind(&MmsKvServer::HandleReplaceRemoteOneSide, this, std::placeholders::_1)); // 处理单点replace单边拉取
 
     mNetEngine->RegisterNewRequestHandler(MMS_OP_S_MULTI_REPLACE,
         std::bind(&MmsKvServer::HandleReplaceRemoteMulti, this, std::placeholders::_1)); // 处理组播replace
@@ -192,12 +484,18 @@ void MmsKvServer::RegisterOpcode()
     mNetEngine->RegisterNewRequestHandler(MMS_OP_C_UPDATE_PT_VERSION,
         std::bind(&MmsKvServer::HandleUpdatePtVersion, this, std::placeholders::_1));
 
+    mNetEngine->RegisterNewRequestHandler(MMS_OP_C_GET_ROUTE_VIEW,
+        std::bind(&MmsKvServer::HandleGetRouteView, this, std::placeholders::_1));
 }
 
 void MmsKvServer::FreeBlocks(std::vector<IOCtxItem> &ctxItems)
 {
     for (auto &item : ctxItems) {
-        mMemAllocator->MmsFree(item.buff);
+        if (mMulticast) {
+            mMemAllocator->MmsFree(item.buff);
+        } else {
+            mMemAllocator->MmsFreeDirect(item.buff);
+        }
     }
 }
 
@@ -251,6 +549,105 @@ BResult MmsKvServer::HandleSendReqs(std::vector<IOCtxItem> &ctxItems, const IoHa
     return MMS_OK;
 }
 
+bool MmsKvServer::ShouldUseRemoteOneSide(uint32_t ioLen, uint16_t remoteNum) const
+{
+    return !mMulticast && remoteNum != 0 && ioLen > MMS_TWOSIDE_IO_THRESHOLD;
+}
+
+BResult MmsKvServer::SendRemoteOneSideAndWait(uint16_t remoteId[], uint16_t remoteNum, MmsOpCode opCode,
+                                              void *ioBuff, uint32_t ioLen, bool applyRemoteResults)
+{
+    if (remoteNum == 0) {
+        return MMS_OK;
+    }
+
+    auto *dataReq = reinterpret_cast<IoDataRequest *>(ioBuff);
+    MmsMemoryKey remoteKey{};
+    auto ret = mNetEngine->GetRegisteredMemoryKey(reinterpret_cast<uintptr_t>(ioBuff), ioLen, remoteKey);
+    if (UNLIKELY(ret != MMS_OK)) {
+        LOG_ERROR("Get registered memory key failed, ret:" << ret << ", ioLen:" << ioLen << ".");
+        return ret;
+    }
+
+    std::vector<OneSideIoRequest> reqs(remoteNum);
+    RemoteIoCbCtx cbCtx(remoteNum, ioBuff, ioLen, true, applyRemoteResults);
+    Callback callback(HandleRemoteIoCallback, static_cast<void *>(&cbCtx));
+
+    ReqHead oneSideHead = dataReq->head;
+    oneSideHead.opcode = opCode;
+    for (uint16_t index = 0; index < remoteNum; ++index) {
+        reqs[index] = {oneSideHead, dataReq->seqNo, dataReq->negoSeqNo, reinterpret_cast<uintptr_t>(ioBuff),
+                       remoteKey, ioLen, dataReq->num};
+        mNetEngine->AsyncCall(remoteId[index], g_groupIndex, opCode, reqs[index], callback);
+    }
+    while (cbCtx.quota.load(std::memory_order_acquire) != 0) {
+        CPU_RELAX();
+    }
+    return cbCtx.result.load(std::memory_order_acquire);
+}
+
+BResult MmsKvServer::HandleRemoteOneSide(ServiceContext &ctx, const IoHandle &handle)
+{
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(OneSideIoRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive one-side message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        ReplyPeerRequest(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        return MMS_OK;
+    }
+
+    OneSideIoRequest request = *static_cast<OneSideIoRequest *>(ctx.MessageData());
+    auto *req = &request;
+    if (UNLIKELY(req->ioLength < sizeof(IoDataRequest) || req->ioLength > MMS_ONESIDE_STAGING_SIZE)) {
+        LOG_ERROR("Invalid one-side io length:" << req->ioLength << ".");
+        ReplyPeerRequest(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        return MMS_OK;
+    }
+
+    uint16_t numaId = 0;
+    uintptr_t localBuff = 0;
+    auto ret = mMemAllocator->MmsAllocDirect(req->ioLength, numaId, localBuff);
+    if (UNLIKELY(ret != MMS_OK)) {
+        LOG_ERROR("Alloc one-side local io buffer failed, ret:" << ret << ", len:" << req->ioLength << ".");
+        ReplyPeerRequest(ctx, MMS_ALLOC_FAIL, nullptr, 0);
+        return MMS_OK;
+    }
+
+    MmsMemoryKey localKey{};
+    ret = mNetEngine->GetRegisteredMemoryKey(localBuff, req->ioLength, localKey);
+    if (LIKELY(ret == MMS_OK)) {
+        NetRequest netReq = mNetEngine->InitNetRequest(localBuff, req->remoteAddr, localKey, req->remoteKey,
+                                                       req->ioLength);
+        ret = mNetEngine->SyncReadOneSide(req->head.nodeId, req->head.groupIndex, netReq);
+    }
+    if (LIKELY(ret == MMS_OK)) {
+        auto *dataReq = reinterpret_cast<IoDataRequest *>(localBuff);
+        bool invalidHeader = dataReq->head.nodeId != req->head.nodeId || dataReq->head.ptId != req->head.ptId ||
+            dataReq->head.ptv != req->head.ptv || dataReq->seqNo != req->seqNo ||
+            dataReq->negoSeqNo != req->negoSeqNo || dataReq->num != req->reserved;
+        if (UNLIKELY(invalidHeader)) {
+            LOG_ERROR("One-side data header mismatch, source node:" << req->head.nodeId << ", ioLen:" << req->ioLength
+                      << ", expected item num:" << req->reserved << ", actual item num:" << dataReq->num << ".");
+            ret = MMS_INVALID_PARAM;
+        }
+    }
+    bool handled = false;
+    if (LIKELY(ret == MMS_OK)) {
+        ret = handle(reinterpret_cast<void *>(localBuff), req->ioLength);
+        handled = true;
+    } else {
+        LOG_ERROR("One-side read io buffer failed, ret:" << ret << ", len:" << req->ioLength << ".");
+    }
+    if (handled && mKeyRouteEnabled && mReplicaNum == NO_1) {
+        auto reply = [this, &ctx](int32_t code, void *data, uint32_t len) {
+            ReplyPeerRequest(ctx, code, data, len);
+        };
+        ReplyIoItemResults(reply, ret, reinterpret_cast<void *>(localBuff), req->ioLength, true);
+    } else {
+        ReplyPeerRequest(ctx, ret, nullptr, 0);
+    }
+    mMemAllocator->MmsFreeDirect(localBuff);
+    return MMS_OK;
+}
+
 BResult MmsKvServer::Put(PutItems *itemList, uint32_t itemNum)
 {
     if (UNLIKELY(!mServiceable.load(std::memory_order_acquire))) {
@@ -272,7 +669,9 @@ BResult MmsKvServer::Put(PutItems *itemList, uint32_t itemNum)
     BResult result = MMS_OK;
     while (curItemIndex < itemNum) {
         ctxItems.clear();
-        ret = EncodePutRequest(&itemList[curItemIndex], itemNum - curItemIndex, ctxItems, allocFunc, mIoCtxBuffLen);
+        uint32_t encodeBuffLen = (itemList[curItemIndex].valueLen > MMS_TWOSIDE_IO_THRESHOLD) ?
+            MMS_ONESIDE_STAGING_SIZE : mIoCtxBuffLen;
+        ret = EncodePutRequest(&itemList[curItemIndex], itemNum - curItemIndex, ctxItems, allocFunc, encodeBuffLen);
         if (LIKELY(ret == MMS_OK)) {
             ret = HandleSendReqs(ctxItems, handle, false);
             if (LIKELY(ret == MMS_OK)) {
@@ -349,7 +748,6 @@ BResult MmsKvServer::Update(UpdateItems *itemList, uint32_t itemNum)
         LOG_WARN("Service is not available.");
         return MMS_NOT_READY;
     }
-
     static IoHandle handle = [this](void *ioBuff, uint32_t ioLen) -> BResult {
         if (mMulticast) {
             return HandleUpdateMultiImpl(ioBuff, ioLen);
@@ -364,7 +762,9 @@ BResult MmsKvServer::Update(UpdateItems *itemList, uint32_t itemNum)
     BResult result = MMS_OK;
     while (curItemIndex < itemNum) {
         ctxItems.clear();
-        ret = EncodeUpdateRequest(&itemList[curItemIndex], itemNum - curItemIndex, ctxItems, allocFunc, mIoCtxBuffLen);
+        uint32_t encodeBuffLen = (itemList[curItemIndex].valueLen > MMS_TWOSIDE_IO_THRESHOLD) ?
+            MMS_ONESIDE_STAGING_SIZE : mIoCtxBuffLen;
+        ret = EncodeUpdateRequest(&itemList[curItemIndex], itemNum - curItemIndex, ctxItems, allocFunc, encodeBuffLen);
         if (LIKELY(ret == MMS_OK)) {
             ret = HandleSendReqs(ctxItems, handle, false);
             if (LIKELY(ret == MMS_OK)) {
@@ -488,7 +888,10 @@ BResult MmsKvServer::Replace(ReplaceItems *itemList, uint32_t itemNum)
     BResult result = MMS_OK;
     while (curItemIndex < itemNum) {
         ctxItems.clear();
-        ret = EncodeReplaceRequest(&itemList[curItemIndex], itemNum - curItemIndex, ctxItems, allocFunc, mIoCtxBuffLen);
+        uint32_t encodeBuffLen = (itemList[curItemIndex].valueLen > MMS_TWOSIDE_IO_THRESHOLD) ?
+            MMS_ONESIDE_STAGING_SIZE : mIoCtxBuffLen;
+        ret = EncodeReplaceRequest(&itemList[curItemIndex], itemNum - curItemIndex, ctxItems, allocFunc,
+                                   encodeBuffLen);
         if (LIKELY(ret == MMS_OK)) {
             ret = HandleSendReqs(ctxItems, handle, false);
             if (LIKELY(ret == MMS_OK)) {
@@ -532,25 +935,50 @@ BResult MmsKvServer::Replace(ReplaceItems *itemList, uint32_t itemNum)
 BResult MmsKvServer::HandleBasic(ServiceContext &ctx)
 {
     BasicResponse rsp{};
+    if (UNLIKELY(ctx.Channel() == nullptr)) {
+        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        return MMS_OK;
+    }
+    NetChannelUpCtx channelCtx(ctx.Channel()->GetUpCtx());
+    if (UNLIKELY(channelCtx.peerId != INVALID_NID || channelCtx.procId == 0)) {
+        LOG_ERROR("Invalid client basic channel, node id:" << channelCtx.peerId << ", pid:" << channelCtx.procId
+                                                           << ".");
+        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        return MMS_OK;
+    }
+
+    ClientIoCtxPtr clientIoCtx;
+    auto ret = MmsServer::Instance()->AcquireClientIoCtx(channelCtx.procId, clientIoCtx);
+    if (UNLIKELY(ret != MMS_OK || clientIoCtx == nullptr)) {
+        LOG_ERROR("Acquire client ioctx failed, pid:" << channelCtx.procId << ", ret:" << ret << ".");
+        mNetEngine->Reply(ctx, ret, nullptr, 0);
+        return MMS_OK;
+    }
 
     MmsConfigPtr config = MmsServer::Instance()->GetConfig();
     rsp.serverPid = getpid();
+    rsp.ioCtxProtocolVersion = MMS_IOCTX_PROTOCOL_VERSION;
+    rsp.clientGeneration = clientIoCtx->generation;
     rsp.netTimeOut = config->GetCmConfig().registeredTimeoutSec; // 同zk心跳超时;
     rsp.ioTimeOut = rsp.netTimeOut * IO_RETRY_NUM; // 默认心跳超时x倍，确保IO RETRY重试OK;
     rsp.logLevel = config->GetBasicConfig().logLevel;
     rsp.traceSwitch = config->GetBasicConfig().traceSwitch;
     rsp.enableCrc = config->GetBasicConfig().crcSwitch;
+    rsp.keyRouteEnabled = mKeyRouteEnabled;
     rsp.dataChangeCallbackSwitch = config->GetBasicConfig().dataChangeCallbackSwitch;
     rsp.maxMsgBuffSize = config->GetNetConfig().msgMaxBuffSize;
     rsp.valueBlockSize = config->GetMemConfig().valueBlockSize;
 
     int32_t fds[MMAP_AREA_BUTT];
-    mMemMgr->GetAreaMemDesc(MMAP_AREA_IOCTX, fds[MMAP_AREA_IOCTX]);
+    fds[MMAP_AREA_IOCTX] = clientIoCtx->fd;
     mMemMgr->GetAreaMemDesc(MMAP_AREA_BUCKET, fds[MMAP_AREA_BUCKET]);
     mMemMgr->GetAreaMemDesc(MMAP_AREA_VALUE, fds[MMAP_AREA_VALUE]);
     mMemMgr->GetAreaMemDesc(MMAP_AREA_INDEX, fds[MMAP_AREA_INDEX]);
     mMemMgr->GetNumaMemDesc(rsp.memNumaId, rsp.memSize, rsp.memNum);
-    auto ret = mNetEngine->SendFds(ctx.Channel(), fds, MMAP_AREA_BUTT);
+    for (uint16_t index = 0; index < clientIoCtx->numaNum; ++index) {
+        rsp.ioCtxNumaSize[index] = clientIoCtx->numaSize[index];
+    }
+    ret = mNetEngine->SendFds(ctx.Channel(), fds, MMAP_AREA_BUTT);
     if (ret != MMS_OK) {
         LOG_ERROR("Send fds failed, ret:" << ret << ".");
         mNetEngine->Reply(ctx, MMS_INNER_ERR, nullptr, 0);
@@ -570,12 +998,617 @@ BResult MmsKvServer::HandleServiceable(ServiceContext &ctx)
     return MMS_OK;
 }
 
-bool MmsKvServer::IsIoCtxRequestValid(const IoCtrlRequest &req, uint64_t minLength) const
+BResult MmsKvServer::ResolveClientIoCtx(ServiceContext &ctx, uint64_t generation, uint64_t offset, uint64_t length,
+                                        ClientIoCtxPtr &ioCtx, uintptr_t &address) const
 {
-    if (req.ioLength < minLength || req.ioLength > mIoCtxBuffLen || req.ioNumaOffset > mIoCtxMemSize) {
+    if (UNLIKELY(ctx.Channel() == nullptr)) {
+        return MMS_INVALID_PARAM;
+    }
+    NetChannelUpCtx channelCtx(ctx.Channel()->GetUpCtx());
+    if (UNLIKELY(channelCtx.peerId != INVALID_NID || channelCtx.procId == 0)) {
+        return MMS_INVALID_PARAM;
+    }
+    return MmsServer::Instance()->ResolveClientIoCtx(channelCtx.procId, generation, offset, length, ioCtx, address);
+}
+
+bool MmsKvServer::IsIoCtxRequestValid(ServiceContext &ctx, const IoCtrlRequest &req, uint64_t minLength,
+                                      ClientIoCtxPtr &ioCtx, uintptr_t &address) const
+{
+    if (req.ioLength < minLength || (mMulticast && req.ioLength > mIoCtxBuffLen)) {
         return false;
     }
-    return req.ioLength <= mIoCtxMemSize - req.ioNumaOffset;
+    return ResolveClientIoCtx(ctx, req.clientGeneration, req.ioNumaOffset, req.ioLength, ioCtx, address) == MMS_OK;
+}
+
+BResult MmsKvServer::HandleClientIoBuffer(void *ioBuff, uint32_t ioLen, const IoHandle &handle)
+{
+    if (!mMulticast) {
+        return handle(ioBuff, ioLen);
+    }
+
+    uint16_t numaId = 0;
+    uintptr_t stagingBuff = 0;
+    auto ret = mMemAllocator->MmsAlloc(ioLen, numaId, stagingBuff);
+    if (UNLIKELY(ret != MMS_OK)) {
+        LOG_ERROR("Alloc multicast client staging buffer failed, ret:" << ret << ", len:" << ioLen << ".");
+        return ret;
+    }
+    ret = memcpy_s(reinterpret_cast<void *>(stagingBuff), ioLen, ioBuff, ioLen);
+    if (LIKELY(ret == EOK)) {
+        ret = handle(reinterpret_cast<void *>(stagingBuff), ioLen);
+    } else {
+        ret = MMS_ERR;
+    }
+    int32_t copyRet = memcpy_s(ioBuff, ioLen, reinterpret_cast<void *>(stagingBuff), ioLen);
+    mMemAllocator->MmsFree(stagingBuff);
+    if (UNLIKELY(copyRet != EOK && ret == MMS_OK)) {
+        return MMS_ERR;
+    }
+    return ret;
+}
+
+BResult MmsKvServer::ForwardGet(ServiceContext &ctx, GetValueRequest &req, uint16_t remoteId)
+{
+    bool oneSide = (req.flags & MMS_GET_FLAG_ONESIDE) != 0;
+    if (UNLIKELY(oneSide && (req.flags & MMS_GET_FLAG_PROXY_FORWARDED) == 0)) {
+        LOG_ERROR("Direct one-side get cannot be forwarded, remote id:" << remoteId << ", key:" << req.key << ".");
+        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        return MMS_OK;
+    }
+
+    if (oneSide) {
+        GetValueResponse rsp = {};
+        MMS_TRACE_START(SERVER_TRACE_GET_FORWARD);
+        auto ret = mNetEngine->SyncCall<GetValueRequest, GetValueResponse>(remoteId, g_groupIndex, MMS_OP_C_GET,
+                                                                            req, rsp);
+        MMS_TRACE_END(SERVER_TRACE_GET_FORWARD, ret);
+        if (UNLIKELY(ret != MMS_OK)) {
+            LOG_ERROR("Forward one-side get failed, ret:" << ret << ", remote id:" << remoteId
+                                                            << ", key:" << req.key << ".");
+            mNetEngine->Reply(ctx, ret, nullptr, 0);
+            return MMS_OK;
+        }
+        if (rsp.result == MMS_NOT_EXISTS) {
+            LOG_DEBUG("Forward get key not found, remote id:" << remoteId << ", key:" << req.key << ".");
+        }
+        mNetEngine->Reply(ctx, MMS_OK, &rsp, sizeof(rsp));
+        return MMS_OK;
+    }
+
+    GetValueResponse *rsp = nullptr;
+    uint64_t rspLen = 0;
+    MMS_TRACE_START(SERVER_TRACE_GET_FORWARD);
+    auto ret = mNetEngine->SyncCall<GetValueRequest, GetValueResponse>(remoteId, g_groupIndex, MMS_OP_C_GET, req, &rsp,
+                                                                       rspLen);
+    MMS_TRACE_END(SERVER_TRACE_GET_FORWARD, ret);
+    if (UNLIKELY(ret != MMS_OK)) {
+        LOG_ERROR("Forward get failed, ret:" << ret << ", remote id:" << remoteId << ", key:" << req.key << ".");
+        mNetEngine->Reply(ctx, ret, nullptr, 0);
+        return MMS_OK;
+    }
+
+    if (rsp->result == MMS_NOT_EXISTS) {
+        LOG_DEBUG("Forward get key not found, remote id:" << remoteId << ", key:" << req.key << ".");
+    }
+    mNetEngine->Reply(ctx, MMS_OK, rsp, rspLen);
+    return MMS_OK;
+}
+
+BResult MmsKvServer::HandleGetLocalProxy(ServiceContext &ctx, const GetValueRequest &req)
+{
+    ClientIoCtxPtr clientIoCtx;
+    uintptr_t responseBuff = 0;
+    auto resolveRet = ResolveClientIoCtx(ctx, req.clientGeneration, req.valueAddr, req.length,
+                                         clientIoCtx, responseBuff);
+    if (UNLIKELY(resolveRet != MMS_OK)) {
+        LOG_ERROR("Invalid proxy get response offset:" << req.valueAddr << ", len:" << req.length << ".");
+        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        return MMS_OK;
+    }
+
+    GetValueResponse rsp = {};
+    char *value = reinterpret_cast<char *>(responseBuff);
+    GetPara para = {req.key, static_cast<uint16_t>(strnlen(req.key, MAX_KEY_SIZE)), req.offset, req.length, &value,
+                    &rsp.realLength};
+    MMS_TRACE_START(SERVER_TRACE_GET_CACHE);
+    auto ret = mCache->Get(para);
+    MMS_TRACE_END(SERVER_TRACE_GET_CACHE, ret);
+    if (UNLIKELY(ret != MMS_OK)) {
+        if (ret == MMS_NOT_EXISTS) {
+            rsp.result = ret;
+            LOG_DEBUG("Get key not found, key:" << req.key << ".");
+            mNetEngine->Reply(ctx, MMS_OK, &rsp, sizeof(rsp));
+            return MMS_OK;
+        }
+        LOG_WARN("Get cache failed, ret:" << ret << ", key:" << req.key << ".");
+        mNetEngine->Reply(ctx, ret, nullptr, 0);
+        return MMS_OK;
+    }
+    rsp.result = MMS_OK;
+    mNetEngine->Reply(ctx, MMS_OK, &rsp, sizeof(rsp));
+    return MMS_OK;
+}
+
+BResult MmsKvServer::PrepareGetProxyForward(ServiceContext &ctx, GetValueRequest &req, ClientIoCtxPtr &clientIoCtx)
+{
+    uintptr_t responseBuff = 0;
+    auto ret = ResolveClientIoCtx(ctx, req.clientGeneration, req.valueAddr, req.length, clientIoCtx, responseBuff);
+    if (UNLIKELY(ret != MMS_OK)) {
+        LOG_ERROR("Invalid proxy get response offset:" << req.valueAddr << ", len:" << req.length << ".");
+        return MMS_INVALID_PARAM;
+    }
+    if (!clientIoCtx->mrRegistered) {
+        LOG_ERROR("Client ioctx is not registered for remote get, pid:" << clientIoCtx->pid << ".");
+        return MMS_NOT_READY;
+    }
+    req.valueKey = clientIoCtx->memoryKey;
+    req.valueAddr = responseBuff;
+    req.flags = (req.flags & ~MMS_GET_FLAG_PROXY_BUFFER) |
+                MMS_GET_FLAG_ONESIDE | MMS_GET_FLAG_PROXY_FORWARDED;
+    return MMS_OK;
+}
+
+BResult MmsKvServer::HandleGetLocal(ServiceContext &ctx, const GetValueRequest &req)
+{
+    if ((req.flags & MMS_GET_FLAG_PROXY_BUFFER) != 0) {
+        return HandleGetLocalProxy(ctx, req);
+    }
+    if ((req.flags & MMS_GET_FLAG_ONESIDE) != 0) {
+        return HandleGetLocalOneSide(ctx, req);
+    }
+
+    uint64_t rspLen = sizeof(GetValueResponse) + req.length;
+    bool needFree = false;
+    void *rspData = g_getRspBuffer.data();
+    if (UNLIKELY(rspLen > GET_RSP_BUFFER_SIZE)) {
+        rspData = malloc(rspLen);
+        if (UNLIKELY(rspData == nullptr)) {
+            LOG_ERROR("Malloc get response failed, len:" << rspLen << ".");
+            mNetEngine->Reply(ctx, MMS_ALLOC_FAIL, nullptr, 0);
+            return MMS_OK;
+        }
+        needFree = true;
+    }
+
+    auto *rsp = static_cast<GetValueResponse *>(rspData);
+    rsp->result = MMS_OK;
+    rsp->reserved = 0;
+    rsp->realLength = 0;
+    char *value = rsp->value;
+    GetPara para = {req.key, static_cast<uint16_t>(strnlen(req.key, MAX_KEY_SIZE)), req.offset, req.length, &value,
+                    &rsp->realLength};
+    MMS_TRACE_START(SERVER_TRACE_GET_CACHE);
+    auto ret = mCache->Get(para);
+    MMS_TRACE_END(SERVER_TRACE_GET_CACHE, ret);
+    if (UNLIKELY(ret != MMS_OK)) {
+        if (ret == MMS_NOT_EXISTS) {
+            rsp->result = ret;
+            LOG_DEBUG("Get key not found, key:" << req.key << ".");
+            mNetEngine->Reply(ctx, MMS_OK, rspData, sizeof(GetValueResponse));
+        } else {
+            LOG_WARN("Get cache failed, ret:" << ret << ", key:" << req.key << ".");
+            mNetEngine->Reply(ctx, ret, nullptr, 0);
+        }
+        if (needFree) {
+            free(rspData);
+        }
+        return MMS_OK;
+    }
+
+    mNetEngine->Reply(ctx, MMS_OK, rspData, sizeof(GetValueResponse) + rsp->realLength);
+    if (needFree) {
+        free(rspData);
+    }
+    return MMS_OK;
+}
+
+BResult MmsKvServer::HandleGetLocalOneSide(ServiceContext &ctx, const GetValueRequest &req)
+{
+    if (UNLIKELY(req.valueAddr == 0 || req.length == 0)) {
+        LOG_ERROR("Invalid one-side get param, addr:" << req.valueAddr << ", len:" << req.length << ".");
+        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        return MMS_OK;
+    }
+
+    GetValueResponse rsp = {};
+    char *directValue = nullptr;
+    bool directMrUnavailable = false;
+    GetPara directPara = {req.key, static_cast<uint16_t>(strnlen(req.key, MAX_KEY_SIZE)), req.offset, req.length,
+                          &directValue, &rsp.realLength};
+    BResult ret = MMS_OK;
+    {
+        MMS_TRACE_START(SERVER_TRACE_GET_CACHE);
+        ret = mCache->GetDirect(directPara, [this, &ctx, &req, &directMrUnavailable]
+            (const char *value, uint64_t realLength) -> BResult {
+            MmsMemoryKey localKey{};
+            auto directRet =
+                mNetEngine->GetRegisteredMemoryKey(reinterpret_cast<uintptr_t>(value), realLength, localKey);
+            if (UNLIKELY(directRet != MMS_OK)) {
+                directMrUnavailable = true;
+                return directRet;
+            }
+            NetRequest netReq = mNetEngine->InitNetRequest(reinterpret_cast<uintptr_t>(value), req.valueAddr,
+                                                           localKey, req.valueKey,
+                                                           static_cast<uint32_t>(realLength));
+            MMS_TRACE_START(SERVER_TRACE_GET_ONESIDE_WRITE);
+            directRet = mNetEngine->SyncWrite(ctx.Channel(), netReq);
+            MMS_TRACE_END(SERVER_TRACE_GET_ONESIDE_WRITE, directRet);
+            return directRet;
+        });
+        MMS_TRACE_END(SERVER_TRACE_GET_CACHE, ret);
+    }
+    if (!directMrUnavailable) {
+        if (UNLIKELY(ret != MMS_OK)) {
+            if (ret == MMS_NOT_EXISTS) {
+                rsp.result = ret;
+                LOG_DEBUG("Get key not found, key:" << req.key << ".");
+                mNetEngine->Reply(ctx, MMS_OK, &rsp, sizeof(rsp));
+                return MMS_OK;
+            }
+            LOG_WARN("Get cache direct failed, ret:" << ret << ", key:" << req.key << ".");
+        }
+        rsp.result = ret;
+        mNetEngine->Reply(ctx, ret, ret == MMS_OK ? &rsp : nullptr, ret == MMS_OK ? sizeof(rsp) : 0);
+        return MMS_OK;
+    }
+
+    LOG_WARN("Value memory is not registered, fallback to get staging buffer, key:" << req.key << ".");
+    uint16_t numaId = 0;
+    uintptr_t localBuff = 0;
+    MMS_TRACE_START(SERVER_TRACE_GET_ONESIDE_ALLOC);
+    ret = mMemAllocator->MmsAllocDirect(req.length, numaId, localBuff);
+    MMS_TRACE_END(SERVER_TRACE_GET_ONESIDE_ALLOC, ret);
+    if (UNLIKELY(ret != MMS_OK)) {
+        LOG_ERROR("Alloc get one-side local buffer failed, ret:" << ret << ", len:" << req.length << ".");
+        mNetEngine->Reply(ctx, MMS_ALLOC_FAIL, nullptr, 0);
+        return MMS_OK;
+    }
+
+    char *value = reinterpret_cast<char *>(localBuff);
+    GetPara para = {req.key, static_cast<uint16_t>(strnlen(req.key, MAX_KEY_SIZE)), req.offset, req.length, &value,
+                    &rsp.realLength};
+    MMS_TRACE_START(SERVER_TRACE_GET_CACHE);
+    ret = mCache->Get(para);
+    MMS_TRACE_END(SERVER_TRACE_GET_CACHE, ret);
+    if (UNLIKELY(ret != MMS_OK)) {
+        if (ret == MMS_NOT_EXISTS) {
+            rsp.result = ret;
+            LOG_DEBUG("Get key not found, key:" << req.key << ".");
+            mMemAllocator->MmsFreeDirect(localBuff);
+            mNetEngine->Reply(ctx, MMS_OK, &rsp, sizeof(rsp));
+            return MMS_OK;
+        }
+        LOG_WARN("Get cache failed, ret:" << ret << ", key:" << req.key << ".");
+        mMemAllocator->MmsFreeDirect(localBuff);
+        mNetEngine->Reply(ctx, ret, nullptr, 0);
+        return MMS_OK;
+    }
+
+    if (rsp.realLength != 0) {
+        MmsMemoryKey localKey{};
+        ret = mNetEngine->GetRegisteredMemoryKey(localBuff, rsp.realLength, localKey);
+        if (UNLIKELY(ret != MMS_OK)) {
+            LOG_ERROR("Get registered memory key for get response failed, ret:" << ret << ", len:" << rsp.realLength
+                                                                                << ".");
+            mMemAllocator->MmsFreeDirect(localBuff);
+            mNetEngine->Reply(ctx, ret, nullptr, 0);
+            return MMS_OK;
+        }
+        NetRequest netReq = mNetEngine->InitNetRequest(localBuff, req.valueAddr, localKey, req.valueKey,
+                                                       static_cast<uint32_t>(rsp.realLength));
+        MMS_TRACE_START(SERVER_TRACE_GET_ONESIDE_WRITE);
+        ret = mNetEngine->SyncWrite(ctx.Channel(), netReq);
+        MMS_TRACE_END(SERVER_TRACE_GET_ONESIDE_WRITE, ret);
+        if (UNLIKELY(ret != MMS_OK)) {
+            LOG_ERROR("One-side write get response failed, ret:" << ret << ", len:" << rsp.realLength << ".");
+            mMemAllocator->MmsFreeDirect(localBuff);
+            mNetEngine->Reply(ctx, ret, nullptr, 0);
+            return MMS_OK;
+        }
+    }
+
+    mMemAllocator->MmsFreeDirect(localBuff);
+    rsp.result = MMS_OK;
+    mNetEngine->Reply(ctx, MMS_OK, &rsp, sizeof(rsp));
+    return MMS_OK;
+}
+
+BResult MmsKvServer::HandleBatchGet(ServiceContext &ctx)
+{
+    MMS_TRACE_START(SERVER_TRACE_GET_BATCH);
+    auto handle = [this, &ctx]() -> BResult {
+        if (UNLIKELY(ctx.MessageData() == nullptr || ctx.MessageDataLen() < sizeof(BatchGetRequest))) {
+            LOG_ERROR("Invalid batch get request len:" << ctx.MessageDataLen() << ".");
+            mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+            return MMS_OK;
+        }
+
+        auto *req = static_cast<BatchGetRequest *>(ctx.MessageData());
+        uint64_t expectedLen = sizeof(BatchGetRequest) +
+            static_cast<uint64_t>(req->itemNum) * sizeof(BatchGetItemRequest);
+        uint64_t responseMetaSize = sizeof(BatchGetResponse) +
+            static_cast<uint64_t>(req->itemNum) * sizeof(BatchGetItemResponse);
+        bool forwarded = (req->flags & MMS_BATCH_GET_FLAG_FORWARDED) != 0;
+        if (UNLIKELY(req->itemNum == 0 || expectedLen != ctx.MessageDataLen() ||
+                     expectedLen > MMS_TWOSIDE_IO_THRESHOLD || req->targetNid >= MAX_NODES_NUM ||
+                     (forwarded && req->valueAddr == 0) ||
+                     req->responseCapacity < responseMetaSize ||
+                     req->responseCapacity > MMS_ONESIDE_STAGING_SIZE)) {
+            LOG_ERROR("Invalid batch get request, item num:" << req->itemNum << ", request len:" << expectedLen
+                                                              << ", response cap:" << req->responseCapacity << ".");
+            mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+            return MMS_OK;
+        }
+        if (UNLIKELY(!mServiceable.load(std::memory_order_acquire))) {
+            mNetEngine->Reply(ctx, MMS_NOT_READY, nullptr, 0);
+            return MMS_OK;
+        }
+
+        uint64_t localPtV = mCm->GetPtVersion();
+        if (UNLIKELY(req->head.ptv != localPtV)) {
+            mNetEngine->Reply(ctx, MMS_NEED_UPDATE_PT_VERSION, nullptr, 0);
+            return MMS_OK;
+        }
+
+        BResult routeRet = MMS_OK;
+        uint16_t localNid = mCm->GetLocalNid();
+        MMS_TRACE_START(SERVER_TRACE_GET_BATCH_ROUTE);
+        for (uint32_t index = 0; routeRet == MMS_OK && index < req->itemNum; ++index) {
+            const auto &item = req->items[index];
+            if (UNLIKELY(item.keyLen == 0 || item.keyLen >= MAX_KEY_SIZE || item.key[item.keyLen] != '\0' ||
+                         item.length == 0)) {
+                routeRet = MMS_INVALID_PARAM;
+                break;
+            }
+        }
+        if (routeRet == MMS_OK && mKeyRouteEnabled) {
+            routeRet = mCm->ValidateBatchOwnerItems(req->items, req->itemNum, req->head.ptv, req->targetNid);
+        }
+        for (uint32_t index = 0; routeRet == MMS_OK && !mKeyRouteEnabled && index < req->itemNum; ++index) {
+            const auto &item = req->items[index];
+            uint16_t ptId = 0;
+            uint64_t ptv = 0;
+            uint16_t remoteId[MAX_NODES_NUM] = {0};
+            uint16_t remoteNum = 0;
+            routeRet = mCm->GetPtInfoByKey(item.key, item.keyLen, ptId, ptv, remoteId, remoteNum);
+            if (UNLIKELY(routeRet != MMS_OK)) {
+                break;
+            }
+            uint16_t ownerNid = (remoteNum < mReplicaNum) ? localNid : remoteId[NO_0];
+            if (UNLIKELY(ownerNid != req->targetNid)) {
+                routeRet = MMS_NEED_UPDATE_PT_VERSION;
+                break;
+            }
+        }
+        MMS_TRACE_END(SERVER_TRACE_GET_BATCH_ROUTE, routeRet);
+        if (UNLIKELY(routeRet != MMS_OK)) {
+            mNetEngine->Reply(ctx, routeRet, nullptr, 0);
+            return MMS_OK;
+        }
+
+        auto fillResponse = [this, req, responseMetaSize](uintptr_t responseBuff,
+                                                         uint32_t &responseLength) -> BResult {
+            auto *rsp = reinterpret_cast<BatchGetResponse *>(responseBuff);
+            rsp->itemNum = req->itemNum;
+            uint64_t valueOffset = responseMetaSize;
+            BResult cacheRet = MMS_OK;
+            MMS_TRACE_START(SERVER_TRACE_GET_BATCH_CACHE);
+            for (uint32_t index = 0; index < req->itemNum; ++index) {
+                const auto &reqItem = req->items[index];
+                auto &rspItem = rsp->items[index];
+                rspItem = {};
+                rspItem.valueOffset = static_cast<uint32_t>(valueOffset);
+                if (UNLIKELY(reqItem.length > req->responseCapacity - valueOffset)) {
+                    rspItem.result = MMS_INVALID_PARAM;
+                    cacheRet = MMS_INVALID_PARAM;
+                    continue;
+                }
+
+                char *value = reinterpret_cast<char *>(responseBuff + valueOffset);
+                uint64_t realLength = 0;
+                GetPara para = {reqItem.key, reqItem.keyLen, reqItem.offset, reqItem.length, &value, &realLength};
+                auto itemRet = mCache->Get(para);
+                rspItem.result = itemRet;
+                rspItem.realLength = static_cast<uint32_t>(realLength);
+                if (LIKELY(itemRet == MMS_OK)) {
+                    valueOffset += realLength;
+                } else if (itemRet != MMS_NOT_EXISTS) {
+                    cacheRet = itemRet;
+                }
+            }
+            rsp->dataLength = static_cast<uint32_t>(valueOffset);
+            responseLength = rsp->dataLength;
+            MMS_TRACE_END(SERVER_TRACE_GET_BATCH_CACHE, cacheRet);
+            return MMS_OK;
+        };
+
+        if (!forwarded) {
+            BResult ret = MMS_OK;
+            ClientIoCtxPtr clientIoCtx;
+            uintptr_t responseBuff = 0;
+            auto resolveRet = ResolveClientIoCtx(ctx, req->clientGeneration, req->responseOffset,
+                                                 req->responseCapacity,
+                                                 clientIoCtx, responseBuff);
+            if (UNLIKELY(resolveRet != MMS_OK)) {
+                LOG_ERROR("Invalid batch get response offset:" << req->responseOffset
+                                                                 << ", capacity:" << req->responseCapacity
+                                                                 << ", total size:" << mIoCtxMemSize << ".");
+                mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+                return MMS_OK;
+            }
+
+            if (req->targetNid == localNid) {
+                uint32_t responseLength = 0;
+                auto ret = fillResponse(responseBuff, responseLength);
+                mNetEngine->Reply(ctx, ret, nullptr, 0);
+                return MMS_OK;
+            }
+
+            if (UNLIKELY(!clientIoCtx->mrRegistered)) {
+                LOG_ERROR("Client ioctx is not registered for remote batch get, pid:" << clientIoCtx->pid << ".");
+                mNetEngine->Reply(ctx, MMS_NOT_READY, nullptr, 0);
+                return MMS_OK;
+            }
+            req->valueKey = clientIoCtx->memoryKey;
+            req->head = {localNid, MMS_OP_C_BATCH_GET, g_groupIndex, 0, localPtV};
+            req->valueAddr = responseBuff;
+            req->flags |= MMS_BATCH_GET_FLAG_FORWARDED;
+            BResult rspRet = MMS_OK;
+            MMS_TRACE_START(SERVER_TRACE_GET_BATCH_FORWARD);
+            ret = mNetEngine->SyncCall<BResult>(req->targetNid, g_groupIndex, MMS_OP_C_BATCH_GET, req,
+                                                static_cast<uint32_t>(expectedLen), rspRet);
+            BResult callRet = (ret == MMS_OK) ? rspRet : ret;
+            MMS_TRACE_END(SERVER_TRACE_GET_BATCH_FORWARD, callRet);
+            if (UNLIKELY(callRet != MMS_OK)) {
+                LOG_ERROR("Forward batch get failed, ret:" << callRet << ", remote id:" << req->targetNid << ".");
+            }
+            mNetEngine->Reply(ctx, callRet, nullptr, 0);
+            return MMS_OK;
+        }
+
+        static thread_local ServerDirectBufferCache batchGetResponseCache;
+        uintptr_t localBuff = 0;
+        auto ret = batchGetResponseCache.Reserve(mMemAllocator, req->responseCapacity, localBuff);
+        if (UNLIKELY(ret != MMS_OK)) {
+            LOG_ERROR("Alloc batch get response failed, ret:" << ret << ", len:" << req->responseCapacity << ".");
+            mNetEngine->Reply(ctx, ret, nullptr, 0);
+            return MMS_OK;
+        }
+
+        uint32_t responseLength = 0;
+        ret = fillResponse(localBuff, responseLength);
+        MmsMemoryKey localKey{};
+        if (LIKELY(ret == MMS_OK)) {
+            ret = mNetEngine->GetRegisteredMemoryKey(localBuff, responseLength, localKey);
+        }
+        if (LIKELY(ret == MMS_OK)) {
+            NetRequest netReq = mNetEngine->InitNetRequest(localBuff, req->valueAddr, localKey, req->valueKey,
+                                                           responseLength);
+            MMS_TRACE_START(SERVER_TRACE_GET_BATCH_WRITE);
+            ret = mNetEngine->SyncWrite(ctx.Channel(), netReq);
+            MMS_TRACE_END(SERVER_TRACE_GET_BATCH_WRITE, ret);
+        }
+        if (UNLIKELY(ret != MMS_OK)) {
+            LOG_ERROR("Write batch get response failed, ret:" << ret << ", len:" << responseLength << ".");
+        }
+        mNetEngine->Reply(ctx, ret, nullptr, 0);
+        return MMS_OK;
+    };
+
+    auto ret = handle();
+    MMS_TRACE_END(SERVER_TRACE_GET_BATCH, ret);
+    return ret;
+}
+
+BResult MmsKvServer::HandleGet(ServiceContext &ctx)
+{
+    MMS_TRACE_START(SERVER_TRACE_GET_SINGLE);
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(GetValueRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        MMS_TRACE_END(SERVER_TRACE_GET_SINGLE, MMS_INVALID_PARAM);
+        return MMS_OK;
+    }
+
+    if (UNLIKELY(!mServiceable.load(std::memory_order_acquire))) {
+        LOG_WARN("Service is not available.");
+        mNetEngine->Reply(ctx, MMS_NOT_READY, nullptr, 0);
+        MMS_TRACE_END(SERVER_TRACE_GET_SINGLE, MMS_NOT_READY);
+        return MMS_OK;
+    }
+
+    auto *req = static_cast<GetValueRequest *>(ctx.MessageData());
+    if (UNLIKELY(req->length == 0 || req->key[0] == '\0')) {
+        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        MMS_TRACE_END(SERVER_TRACE_GET_SINGLE, MMS_INVALID_PARAM);
+        return MMS_OK;
+    }
+
+    if (!mKeyRouteEnabled) {
+        auto ret = HandleGetLocal(ctx, *req);
+        MMS_TRACE_END(SERVER_TRACE_GET_SINGLE, ret);
+        return ret;
+    }
+
+    bool forwarded = (req->flags & MMS_GET_FLAG_ROUTE_FORWARDED) != 0;
+    if (forwarded) {
+        CmPtInfo ptInfo{};
+        auto ret = mCm->GetPtInfo(req->head.ptId, ptInfo);
+        if (UNLIKELY(ret != MMS_OK)) {
+            mNetEngine->Reply(ctx, MMS_CHECK_PT_FAIL, nullptr, 0);
+            MMS_TRACE_END(SERVER_TRACE_GET_SINGLE, MMS_CHECK_PT_FAIL);
+            return MMS_OK;
+        }
+        if (UNLIKELY(req->head.ptv != ptInfo.version)) {
+            LOG_ERROR("Client pt version is lower, old version:" << req->head.ptv << ", new version:"
+                                                                 << ptInfo.version
+                                                                 << ", key:" << req->key << ".");
+            mNetEngine->Reply(ctx, MMS_NEED_UPDATE_PT_VERSION, nullptr, 0);
+            MMS_TRACE_END(SERVER_TRACE_GET_SINGLE, MMS_NEED_UPDATE_PT_VERSION);
+            return MMS_OK;
+        }
+        bool localCopy = false;
+        for (const auto &copy : ptInfo.copys) {
+            if (copy.nodeId == mCm->GetLocalNid() && copy.state == CM_COPY_RUNNING) {
+                localCopy = true;
+                break;
+            }
+        }
+        if (UNLIKELY(!localCopy)) {
+            mNetEngine->Reply(ctx, MMS_CHECK_PT_FAIL, nullptr, 0);
+            MMS_TRACE_END(SERVER_TRACE_GET_SINGLE, MMS_CHECK_PT_FAIL);
+            return MMS_OK;
+        }
+        ret = HandleGetLocal(ctx, *req);
+        MMS_TRACE_END(SERVER_TRACE_GET_SINGLE, ret);
+        return ret;
+    }
+
+    uint64_t localPtV = mCm->GetPtVersion();
+    if (UNLIKELY(req->head.ptv != localPtV)) {
+        LOG_ERROR("Client pt version is lower, old version:" << req->head.ptv << ", new version:" << localPtV
+                                                             << ", key:" << req->key << ".");
+        mNetEngine->Reply(ctx, MMS_NEED_UPDATE_PT_VERSION, nullptr, 0);
+        MMS_TRACE_END(SERVER_TRACE_GET_SINGLE, MMS_NEED_UPDATE_PT_VERSION);
+        return MMS_OK;
+    }
+
+    uint16_t ptId = 0;
+    uint64_t ptv = 0;
+    uint16_t remoteId[MAX_NODES_NUM] = {0};
+    uint16_t remoteNum = 0;
+    MMS_TRACE_START(SERVER_TRACE_GET_ROUTE);
+    uint16_t keyLen = static_cast<uint16_t>(strnlen(req->key, MAX_KEY_SIZE));
+    auto ret = mCm->GetPtInfoByKey(req->key, keyLen, ptId, ptv, remoteId, remoteNum);
+    MMS_TRACE_END(SERVER_TRACE_GET_ROUTE, ret);
+    if (UNLIKELY(ret != MMS_OK)) {
+        LOG_ERROR("Get pt info by key failed, ret:" << ret << ", key:" << req->key << ".");
+        mNetEngine->Reply(ctx, ret, nullptr, 0);
+        MMS_TRACE_END(SERVER_TRACE_GET_SINGLE, ret);
+        return MMS_OK;
+    }
+
+    bool localCopy = remoteNum < mReplicaNum;
+    if (localCopy) {
+        ret = HandleGetLocal(ctx, *req);
+        MMS_TRACE_END(SERVER_TRACE_GET_SINGLE, ret);
+        return ret;
+    }
+
+    ClientIoCtxPtr clientIoCtx;
+    if ((req->flags & MMS_GET_FLAG_PROXY_BUFFER) != 0) {
+        ret = PrepareGetProxyForward(ctx, *req, clientIoCtx);
+        if (UNLIKELY(ret != MMS_OK)) {
+            mNetEngine->Reply(ctx, ret, nullptr, 0);
+            MMS_TRACE_END(SERVER_TRACE_GET_SINGLE, ret);
+            return MMS_OK;
+        }
+    }
+    req->head = {mCm->GetLocalNid(), MMS_OP_C_GET, g_groupIndex, ptId, ptv};
+    req->flags |= MMS_GET_FLAG_ROUTE_FORWARDED;
+    ret = ForwardGet(ctx, *req, remoteId[NO_0]);
+    MMS_TRACE_END(SERVER_TRACE_GET_SINGLE, ret);
+    return ret;
 }
 
 void MmsKvServer::AppendNotifyItem(std::vector<NotifyShmPublishItem> &items, uint32_t &itemNum,
@@ -601,6 +1634,260 @@ void MmsKvServer::NotifyDataChangeBatch(const NotifyShmPublishItem *items, uint3
     }
 }
 
+BResult MmsKvServer::HandlePutRoutedBatch(void *ioBuff, uint32_t ioLen)
+{
+    auto *req = static_cast<IoDataRequest *>(ioBuff);
+    if (!mKeyRouteEnabled || req->num <= NO_1) {
+        return HandlePutDefImpl(ioBuff, ioLen);
+    }
+
+    MMS_TRACE_START(SERVER_TRACE_PUT_BATCH);
+    static thread_local std::vector<DecodePutItem> decodedItems;
+    decodedItems.resize(req->num);
+    uint32_t itemNum = 0;
+    auto ret = DeCodePutRequest(decodedItems, itemNum, reinterpret_cast<uint64_t>(ioBuff), ioLen);
+    if (UNLIKELY(ret != MMS_OK || itemNum != req->num)) {
+        ret = ret == MMS_OK ? MMS_INVALID_PARAM : ret;
+        MMS_TRACE_END(SERVER_TRACE_PUT_BATCH, ret);
+        return ret;
+    }
+
+    auto &groups = g_routedBatchGroups;
+    MMS_TRACE_START(SERVER_TRACE_PUT_BATCH_ROUTE);
+    ret = BuildRoutedPtGroups(mCm, decodedItems, itemNum, groups);
+    MMS_TRACE_END(SERVER_TRACE_PUT_BATCH_ROUTE, ret);
+    if (UNLIKELY(ret != MMS_OK)) {
+        MMS_TRACE_END(SERVER_TRACE_PUT_BATCH, ret);
+        return ret;
+    }
+
+    auto runSerial = [this, &groups]() -> BResult {
+        BResult result = MMS_OK;
+        static thread_local std::vector<PutItems> items;
+        static thread_local std::vector<char *> valueAddrs;
+        for (auto ptId : groups.ptIds) {
+            const auto &itemIndexes = groups.itemIndexes[ptId];
+            items.resize(itemIndexes.size());
+            valueAddrs.assign(itemIndexes.size(), nullptr);
+            for (size_t index = 0; index < itemIndexes.size(); ++index) {
+                auto &decoded = decodedItems[itemIndexes[index]];
+                items[index] = {decoded.key, decoded.value, decoded.valueLen, decoded.keyLen, decoded.isNotify,
+                                &valueAddrs[index], decoded.result};
+            }
+
+            auto taskRet = Put(items.data(), static_cast<uint32_t>(items.size()));
+            for (size_t index = 0; index < itemIndexes.size(); ++index) {
+                auto &decoded = decodedItems[itemIndexes[index]];
+                *decoded.valueAddr = reinterpret_cast<uint64_t>(valueAddrs[index]);
+            }
+            if (UNLIKELY(taskRet != MMS_OK)) {
+                result = taskRet;
+            }
+        }
+        return result;
+    };
+
+    if (mMulticast || mReplicaNum != NO_1) {
+        ret = runSerial();
+        MMS_TRACE_END(SERVER_TRACE_PUT_BATCH, ret);
+        return ret;
+    }
+
+    MMS_TRACE_START(SERVER_TRACE_PUT_BATCH_ENCODE);
+    static thread_local std::vector<RoutedPutTask> tasks;
+    tasks.resize(groups.ptIds.size());
+    for (auto &task : tasks) {
+        task.ctxItems.clear();
+    }
+    BResult encodeRet = MMS_OK;
+    for (size_t taskIndex = 0; taskIndex < groups.ptIds.size(); ++taskIndex) {
+        auto ptId = groups.ptIds[taskIndex];
+        const auto &itemIndexes = groups.itemIndexes[ptId];
+        auto &task = tasks[taskIndex];
+        task.ptId = ptId;
+        task.itemIndexes.assign(itemIndexes.begin(), itemIndexes.end());
+        task.items.resize(itemIndexes.size());
+        task.valueAddrs.assign(itemIndexes.size(), nullptr);
+        uint64_t encodeLen = sizeof(IoDataRequest);
+        for (size_t index = 0; index < itemIndexes.size(); ++index) {
+            auto &decoded = decodedItems[itemIndexes[index]];
+            task.items[index] = {decoded.key, decoded.value, decoded.valueLen, decoded.keyLen, decoded.isNotify,
+                                 &task.valueAddrs[index], decoded.result};
+            encodeLen += sizeof(IoLocDesc) + decoded.keyLen + NO_1 + decoded.valueLen;
+        }
+        if (UNLIKELY(encodeLen > MMS_ONESIDE_STAGING_SIZE || encodeLen > UINT32_MAX)) {
+            encodeRet = MMS_INVALID_PARAM;
+            break;
+        }
+        encodeRet = EncodePutRequest(task.items.data(), static_cast<uint32_t>(task.items.size()), task.ctxItems,
+                                     allocFunc, static_cast<uint32_t>(encodeLen));
+        if (UNLIKELY(encodeRet != MMS_OK || task.ctxItems.size() != NO_1)) {
+            encodeRet = encodeRet == MMS_OK ? MMS_INNER_RETRY : encodeRet;
+            break;
+        }
+    }
+    MMS_TRACE_END(SERVER_TRACE_PUT_BATCH_ENCODE, encodeRet);
+    if (UNLIKELY(encodeRet != MMS_OK)) {
+        for (auto &task : tasks) {
+            FreeBlocks(task.ctxItems);
+        }
+        ret = runSerial();
+        MMS_TRACE_END(SERVER_TRACE_PUT_BATCH, ret);
+        return ret;
+    }
+
+    IoHandle serialHandle = [this](void *buffer, uint32_t length) {
+        return HandlePutDefImpl(buffer, length);
+    };
+    auto finishTask = [this](RoutedPutTask &task, BResult taskRet) {
+        if (LIKELY(taskRet == MMS_OK)) {
+            FillPutItemResults(task.items.data(), 0, task.ctxItems);
+        } else {
+            FillPutItemResultsAfterSend(task.items.data(), task.ctxItems, {0, taskRet, true});
+        }
+        for (size_t index = 0; index < task.itemIndexes.size(); ++index) {
+            auto &decoded = decodedItems[task.itemIndexes[index]];
+            *decoded.valueAddr = reinterpret_cast<uint64_t>(task.valueAddrs[index]);
+        }
+        FreeBlocks(task.ctxItems);
+    };
+    auto retryable = [](BResult taskRet) {
+        return taskRet == MMS_ALLOC_FAIL || taskRet == MMS_INNER_RETRY ||
+               taskRet == MMS_NET_RETRY || taskRet == MMS_CHECK_PT_FAIL;
+    };
+
+    BResult result = MMS_OK;
+    for (size_t waveBegin = 0; waveBegin < tasks.size(); waveBegin += ROUTED_PUT_MAX_INFLIGHT) {
+        size_t waveEnd = std::min(tasks.size(), waveBegin + ROUTED_PUT_MAX_INFLIGHT);
+        std::vector<std::unique_ptr<RoutedPutAsyncOp>> ops;
+        ops.reserve(waveEnd - waveBegin);
+        BResult prepareRet = MMS_OK;
+        for (size_t taskIndex = waveBegin; taskIndex < waveEnd; ++taskIndex) {
+            auto op = std::unique_ptr<RoutedPutAsyncOp>(new (std::nothrow) RoutedPutAsyncOp());
+            if (UNLIKELY(op == nullptr)) {
+                prepareRet = MMS_ALLOC_FAIL;
+                break;
+            }
+            op->task = &tasks[taskIndex];
+            op->ctxItem = &op->task->ctxItems[NO_0];
+            auto *dataReq = reinterpret_cast<IoDataRequest *>(op->ctxItem->buff);
+            uint64_t ptv = 0;
+            prepareRet = SelectPtForIo(reinterpret_cast<void *>(op->ctxItem->buff),
+                                       static_cast<uint32_t>(op->ctxItem->reqLen), false, op->ptId, ptv,
+                                       op->remoteIds.data(), op->remoteNum);
+            if (UNLIKELY(prepareRet != MMS_OK || op->ptId != op->task->ptId)) {
+                prepareRet = prepareRet == MMS_OK ? MMS_NEED_UPDATE_PT_VERSION : prepareRet;
+                ops.emplace_back(std::move(op));
+                break;
+            }
+            op->groupIndex = SelectPtWorkerGroup(op->ptId, mRpcWorkerGroupNum);
+            prepareRet = mSequence->ApplyForSeqNo2Mst(op->ptId, op->groupIndex, dataReq->seqNo,
+                                                      dataReq->negoSeqNo);
+            if (UNLIKELY(prepareRet != MMS_OK)) {
+                ops.emplace_back(std::move(op));
+                break;
+            }
+            op->sequenceApplied = true;
+            op->seqNo = dataReq->seqNo;
+            dataReq->head = {mCm->GetLocalNid(), MMS_OP_S_PUT, op->groupIndex, op->ptId, ptv};
+            op->localCopy = op->remoteNum == 0;
+            op->oneSide = ShouldUseRemoteOneSide(static_cast<uint32_t>(op->ctxItem->reqLen), op->remoteNum);
+            uint16_t quota = op->remoteNum + static_cast<uint16_t>(op->localCopy);
+            op->callbackCtx = std::unique_ptr<RemoteIoCbCtx>(
+                new (std::nothrow) RemoteIoCbCtx(quota, reinterpret_cast<void *>(op->ctxItem->buff),
+                                                 static_cast<uint32_t>(op->ctxItem->reqLen), true, !op->localCopy));
+            if (UNLIKELY(op->callbackCtx == nullptr)) {
+                prepareRet = MMS_ALLOC_FAIL;
+                ops.emplace_back(std::move(op));
+                break;
+            }
+            if (op->oneSide) {
+                MmsMemoryKey remoteKey{};
+                prepareRet = mNetEngine->GetRegisteredMemoryKey(op->ctxItem->buff, op->ctxItem->reqLen, remoteKey);
+                if (UNLIKELY(prepareRet != MMS_OK)) {
+                    ops.emplace_back(std::move(op));
+                    break;
+                }
+                op->oneSideReqs.resize(op->remoteNum);
+                ReqHead oneSideHead = dataReq->head;
+                oneSideHead.opcode = MMS_OP_S_PUT_ONESIDE;
+                for (uint16_t index = 0; index < op->remoteNum; ++index) {
+                    op->oneSideReqs[index] = {oneSideHead, dataReq->seqNo, dataReq->negoSeqNo, op->ctxItem->buff,
+                                              remoteKey, static_cast<uint32_t>(op->ctxItem->reqLen), dataReq->num};
+                }
+            }
+            ops.emplace_back(std::move(op));
+        }
+
+        if (UNLIKELY(prepareRet != MMS_OK || ops.size() != waveEnd - waveBegin)) {
+            for (auto &op : ops) {
+                if (op->sequenceApplied) {
+                    mSequence->ReleaseSeqNo2Mst(op->ptId, op->groupIndex, op->seqNo);
+                }
+            }
+            for (size_t taskIndex = waveBegin; taskIndex < waveEnd; ++taskIndex) {
+                auto &task = tasks[taskIndex];
+                auto taskRet = SendSingleReq(serialHandle, task.ctxItems[NO_0]);
+                finishTask(task, taskRet);
+                if (UNLIKELY(taskRet != MMS_OK)) {
+                    result = taskRet;
+                }
+            }
+            continue;
+        }
+
+        MMS_TRACE_START(SERVER_TRACE_PUT_BATCH_SEND);
+        for (auto &op : ops) {
+            Callback callback(HandleRemoteIoCallback, static_cast<void *>(op->callbackCtx.get()));
+            if (op->oneSide) {
+                for (uint16_t index = 0; index < op->remoteNum; ++index) {
+                    mNetEngine->AsyncCall(op->remoteIds[index], op->groupIndex, MMS_OP_S_PUT_ONESIDE,
+                                          op->oneSideReqs[index], callback);
+                }
+            } else {
+                for (uint16_t index = 0; index < op->remoteNum; ++index) {
+                    mNetEngine->AsyncCallBuff(op->remoteIds[index], op->groupIndex, MMS_OP_S_PUT,
+                                              reinterpret_cast<void *>(op->ctxItem->buff),
+                                              static_cast<uint32_t>(op->ctxItem->reqLen), callback);
+                }
+            }
+            if (op->localCopy) {
+                auto localRet = PutLocal(reinterpret_cast<void *>(op->ctxItem->buff),
+                                         static_cast<uint32_t>(op->ctxItem->reqLen));
+                callback.cb(callback.cbCtx, nullptr, 0, localRet);
+            }
+        }
+        MMS_TRACE_END(SERVER_TRACE_PUT_BATCH_SEND, MMS_OK);
+
+        BResult waitRet = MMS_OK;
+        MMS_TRACE_START(SERVER_TRACE_PUT_BATCH_WAIT);
+        for (auto &op : ops) {
+            while (op->callbackCtx->quota.load(std::memory_order_acquire) != 0) {
+                CPU_RELAX();
+            }
+            op->result = static_cast<BResult>(op->callbackCtx->result.load(std::memory_order_acquire));
+            mSequence->ReleaseSeqNo2Mst(op->ptId, op->groupIndex, op->seqNo);
+            if (UNLIKELY(op->result != MMS_OK)) {
+                waitRet = op->result;
+            }
+        }
+        MMS_TRACE_END(SERVER_TRACE_PUT_BATCH_WAIT, waitRet);
+
+        for (auto &op : ops) {
+            auto taskRet = op->result;
+            if (UNLIKELY(retryable(taskRet))) {
+                taskRet = SendSingleReq(serialHandle, *op->ctxItem);
+            }
+            finishTask(*op->task, taskRet);
+            if (UNLIKELY(taskRet != MMS_OK)) {
+                result = taskRet;
+            }
+        }
+    }
+    MMS_TRACE_END(SERVER_TRACE_PUT_BATCH, result);
+    return result;
+}
+
 BResult MmsKvServer::HandlePut(ServiceContext &ctx)
 {
     if (UNLIKELY(ctx.MessageDataLen() != sizeof(IoCtrlRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
@@ -611,7 +1898,9 @@ BResult MmsKvServer::HandlePut(ServiceContext &ctx)
 
     BResult ret = MMS_OK;
     IoCtrlRequest *req = static_cast<IoCtrlRequest *>(ctx.MessageData());
-    if (UNLIKELY(!IsIoCtxRequestValid(*req, sizeof(IoDataRequest)))) {
+    ClientIoCtxPtr clientIoCtx;
+    uintptr_t ioBuff = 0;
+    if (UNLIKELY(!IsIoCtxRequestValid(ctx, *req, sizeof(IoDataRequest), clientIoCtx, ioBuff))) {
         LOG_ERROR("Invalid io context, offset:" << req->ioNumaOffset << ", length:" << req->ioLength
                                                << ", total size:" << mIoCtxMemSize << ".");
         mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
@@ -625,22 +1914,23 @@ BResult MmsKvServer::HandlePut(ServiceContext &ctx)
         return MMS_OK;
     }
 
-    uint64_t ioBuff;
-    mMemMgr->Trans2Addr(MMAP_AREA_IOCTX, req->ioNumaOffset, ioBuff);
-
-    if (mMulticast) {
-        MMS_TRACE_START(SERVER_TRACE_MULTICAST_PUT);
-        ret = HandlePutMultiImpl(reinterpret_cast<void *>(ioBuff), static_cast<uint32_t>(req->ioLength));
-        MMS_TRACE_END(SERVER_TRACE_MULTICAST_PUT, ret);
-    } else {
-        ret = HandlePutDefImpl(reinterpret_cast<void *>(ioBuff), static_cast<uint32_t>(req->ioLength));
-    }
+    IoHandle handle = [this](void *buffer, uint32_t length) {
+        if (mMulticast) {
+            MMS_TRACE_START(SERVER_TRACE_MULTICAST_PUT);
+            auto handleRet = HandlePutMultiImpl(buffer, length);
+            MMS_TRACE_END(SERVER_TRACE_MULTICAST_PUT, handleRet);
+            return handleRet;
+        }
+        return HandlePutRoutedBatch(buffer, length);
+    };
+    ret = HandleClientIoBuffer(reinterpret_cast<void *>(ioBuff), static_cast<uint32_t>(req->ioLength), handle);
     mNetEngine->Reply(ctx, ret, nullptr, 0);
     return MMS_OK;
 }
 
 BResult MmsKvServer::HandlePutDefImpl(void *ioBuff, uint32_t ioLen)
 {
+    MMS_TRACE_START(SERVER_TRACE_PUT);
     uint16_t ptId;
     uint64_t ptv;
     uint16_t remoteId[MAX_NODES_NUM];
@@ -648,36 +1938,49 @@ BResult MmsKvServer::HandlePutDefImpl(void *ioBuff, uint32_t ioLen)
 
     IoDataRequest *req = static_cast<IoDataRequest *>(ioBuff);
 
-    auto ret = mCm->GetPtInfo(ptId, ptv, remoteId, remoteNum);
+    MMS_TRACE_START(SERVER_TRACE_PUT_ROUTE);
+    auto ret = SelectPtForIo(ioBuff, ioLen, false, ptId, ptv, remoteId, remoteNum);
+    MMS_TRACE_END(SERVER_TRACE_PUT_ROUTE, ret);
     if (UNLIKELY(ret != MMS_OK)) {
         LOG_ERROR("Get pt failed, ret: " << ret << ", ptId:" << ptId << ".");
         return ret;
     }
 
+    MMS_TRACE_START(SERVER_TRACE_PUT_SEQUENCE);
     ret = mSequence->ApplyForSeqNo2Mst(ptId, g_groupIndex, req->seqNo, req->negoSeqNo);
+    MMS_TRACE_END(SERVER_TRACE_PUT_SEQUENCE, ret);
     if (UNLIKELY(ret != MMS_OK)) {
         LOG_ERROR("Apply for seq no fail, ret: " << ret << ", ptId:" << ptId << ", groupIndex:" << g_groupIndex << ".");
+        MMS_TRACE_END(SERVER_TRACE_PUT, ret);
         return ret;
     }
 
-    req->head = { 0, MMS_OP_S_PUT, g_groupIndex, ptId, ptv };
+    req->head = { mCm->GetLocalNid(), MMS_OP_S_PUT, g_groupIndex, ptId, ptv };
 
-    int32_t quotaNum = remoteNum + NO_1;
+    bool localCopy = !mKeyRouteEnabled || remoteNum == 0;
 
-    KvCbCtx cbCtx(quotaNum, MMS_OK);
-    auto cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result) {
-        auto *cbCtx = (KvCbCtx *)ctx;
-        if (UNLIKELY(result != MMS_OK)) {
-            int32_t expected = MMS_OK;
-            cbCtx->result.compare_exchange_strong(expected, result, std::memory_order_relaxed);
+    MMS_TRACE_START(SERVER_TRACE_PUT_COPY);
+    if (ShouldUseRemoteOneSide(ioLen, remoteNum)) {
+        ret = SendRemoteOneSideAndWait(remoteId, remoteNum, MMS_OP_S_PUT_ONESIDE, ioBuff, ioLen, !localCopy);
+        if (LIKELY(ret == MMS_OK) && localCopy) {
+            ret = PutLocal(ioBuff, ioLen);
         }
-        cbCtx->quota.fetch_sub(NO_1, std::memory_order_release);
-    };
-    Callback callback(cbFunc, static_cast<void *>(&cbCtx));
+        mSequence->ReleaseSeqNo2Mst(ptId, g_groupIndex, req->seqNo);
+        MMS_TRACE_END(SERVER_TRACE_PUT_COPY, ret);
+        MMS_TRACE_END(SERVER_TRACE_PUT, ret);
+        return ret;
+    }
+
+    int32_t quotaNum = remoteNum + static_cast<int32_t>(localCopy);
+
+    RemoteIoCbCtx cbCtx(quotaNum, ioBuff, ioLen, true, !localCopy);
+    Callback callback(HandleRemoteIoCallback, static_cast<void *>(&cbCtx));
 
     PutRemote(remoteId, remoteNum, ioBuff, ioLen, callback);
-    ret = PutLocal(ioBuff, ioLen);
-    callback.cb(callback.cbCtx, nullptr, 0, ret);
+    if (localCopy) {
+        ret = PutLocal(ioBuff, ioLen);
+        callback.cb(callback.cbCtx, nullptr, 0, ret);
+    }
 
     while (cbCtx.quota.load(std::memory_order_acquire) != 0) {
         CPU_RELAX();
@@ -685,7 +1988,10 @@ BResult MmsKvServer::HandlePutDefImpl(void *ioBuff, uint32_t ioLen)
 
     mSequence->ReleaseSeqNo2Mst(ptId, g_groupIndex, req->seqNo);
 
-    return cbCtx.result;
+    ret = cbCtx.result.load(std::memory_order_acquire);
+    MMS_TRACE_END(SERVER_TRACE_PUT_COPY, ret);
+    MMS_TRACE_END(SERVER_TRACE_PUT, ret);
+    return ret;
 }
 
 BResult MmsKvServer::HandlePutMultiImpl(void *ioBuff, uint32_t ioLen)
@@ -739,7 +2045,7 @@ BResult MmsKvServer::HandlePutMultiImpl(void *ioBuff, uint32_t ioLen)
 
 BResult MmsKvServer::HandlePutRemote(ServiceContext &ctx)
 {
-    if (UNLIKELY(ctx.MessageDataLen() < sizeof(IoDataRequest)) || UNLIKELY(ctx.MessageDataLen() > mIoCtxBuffLen) ||
+    if (UNLIKELY(ctx.MessageDataLen() < sizeof(IoDataRequest)) ||
         UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive message len:" << ctx.MessageDataLen() << " or message data invalid.");
         ReplyPeerRequest(ctx, MMS_INVALID_PARAM, nullptr, 0);
@@ -747,8 +2053,23 @@ BResult MmsKvServer::HandlePutRemote(ServiceContext &ctx)
     }
 
     auto ret = PutLocal(ctx.MessageData(), ctx.MessageDataLen(), true);
-    ReplyPeerRequest(ctx, ret, nullptr, 0);
+    if (mKeyRouteEnabled && mReplicaNum == NO_1) {
+        auto reply = [this, &ctx](int32_t code, void *data, uint32_t len) {
+            ReplyPeerRequest(ctx, code, data, len);
+        };
+        ReplyIoItemResults(reply, ret, ctx.MessageData(), ctx.MessageDataLen(), true);
+    } else {
+        ReplyPeerRequest(ctx, ret, nullptr, 0);
+    }
     return MMS_OK;
+}
+
+BResult MmsKvServer::HandlePutRemoteOneSide(ServiceContext &ctx)
+{
+    IoHandle handle = [this](void *ioBuff, uint32_t ioLen) {
+        return PutLocal(ioBuff, ioLen, true);
+    };
+    return HandleRemoteOneSide(ctx, handle);
 }
 
 BResult MmsKvServer::HandlePutRemoteMulti(ServiceContext &ctx)
@@ -781,6 +2102,12 @@ void MmsKvServer::PutRemote(uint16_t remoteId[], int32_t remoteNum, void *ioBuff
 
 BResult MmsKvServer::PutLocal(void *ioBuff, uint32_t ioLen, bool notifyDataChange)
 {
+    MMS_TRACE_START(SERVER_TRACE_PUT_LOCAL);
+    if (UNLIKELY(itemListPut.size() < mMaxPutItemNum)) {
+        itemListPut.resize(mMaxPutItemNum);
+        notifyPutItems.resize(mMaxPutItemNum);
+    }
+
     uint32_t itemNum;
     uint32_t index;
     IoDataRequest *req = reinterpret_cast<IoDataRequest *>(ioBuff);
@@ -790,12 +2117,16 @@ BResult MmsKvServer::PutLocal(void *ioBuff, uint32_t ioLen, bool notifyDataChang
     if (UNLIKELY(ret != MMS_OK)) {
         LOG_ERROR("Nego fail, ret: " << ret << ", ptId:" << req->head.ptId << ", groupIndex:" << req->head.groupIndex
                                      << ", seq no:" << req->seqNo << ".");
+        MMS_TRACE_END(SERVER_TRACE_PUT_LOCAL, ret);
         return ret;
     }
 
     ret = DeCodePutRequest(itemListPut, itemNum, reinterpret_cast<uint64_t>(ioBuff), ioLen);
     if (ret != MMS_OK) {
-        LOG_ERROR("Decode put request fail, ret:" << ret << ", ptId:" << req->head.ptId);
+        LOG_ERROR("Decode put request fail, ret:" << ret << ", ptId:" << req->head.ptId << ", itemNum:" << itemNum
+                  << ", capacity:" << itemListPut.size() << ", maxItemNum:" << mMaxPutItemNum << ", ioLen:" << ioLen
+                  << ".");
+        MMS_TRACE_END(SERVER_TRACE_PUT_LOCAL, ret);
         return ret;
     }
 
@@ -836,6 +2167,7 @@ BResult MmsKvServer::PutLocal(void *ioBuff, uint32_t ioLen, bool notifyDataChang
         NotifyDataChangeBatch(notifyPutItems.data(), notifyEventNum);
         MMS_TRACE_END(SERVER_TRACE_NOTIFY_DATA_CHANGE, MMS_OK);
     }
+    MMS_TRACE_END(SERVER_TRACE_PUT_LOCAL, result);
     return result;
 }
 
@@ -859,6 +2191,45 @@ thread_local std::vector<NotifyShmPublishItem> MmsKvServer::notifyDeleteItems = 
     return std::vector<NotifyShmPublishItem>(mMaxDeleteItemNum);
 }();
 
+BResult MmsKvServer::HandleUpdateRoutedBatch(void *ioBuff, uint32_t ioLen)
+{
+    auto *req = static_cast<IoDataRequest *>(ioBuff);
+    if (!mKeyRouteEnabled || req->num <= NO_1) {
+        return HandleUpdateDefImpl(ioBuff, ioLen);
+    }
+
+    static thread_local std::vector<DecodeUpdateItem> decodedItems;
+    decodedItems.resize(req->num);
+    uint32_t itemNum = 0;
+    auto ret = DeCodeUpdateRequest(decodedItems, itemNum, reinterpret_cast<uint64_t>(ioBuff), ioLen);
+    if (UNLIKELY(ret != MMS_OK || itemNum != req->num)) {
+        return ret == MMS_OK ? MMS_INVALID_PARAM : ret;
+    }
+
+    auto &groups = g_routedBatchGroups;
+    ret = BuildRoutedPtGroups(mCm, decodedItems, itemNum, groups);
+    if (UNLIKELY(ret != MMS_OK)) {
+        return ret;
+    }
+
+    BResult result = MMS_OK;
+    static thread_local std::vector<UpdateItems> items;
+    for (auto ptId : groups.ptIds) {
+        const auto &itemIndexes = groups.itemIndexes[ptId];
+        items.resize(itemIndexes.size());
+        for (size_t index = 0; index < itemIndexes.size(); ++index) {
+            auto &decoded = decodedItems[itemIndexes[index]];
+            items[index] = {decoded.key, decoded.value, decoded.keyLen, decoded.valueLen, decoded.offset,
+                            decoded.result};
+        }
+        ret = Update(items.data(), static_cast<uint32_t>(items.size()));
+        if (UNLIKELY(ret != MMS_OK)) {
+            result = ret;
+        }
+    }
+    return result;
+}
+
 BResult MmsKvServer::HandleUpdate(ServiceContext &ctx)
 {
     if (UNLIKELY(ctx.MessageDataLen() != sizeof(IoCtrlRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
@@ -869,7 +2240,9 @@ BResult MmsKvServer::HandleUpdate(ServiceContext &ctx)
 
     BResult ret = MMS_OK;
     IoCtrlRequest *req = static_cast<IoCtrlRequest *>(ctx.MessageData());
-    if (UNLIKELY(!IsIoCtxRequestValid(*req, sizeof(IoDataRequest)))) {
+    ClientIoCtxPtr clientIoCtx;
+    uintptr_t ioBuff = 0;
+    if (UNLIKELY(!IsIoCtxRequestValid(ctx, *req, sizeof(IoDataRequest), clientIoCtx, ioBuff))) {
         LOG_ERROR("Invalid io context, offset:" << req->ioNumaOffset << ", length:" << req->ioLength
                                                << ", total size:" << mIoCtxMemSize << ".");
         mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
@@ -883,15 +2256,10 @@ BResult MmsKvServer::HandleUpdate(ServiceContext &ctx)
         return MMS_OK;
     }
 
-    uint64_t ioBuff;
-    mMemMgr->Trans2Addr(MMAP_AREA_IOCTX, req->ioNumaOffset, ioBuff);
-
-    if (mMulticast) {
-        ret = HandleUpdateMultiImpl(reinterpret_cast<void *>(ioBuff),
-                                    static_cast<uint32_t>(req->ioLength));
-    } else {
-        ret = HandleUpdateDefImpl(reinterpret_cast<void *>(ioBuff), static_cast<uint32_t>(req->ioLength));
-    }
+    IoHandle handle = [this](void *buffer, uint32_t length) {
+        return mMulticast ? HandleUpdateMultiImpl(buffer, length) : HandleUpdateRoutedBatch(buffer, length);
+    };
+    ret = HandleClientIoBuffer(reinterpret_cast<void *>(ioBuff), static_cast<uint32_t>(req->ioLength), handle);
     mNetEngine->Reply(ctx, ret, nullptr, 0);
     return MMS_OK;
 }
@@ -905,7 +2273,7 @@ BResult MmsKvServer::HandleUpdateDefImpl(void *ioBuff, uint32_t ioLen)
 
     IoDataRequest *req = static_cast<IoDataRequest *>(ioBuff);
 
-    auto ret = mCm->GetPtInfo(ptId, ptv, remoteId, remoteNum);
+    auto ret = SelectPtForIo(ioBuff, ioLen, false, ptId, ptv, remoteId, remoteNum);
     if (UNLIKELY(ret != MMS_OK)) {
         LOG_ERROR("Get pt failed, ret: " << ret << ", ptId:" << ptId << ".");
         return ret;
@@ -917,24 +2285,29 @@ BResult MmsKvServer::HandleUpdateDefImpl(void *ioBuff, uint32_t ioLen)
         return ret;
     }
 
-    req->head = { 0, MMS_OP_S_UPDATE, g_groupIndex, ptId, ptv };
+    req->head = { mCm->GetLocalNid(), MMS_OP_S_UPDATE, g_groupIndex, ptId, ptv };
 
-    int32_t quotaNum = remoteNum + NO_1;
+    bool localCopy = !mKeyRouteEnabled || remoteNum == 0;
 
-    KvCbCtx cbCtx(quotaNum, MMS_OK);
-    auto cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result) {
-        auto *cbCtx = (KvCbCtx *)ctx;
-        if (UNLIKELY(result != MMS_OK)) {
-            int32_t expected = MMS_OK;
-            cbCtx->result.compare_exchange_strong(expected, result, std::memory_order_relaxed);
+    if (ShouldUseRemoteOneSide(ioLen, remoteNum)) {
+        ret = SendRemoteOneSideAndWait(remoteId, remoteNum, MMS_OP_S_UPDATE_ONESIDE, ioBuff, ioLen, !localCopy);
+        if (LIKELY(ret == MMS_OK) && localCopy) {
+            ret = UpdateLocal(ioBuff, ioLen);
         }
-        cbCtx->quota.fetch_sub(NO_1, std::memory_order_release);
-    };
-    Callback callback(cbFunc, static_cast<void *>(&cbCtx));
+        mSequence->ReleaseSeqNo2Mst(ptId, g_groupIndex, req->seqNo);
+        return ret;
+    }
+
+    int32_t quotaNum = remoteNum + static_cast<int32_t>(localCopy);
+
+    RemoteIoCbCtx cbCtx(quotaNum, ioBuff, ioLen, true, !localCopy);
+    Callback callback(HandleRemoteIoCallback, static_cast<void *>(&cbCtx));
 
     UpdateRemote(remoteId, remoteNum, ioBuff, ioLen, callback);
-    ret = UpdateLocal(ioBuff, ioLen);
-    callback.cb(callback.cbCtx, nullptr, 0, ret);
+    if (localCopy) {
+        ret = UpdateLocal(ioBuff, ioLen);
+        callback.cb(callback.cbCtx, nullptr, 0, ret);
+    }
 
     while (cbCtx.quota.load(std::memory_order_acquire) != 0) {
         CPU_RELAX();
@@ -942,7 +2315,7 @@ BResult MmsKvServer::HandleUpdateDefImpl(void *ioBuff, uint32_t ioLen)
 
     mSequence->ReleaseSeqNo2Mst(ptId, g_groupIndex, req->seqNo);
 
-    return cbCtx.result;
+    return cbCtx.result.load(std::memory_order_acquire);
 }
 
 BResult MmsKvServer::HandleUpdateMultiImpl(void *ioBuff, uint32_t ioLen)
@@ -996,7 +2369,7 @@ BResult MmsKvServer::HandleUpdateMultiImpl(void *ioBuff, uint32_t ioLen)
 
 BResult MmsKvServer::HandleUpdateRemote(ServiceContext &ctx)
 {
-    if (UNLIKELY(ctx.MessageDataLen() < sizeof(IoDataRequest)) || UNLIKELY(ctx.MessageDataLen() > mIoCtxBuffLen) ||
+    if (UNLIKELY(ctx.MessageDataLen() < sizeof(IoDataRequest)) ||
         UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive message len:" << ctx.MessageDataLen() << " or message data invalid.");
         ReplyPeerRequest(ctx, MMS_INVALID_PARAM, nullptr, 0);
@@ -1004,8 +2377,23 @@ BResult MmsKvServer::HandleUpdateRemote(ServiceContext &ctx)
     }
 
     auto ret = UpdateLocal(ctx.MessageData(), ctx.MessageDataLen());
-    ReplyPeerRequest(ctx, ret, nullptr, 0);
+    if (mKeyRouteEnabled && mReplicaNum == NO_1) {
+        auto reply = [this, &ctx](int32_t code, void *data, uint32_t len) {
+            ReplyPeerRequest(ctx, code, data, len);
+        };
+        ReplyIoItemResults(reply, ret, ctx.MessageData(), ctx.MessageDataLen(), true);
+    } else {
+        ReplyPeerRequest(ctx, ret, nullptr, 0);
+    }
     return MMS_OK;
+}
+
+BResult MmsKvServer::HandleUpdateRemoteOneSide(ServiceContext &ctx)
+{
+    IoHandle handle = [this](void *ioBuff, uint32_t ioLen) {
+        return UpdateLocal(ioBuff, ioLen);
+    };
+    return HandleRemoteOneSide(ctx, handle);
 }
 
 BResult MmsKvServer::HandleUpdateRemoteMulti(ServiceContext &ctx)
@@ -1031,6 +2419,10 @@ void MmsKvServer::UpdateRemote(uint16_t remoteId[], int32_t remoteNum, void *ioB
 
 BResult MmsKvServer::UpdateLocal(void *ioBuff, uint32_t ioLen)
 {
+    if (UNLIKELY(itemListUpdate.size() < mMaxUpdateItemNum)) {
+        itemListUpdate.resize(mMaxUpdateItemNum);
+    }
+
     uint32_t itemNum;
     uint32_t index;
     IoDataRequest *req = reinterpret_cast<IoDataRequest *>(ioBuff);
@@ -1045,7 +2437,9 @@ BResult MmsKvServer::UpdateLocal(void *ioBuff, uint32_t ioLen)
 
     ret = DeCodeUpdateRequest(itemListUpdate, itemNum, reinterpret_cast<uint64_t>(ioBuff), ioLen);
     if (ret != MMS_OK) {
-        LOG_ERROR("Decode update request fail, ret:" << ret << ", ptId:" << req->head.ptId);
+        LOG_ERROR("Decode update request fail, ret:" << ret << ", ptId:" << req->head.ptId << ", itemNum:"
+                  << itemNum << ", capacity:" << itemListUpdate.size() << ", maxItemNum:" << mMaxUpdateItemNum
+                  << ", ioLen:" << ioLen << ".");
         return ret;
     }
 
@@ -1073,6 +2467,44 @@ BResult MmsKvServer::UpdateLocal(void *ioBuff, uint32_t ioLen)
     return result;
 }
 
+BResult MmsKvServer::HandleDeleteRoutedBatch(void *ioBuff, uint32_t ioLen)
+{
+    auto *req = static_cast<IoDataRequest *>(ioBuff);
+    if (!mKeyRouteEnabled || req->num <= NO_1) {
+        return HandleDeleteDefImpl(ioBuff, ioLen);
+    }
+
+    static thread_local std::vector<DecodeDeleteItem> decodedItems;
+    decodedItems.resize(req->num);
+    uint32_t itemNum = 0;
+    auto ret = DeCodeDeleteRequest(decodedItems, itemNum, reinterpret_cast<uint64_t>(ioBuff), ioLen);
+    if (UNLIKELY(ret != MMS_OK || itemNum != req->num)) {
+        return ret == MMS_OK ? MMS_INVALID_PARAM : ret;
+    }
+
+    auto &groups = g_routedBatchGroups;
+    ret = BuildRoutedPtGroups(mCm, decodedItems, itemNum, groups);
+    if (UNLIKELY(ret != MMS_OK)) {
+        return ret;
+    }
+
+    BResult result = MMS_OK;
+    static thread_local std::vector<DeleteItems> items;
+    for (auto ptId : groups.ptIds) {
+        const auto &itemIndexes = groups.itemIndexes[ptId];
+        items.resize(itemIndexes.size());
+        for (size_t index = 0; index < itemIndexes.size(); ++index) {
+            auto &decoded = decodedItems[itemIndexes[index]];
+            items[index] = {decoded.key, decoded.keyLen, decoded.isNotify, decoded.result};
+        }
+        ret = Delete(items.data(), static_cast<uint32_t>(items.size()));
+        if (UNLIKELY(ret != MMS_OK)) {
+            result = ret;
+        }
+    }
+    return result;
+}
+
 BResult MmsKvServer::HandleDelete(ServiceContext &ctx)
 {
     if (UNLIKELY(ctx.MessageDataLen() != sizeof(IoCtrlRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
@@ -1083,7 +2515,9 @@ BResult MmsKvServer::HandleDelete(ServiceContext &ctx)
 
     BResult ret = MMS_OK;
     IoCtrlRequest *req = static_cast<IoCtrlRequest *>(ctx.MessageData());
-    if (UNLIKELY(!IsIoCtxRequestValid(*req, sizeof(IoDataRequest)))) {
+    ClientIoCtxPtr clientIoCtx;
+    uintptr_t ioBuff = 0;
+    if (UNLIKELY(!IsIoCtxRequestValid(ctx, *req, sizeof(IoDataRequest), clientIoCtx, ioBuff))) {
         LOG_ERROR("Invalid io context, offset:" << req->ioNumaOffset << ", length:" << req->ioLength
                                                << ", total size:" << mIoCtxMemSize << ".");
         mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
@@ -1097,17 +2531,16 @@ BResult MmsKvServer::HandleDelete(ServiceContext &ctx)
         return MMS_OK;
     }
 
-    uint64_t ioBuff;
-    mMemMgr->Trans2Addr(MMAP_AREA_IOCTX, req->ioNumaOffset, ioBuff);
-
-    if (mMulticast) {
-        MMS_TRACE_START(SERVER_TRACE_MULTICAST_DELETE);
-        ret = HandleDeleteMultiImpl(reinterpret_cast<void *>(ioBuff),
-                                    static_cast<uint32_t>(req->ioLength));
-        MMS_TRACE_END(SERVER_TRACE_MULTICAST_DELETE, ret);
-    } else {
-        ret = HandleDeleteDefImpl(reinterpret_cast<void *>(ioBuff), static_cast<uint32_t>(req->ioLength));
-    }
+    IoHandle handle = [this](void *buffer, uint32_t length) {
+        if (mMulticast) {
+            MMS_TRACE_START(SERVER_TRACE_MULTICAST_DELETE);
+            auto handleRet = HandleDeleteMultiImpl(buffer, length);
+            MMS_TRACE_END(SERVER_TRACE_MULTICAST_DELETE, handleRet);
+            return handleRet;
+        }
+        return HandleDeleteRoutedBatch(buffer, length);
+    };
+    ret = HandleClientIoBuffer(reinterpret_cast<void *>(ioBuff), static_cast<uint32_t>(req->ioLength), handle);
     mNetEngine->Reply(ctx, ret, nullptr, 0);
     return MMS_OK;
 }
@@ -1121,7 +2554,7 @@ BResult MmsKvServer::HandleDeleteDefImpl(void *ioBuff, uint32_t ioLen)
 
     IoDataRequest *req = static_cast<IoDataRequest *>(ioBuff);
 
-    auto ret = mCm->GetPtInfo(ptId, ptv, remoteId, remoteNum);
+    auto ret = SelectPtForIo(ioBuff, ioLen, false, ptId, ptv, remoteId, remoteNum);
     if (UNLIKELY(ret != MMS_OK)) {
         LOG_ERROR("Get pt failed, ret: " << ret << ", ptId:" << ptId << ".");
         return ret;
@@ -1133,24 +2566,19 @@ BResult MmsKvServer::HandleDeleteDefImpl(void *ioBuff, uint32_t ioLen)
         return ret;
     }
 
-    req->head = { 0, MMS_OP_S_DELETE, g_groupIndex, ptId, ptv };
+    req->head = { mCm->GetLocalNid(), MMS_OP_S_DELETE, g_groupIndex, ptId, ptv };
 
-    int32_t quotaNum = remoteNum + NO_1;
+    bool localCopy = !mKeyRouteEnabled || remoteNum == 0;
+    int32_t quotaNum = remoteNum + static_cast<int32_t>(localCopy);
 
-    KvCbCtx cbCtx(quotaNum, MMS_OK);
-    auto cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result) {
-        auto *cbCtx = (KvCbCtx *)ctx;
-        if (UNLIKELY(result != MMS_OK)) {
-            int32_t expected = MMS_OK;
-            cbCtx->result.compare_exchange_strong(expected, result, std::memory_order_relaxed);
-        }
-        cbCtx->quota.fetch_sub(NO_1, std::memory_order_release);
-    };
-    Callback callback(cbFunc, static_cast<void *>(&cbCtx));
+    RemoteIoCbCtx cbCtx(quotaNum, ioBuff, ioLen, false, !localCopy);
+    Callback callback(HandleRemoteIoCallback, static_cast<void *>(&cbCtx));
 
     DeleteRemote(remoteId, remoteNum, ioBuff, ioLen, callback);
-    ret = DeleteLocal(ioBuff, ioLen);
-    callback.cb(callback.cbCtx, nullptr, 0, ret);
+    if (localCopy) {
+        ret = DeleteLocal(ioBuff, ioLen);
+        callback.cb(callback.cbCtx, nullptr, 0, ret);
+    }
 
     while (cbCtx.quota.load(std::memory_order_acquire) != 0) {
         CPU_RELAX();
@@ -1158,7 +2586,7 @@ BResult MmsKvServer::HandleDeleteDefImpl(void *ioBuff, uint32_t ioLen)
 
     mSequence->ReleaseSeqNo2Mst(ptId, g_groupIndex, req->seqNo);
 
-    return cbCtx.result;
+    return cbCtx.result.load(std::memory_order_acquire);
 }
 
 BResult MmsKvServer::HandleDeleteMultiImpl(void *ioBuff, uint32_t ioLen)
@@ -1212,7 +2640,7 @@ BResult MmsKvServer::HandleDeleteMultiImpl(void *ioBuff, uint32_t ioLen)
 
 BResult MmsKvServer::HandleDeleteRemote(ServiceContext &ctx)
 {
-    if (UNLIKELY(ctx.MessageDataLen() < sizeof(IoDataRequest)) || UNLIKELY(ctx.MessageDataLen() > mIoCtxBuffLen) ||
+    if (UNLIKELY(ctx.MessageDataLen() < sizeof(IoDataRequest)) ||
         UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive message len:" << ctx.MessageDataLen() << " or message data invalid.");
         ReplyPeerRequest(ctx, MMS_INVALID_PARAM, nullptr, 0);
@@ -1220,7 +2648,14 @@ BResult MmsKvServer::HandleDeleteRemote(ServiceContext &ctx)
     }
 
     auto ret = DeleteLocal(ctx.MessageData(), ctx.MessageDataLen(), true);
-    ReplyPeerRequest(ctx, ret, nullptr, 0);
+    if (mKeyRouteEnabled && mReplicaNum == NO_1) {
+        auto reply = [this, &ctx](int32_t code, void *data, uint32_t len) {
+            ReplyPeerRequest(ctx, code, data, len);
+        };
+        ReplyIoItemResults(reply, ret, ctx.MessageData(), ctx.MessageDataLen(), false);
+    } else {
+        ReplyPeerRequest(ctx, ret, nullptr, 0);
+    }
     return MMS_OK;
 }
 
@@ -1238,6 +2673,45 @@ BResult MmsKvServer::HandleDeleteRemoteMulti(ServiceContext &ctx)
     return MMS_OK;
 }
 
+BResult MmsKvServer::HandleReplaceRoutedBatch(void *ioBuff, uint32_t ioLen)
+{
+    auto *req = static_cast<IoDataRequest *>(ioBuff);
+    if (!mKeyRouteEnabled || req->num <= NO_1) {
+        return HandleReplaceDefImpl(ioBuff, ioLen);
+    }
+
+    static thread_local std::vector<DecodeUpdateItem> decodedItems;
+    decodedItems.resize(req->num);
+    uint32_t itemNum = 0;
+    auto ret = DeCodeReplaceRequest(decodedItems, itemNum, reinterpret_cast<uint64_t>(ioBuff), ioLen);
+    if (UNLIKELY(ret != MMS_OK || itemNum != req->num)) {
+        return ret == MMS_OK ? MMS_INVALID_PARAM : ret;
+    }
+
+    auto &groups = g_routedBatchGroups;
+    ret = BuildRoutedPtGroups(mCm, decodedItems, itemNum, groups);
+    if (UNLIKELY(ret != MMS_OK)) {
+        return ret;
+    }
+
+    BResult result = MMS_OK;
+    static thread_local std::vector<ReplaceItems> items;
+    for (auto ptId : groups.ptIds) {
+        const auto &itemIndexes = groups.itemIndexes[ptId];
+        items.resize(itemIndexes.size());
+        for (size_t index = 0; index < itemIndexes.size(); ++index) {
+            auto &decoded = decodedItems[itemIndexes[index]];
+            items[index] = {decoded.key, decoded.value, decoded.keyLen, decoded.valueLen, decoded.offset,
+                            decoded.result};
+        }
+        ret = Replace(items.data(), static_cast<uint32_t>(items.size()));
+        if (UNLIKELY(ret != MMS_OK)) {
+            result = ret;
+        }
+    }
+    return result;
+}
+
 BResult MmsKvServer::HandleReplace(ServiceContext &ctx)
 {
     if (UNLIKELY(ctx.MessageDataLen() != sizeof(IoCtrlRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
@@ -1248,7 +2722,9 @@ BResult MmsKvServer::HandleReplace(ServiceContext &ctx)
 
     BResult ret = MMS_OK;
     IoCtrlRequest *req = static_cast<IoCtrlRequest *>(ctx.MessageData());
-    if (UNLIKELY(!IsIoCtxRequestValid(*req, sizeof(IoDataRequest)))) {
+    ClientIoCtxPtr clientIoCtx;
+    uintptr_t ioBuff = 0;
+    if (UNLIKELY(!IsIoCtxRequestValid(ctx, *req, sizeof(IoDataRequest), clientIoCtx, ioBuff))) {
         LOG_ERROR("Invalid io context, offset:" << req->ioNumaOffset << ", length:" << req->ioLength
                                                << ", total size:" << mIoCtxMemSize << ".");
         mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
@@ -1262,15 +2738,10 @@ BResult MmsKvServer::HandleReplace(ServiceContext &ctx)
         return MMS_OK;
     }
 
-    uint64_t ioBuff;
-    mMemMgr->Trans2Addr(MMAP_AREA_IOCTX, req->ioNumaOffset, ioBuff);
-
-    if (mMulticast) {
-        ret = HandleReplaceMultiImpl(reinterpret_cast<void *>(ioBuff),
-                                     static_cast<uint32_t>(req->ioLength));
-    } else {
-        ret = HandleReplaceDefImpl(reinterpret_cast<void *>(ioBuff), static_cast<uint32_t>(req->ioLength));
-    }
+    IoHandle handle = [this](void *buffer, uint32_t length) {
+        return mMulticast ? HandleReplaceMultiImpl(buffer, length) : HandleReplaceRoutedBatch(buffer, length);
+    };
+    ret = HandleClientIoBuffer(reinterpret_cast<void *>(ioBuff), static_cast<uint32_t>(req->ioLength), handle);
     mNetEngine->Reply(ctx, ret, nullptr, 0);
     return MMS_OK;
 }
@@ -1284,7 +2755,7 @@ BResult MmsKvServer::HandleReplaceDefImpl(void *ioBuff, uint32_t ioLen)
 
     IoDataRequest *req = static_cast<IoDataRequest *>(ioBuff);
 
-    auto ret = mCm->GetPtInfo(ptId, ptv, remoteId, remoteNum);
+    auto ret = SelectPtForIo(ioBuff, ioLen, false, ptId, ptv, remoteId, remoteNum);
     if (UNLIKELY(ret != MMS_OK)) {
         LOG_ERROR("Get pt failed, ret: " << ret << ", ptId:" << ptId << ".");
         return ret;
@@ -1296,24 +2767,29 @@ BResult MmsKvServer::HandleReplaceDefImpl(void *ioBuff, uint32_t ioLen)
         return ret;
     }
 
-    req->head = { 0, MMS_OP_S_REPLACE, g_groupIndex, ptId, ptv };
+    req->head = { mCm->GetLocalNid(), MMS_OP_S_REPLACE, g_groupIndex, ptId, ptv };
 
-    int32_t quotaNum = remoteNum + NO_1;
+    bool localCopy = !mKeyRouteEnabled || remoteNum == 0;
 
-    KvCbCtx cbCtx(quotaNum, MMS_OK);
-    auto cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result) {
-        auto *cbCtx = (KvCbCtx *)ctx;
-        if (UNLIKELY(result != MMS_OK)) {
-            int32_t expected = MMS_OK;
-            cbCtx->result.compare_exchange_strong(expected, result, std::memory_order_relaxed);
+    if (ShouldUseRemoteOneSide(ioLen, remoteNum)) {
+        ret = SendRemoteOneSideAndWait(remoteId, remoteNum, MMS_OP_S_REPLACE_ONESIDE, ioBuff, ioLen, !localCopy);
+        if (LIKELY(ret == MMS_OK) && localCopy) {
+            ret = ReplaceLocal(ioBuff, ioLen);
         }
-        cbCtx->quota.fetch_sub(NO_1, std::memory_order_release);
-    };
-    Callback callback(cbFunc, static_cast<void *>(&cbCtx));
+        mSequence->ReleaseSeqNo2Mst(ptId, g_groupIndex, req->seqNo);
+        return ret;
+    }
+
+    int32_t quotaNum = remoteNum + static_cast<int32_t>(localCopy);
+
+    RemoteIoCbCtx cbCtx(quotaNum, ioBuff, ioLen, true, !localCopy);
+    Callback callback(HandleRemoteIoCallback, static_cast<void *>(&cbCtx));
 
     ReplaceRemote(remoteId, remoteNum, ioBuff, ioLen, callback);
-    ret = ReplaceLocal(ioBuff, ioLen);
-    callback.cb(callback.cbCtx, nullptr, 0, ret);
+    if (localCopy) {
+        ret = ReplaceLocal(ioBuff, ioLen);
+        callback.cb(callback.cbCtx, nullptr, 0, ret);
+    }
 
     while (cbCtx.quota.load(std::memory_order_acquire) != 0) {
         CPU_RELAX();
@@ -1321,7 +2797,7 @@ BResult MmsKvServer::HandleReplaceDefImpl(void *ioBuff, uint32_t ioLen)
 
     mSequence->ReleaseSeqNo2Mst(ptId, g_groupIndex, req->seqNo);
 
-    return cbCtx.result;
+    return cbCtx.result.load(std::memory_order_acquire);
 }
 
 BResult MmsKvServer::HandleReplaceMultiImpl(void *ioBuff, uint32_t ioLen)
@@ -1375,7 +2851,7 @@ BResult MmsKvServer::HandleReplaceMultiImpl(void *ioBuff, uint32_t ioLen)
 
 BResult MmsKvServer::HandleReplaceRemote(ServiceContext &ctx)
 {
-    if (UNLIKELY(ctx.MessageDataLen() < sizeof(IoDataRequest)) || UNLIKELY(ctx.MessageDataLen() > mIoCtxBuffLen) ||
+    if (UNLIKELY(ctx.MessageDataLen() < sizeof(IoDataRequest)) ||
         UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive message len:" << ctx.MessageDataLen() << " or message data invalid.");
         ReplyPeerRequest(ctx, MMS_INVALID_PARAM, nullptr, 0);
@@ -1383,8 +2859,23 @@ BResult MmsKvServer::HandleReplaceRemote(ServiceContext &ctx)
     }
 
     auto ret = ReplaceLocal(ctx.MessageData(), ctx.MessageDataLen());
-    ReplyPeerRequest(ctx, ret, nullptr, 0);
+    if (mKeyRouteEnabled && mReplicaNum == NO_1) {
+        auto reply = [this, &ctx](int32_t code, void *data, uint32_t len) {
+            ReplyPeerRequest(ctx, code, data, len);
+        };
+        ReplyIoItemResults(reply, ret, ctx.MessageData(), ctx.MessageDataLen(), true);
+    } else {
+        ReplyPeerRequest(ctx, ret, nullptr, 0);
+    }
     return MMS_OK;
+}
+
+BResult MmsKvServer::HandleReplaceRemoteOneSide(ServiceContext &ctx)
+{
+    IoHandle handle = [this](void *ioBuff, uint32_t ioLen) {
+        return ReplaceLocal(ioBuff, ioLen);
+    };
+    return HandleRemoteOneSide(ctx, handle);
 }
 
 BResult MmsKvServer::HandleReplaceRemoteMulti(ServiceContext &ctx)
@@ -1411,6 +2902,10 @@ void MmsKvServer::ReplaceRemote(uint16_t remoteId[], int32_t remoteNum, void *io
 
 BResult MmsKvServer::ReplaceLocal(void *ioBuff, uint32_t ioLen)
 {
+    if (UNLIKELY(itemListUpdate.size() < mMaxUpdateItemNum)) {
+        itemListUpdate.resize(mMaxUpdateItemNum);
+    }
+
     uint32_t itemNum;
     uint32_t index;
     IoDataRequest *req = reinterpret_cast<IoDataRequest *>(ioBuff);
@@ -1425,7 +2920,9 @@ BResult MmsKvServer::ReplaceLocal(void *ioBuff, uint32_t ioLen)
 
     ret = DeCodeReplaceRequest(itemListUpdate, itemNum, reinterpret_cast<uint64_t>(ioBuff), ioLen);
     if (UNLIKELY(ret != MMS_OK)) {
-        LOG_ERROR("Decode replace request fail, ret:" << ret << ", ptId:" << req->head.ptId);
+        LOG_ERROR("Decode replace request fail, ret:" << ret << ", ptId:" << req->head.ptId << ", itemNum:"
+                  << itemNum << ", capacity:" << itemListUpdate.size() << ", maxItemNum:" << mMaxUpdateItemNum
+                  << ", ioLen:" << ioLen << ".");
         return ret;
     }
 
@@ -1454,6 +2951,11 @@ void MmsKvServer::DeleteRemote(uint16_t remoteId[], int32_t remoteNum, void *ioB
 
 BResult MmsKvServer::DeleteLocal(void *ioBuff, uint32_t ioLen, bool notifyDataChange)
 {
+    if (UNLIKELY(itemListDelete.size() < mMaxDeleteItemNum)) {
+        itemListDelete.resize(mMaxDeleteItemNum);
+        notifyDeleteItems.resize(mMaxDeleteItemNum);
+    }
+
     uint32_t itemNum;
     uint32_t index;
     IoDataRequest *req = reinterpret_cast<IoDataRequest *>(ioBuff);
@@ -1877,6 +3379,68 @@ BResult MmsKvServer::HandleUpdatePtVersion(ServiceContext &ctx)
     uint64_t ptVersion = mCm->GetPtVersion();
     UpdatePtVRsp rsp = {ptVersion};
     mNetEngine->Reply(ctx, MMS_OK, &rsp, sizeof(UpdatePtVRsp));
+    return MMS_OK;
+}
+
+BResult MmsKvServer::HandleGetRouteView(ServiceContext &ctx)
+{
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(BasicRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        return MMS_OK;
+    }
+
+    auto nodeView = mCm->GetNodeView();
+    auto ptView = mCm->GetPtView();
+    if (UNLIKELY(nodeView.size() > MAX_NODES_NUM || ptView.size() > MMS_ROUTE_MAX_PT_NUM)) {
+        LOG_ERROR("Route view too large, node num:" << nodeView.size() << ", pt num:" << ptView.size() << ".");
+        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        return MMS_OK;
+    }
+
+    RouteViewResponse rsp{};
+    rsp.localNid = mCm->GetLocalNid();
+    rsp.nodeNum = static_cast<uint16_t>(nodeView.size());
+    rsp.ptNum = mCm->GetPtNum();
+    rsp.replicaNum = mReplicaNum;
+    rsp.ptVersion = mCm->GetPtVersion();
+
+    uint32_t executorNum = 0;
+    NetOptions rpcOption;
+    NetOptions ipcOption;
+    mNetEngine->Show(executorNum, rpcOption, ipcOption);
+    rsp.rpcProtocol = static_cast<uint16_t>(rpcOption.protocol);
+    rsp.rpcConnCount = rpcOption.connCount;
+    rsp.rpcGroupNum = rpcOption.workerGroupsNum;
+
+    uint16_t nodeIndex = 0;
+    for (const auto &elem : nodeView) {
+        auto &node = rsp.nodes[nodeIndex++];
+        node.nodeId = elem.second.id;
+        node.status = elem.second.status;
+        node.port = elem.second.port;
+        if (UNLIKELY(strncpy_s(node.ip, IP_SIZE, elem.second.ip.c_str(), elem.second.ip.size() + NO_1) != MMS_OK)) {
+            LOG_ERROR("Copy route node ip failed, node id:" << elem.second.id << ", ip:" << elem.second.ip << ".");
+            mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+            return MMS_OK;
+        }
+    }
+
+    uint16_t ptIndex = 0;
+    for (const auto &elem : ptView) {
+        auto &pt = rsp.pts[ptIndex++];
+        pt.version = elem.second.version;
+        pt.ptId = elem.second.ptId;
+        pt.state = elem.second.state;
+        pt.masterNodeId = elem.second.masterNodeId;
+        pt.copyNum = static_cast<uint16_t>(std::min(elem.second.copys.size(), static_cast<size_t>(MAX_NODES_NUM)));
+        for (uint16_t copyIndex = 0; copyIndex < pt.copyNum; copyIndex++) {
+            pt.copys[copyIndex].nodeId = elem.second.copys[copyIndex].nodeId;
+            pt.copys[copyIndex].state = elem.second.copys[copyIndex].state;
+        }
+    }
+
+    mNetEngine->Reply(ctx, MMS_OK, &rsp, sizeof(RouteViewResponse));
     return MMS_OK;
 }
 
