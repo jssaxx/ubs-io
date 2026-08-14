@@ -118,10 +118,11 @@ struct PerfTestParam {
     bool consistency;
 };
 
-static void FormatPerfKey(const PerfTestParam *param, char *key, uint32_t keyIndex)
+static void FormatPerfKey(const PerfTestParam *param, const char *key, uint32_t keyIndex)
 {
     const char *prefix = param->consistency ? "check_key" : "key";
-    int ret = snprintf(key, DIAG_KEY_BUFFER_LEN, "%s_%u_%u_%u", prefix, param->id, param->cpu, keyIndex);
+    int ret = snprintf(const_cast<char *>(key), DIAG_KEY_BUFFER_LEN, "%s_%u_%u_%u", prefix, param->id, param->cpu,
+                       keyIndex);
     if (ret < 0) {
         cli_print_buffer("Format key failed.\n");
     }
