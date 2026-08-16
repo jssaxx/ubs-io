@@ -85,6 +85,9 @@ BResult WCache::Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], con
     mUnderFs = UfsHelper::Instance();
     if (isRecover) {
         mIsMaster = false; // 用于识别Put流程特殊处理
+        if (BioServer::Instance()->IsStandaloneMode()) {
+            MarkReadOnly();
+        }
         return BIO_OK;
     }
 
@@ -143,6 +146,9 @@ void WCache::GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &dis
 
 BResult WCache::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
 {
+    if (UNLIKELY(!IsWritable())) {
+        return BIO_INNER_RETRY;
+    }
     auto &memCache = mCacheTiers[WCACHE_MEMORY];
     return memCache->GetDataSlice(sliceKey, slice);
 }
@@ -150,6 +156,9 @@ BResult WCache::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
 BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
     WCacheSliceRefPtr &destSliceRef, CacheAttr &attr)
 {
+    if (UNLIKELY(!IsWritable())) {
+        return BIO_INNER_RETRY;
+    }
     // The in-flight reference is held by WCacheManager::Put from AcquireWCacheForPut
     // until WCacheIndex::Insert completes, so no additional reference is needed here.
     auto ret = PutImpl(key, srcSlice, sliceReader, destSliceRef, attr);
@@ -461,8 +470,7 @@ void WCache::StartEvictTask(WCacheTierType type)
         return;
     }
 
-    bool isNormal = false;
-    mGetLocDiskStatus(mPtId, mDiskId, isNormal);
+    bool isNormal = IsOwnDiskNormal();
     if (!isNormal) {
         mEvictRef[type].store(false); // break task
         return;
@@ -510,8 +518,7 @@ void WCache::RetryEvictTask(WCacheTierType type)
         return;
     }
 
-    bool isNormal = false;
-    mGetLocDiskStatus(mPtId, mDiskId, isNormal);
+    bool isNormal = IsOwnDiskNormal();
     if (!isNormal) {
         mEvictRef[type].store(false); // break task
         return;
@@ -536,6 +543,20 @@ void WCache::RetryEvictTask(WCacheTierType type)
         DecreaseRef();
     }
     return;
+}
+
+bool WCache::IsOwnDiskNormal()
+{
+    bool isNormal = false;
+    if (IsWritable() || !BioServer::Instance()->IsStandaloneMode()) {
+        mGetLocDiskStatus(mPtId, mDiskId, isNormal);
+        return isNormal;
+    }
+
+    CmDiskStatus diskStatus = CM_DISK_FAULT;
+    return !BioServer::Instance()->IsStandaloneDiskFault(mDiskId) &&
+        BioServer::Instance()->GetDiskStatusFromNodeView(mDiskId, diskStatus) == BIO_OK &&
+        diskStatus == CM_DISK_NORMAL;
 }
 
 uint64_t WCache::GetCapacity(WCacheTierType type)

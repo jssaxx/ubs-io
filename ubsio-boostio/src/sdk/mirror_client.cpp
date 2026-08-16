@@ -2069,6 +2069,9 @@ BResult MirrorClient::AddDisk(const char *diskPath)
         isRetry = false;
         ret = AddDiskImpl(diskPath);
         if (LIKELY(ret == BIO_OK)) {
+            if (mMode == STANDALONE && mUpdateView != nullptr) {
+                mUpdateView();
+            }
             return BIO_OK;
         }
         if (ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY || ret == BIO_CHECK_PT_FAIL) {
@@ -2259,7 +2262,8 @@ BResult MirrorClient::AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, 
         return BIO_INNER_RETRY;
     }
     if (UNLIKELY(flowInst->Version() != ptv)) {
-        Delete(ptId, flowInst->FlowId()); // Flow版本号不一致则需要删除Flow, 再重新创建Flow.
+        // The server distinguishes an add-disk READ_ONLY flow from a failed-disk flow.
+        Delete(ptId, flowInst->FlowId());
         BResult ret = CreateFlow(ptId);
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Create flow instance failed, need retry, ret: " << ret << ", ptId:" << ptId << ".");

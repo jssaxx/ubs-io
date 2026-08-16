@@ -30,6 +30,10 @@ BioConfigPtr MakeStandaloneConfig(const std::vector<std::string> &diskList, cons
     auto config = MakeRef<BioConfig>();
     config->mDaemonConfig.diskList = diskList;
     config->mDaemonConfig.diskCaps = diskCaps;
+    // SelectStandaloneDiskByDeviceInfo requires the startup physical capacity
+    // snapshot to stay in sync with diskList; the fixture bypasses
+    // AutoConfigDaemonDisk, so fill it with the same physical values.
+    config->mDaemonConfig.diskPhysicalCaps = diskCaps;
     config->mDaemonConfig.standaloneDeviceCount = deviceCount;
     return config;
 }
@@ -52,6 +56,8 @@ TEST(TestStandaloneConfig, legacy_device_count_zero_selects_disk_by_device_id)
     ASSERT_EQ(config->GetDaemonConfig().diskList.size(), 1);
     EXPECT_EQ(config->GetDaemonConfig().diskList[0], "disk1");
     EXPECT_EQ(config->GetDaemonConfig().diskCaps[0], TEST_DISK_CAP);
+    ASSERT_EQ(config->GetDaemonConfig().diskPhysicalCaps.size(), 1);
+    EXPECT_EQ(config->GetDaemonConfig().diskPhysicalCaps[0], TEST_DISK_CAP);
     EXPECT_EQ(config->mStandaloneDiskIndex, 1);
 }
 

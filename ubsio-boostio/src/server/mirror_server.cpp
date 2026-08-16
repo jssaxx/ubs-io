@@ -284,6 +284,10 @@ BResult MirrorServer::CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t 
             LOG_ERROR("Get wCache failed, flowId:" << reuseFlowId << ".");
             return BIO_NOT_EXISTS;
         }
+        if (!wCache->IsWritable()) {
+            LOG_INFO("Skip read-only reuse flow, flowId:" << reuseFlowId << ", ptId:" << ptId << ".");
+            continue;
+        }
         if (wCache->GetPtv() != base) {
             LOG_DEBUG("Check pt version failed, destroy flow, flowId:" << reuseFlowId << ", ptv:" << wCache->GetPtv() <<
                 ", base:" << base << ", isDegrade:" << wCache->GetDegradeState() << ", index:" << wCache->GetIndex() <<
@@ -310,7 +314,17 @@ BResult MirrorServer::CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t 
     }
 
     flowInfo.isDegrade = BioServer::Instance()->GetServiceState(); // 升级过程中，创建降级Cache实例
-    return CreateFlow(procId, ptId, ptv, flowInfo.flowId, flowInfo.isDegrade);
+    ret = CreateFlow(procId, ptId, ptv, flowInfo.flowId, flowInfo.isDegrade);
+    if (UNLIKELY(ret != BIO_OK) || !BioServer::Instance()->IsStandaloneMode() ||
+        BioServer::Instance()->GetPtEntry(ptId).version == ptv) {
+        return ret;
+    }
+
+    auto wcache = WCacheManager::Instance()->GetWCacheForCleanup(flowInfo.flowId);
+    if (wcache != nullptr) {
+        WCacheManager::Instance()->MarkPtFlowsReadOnly(ptId, ptv, wcache->GetDiskId());
+    }
+    return BIO_CHECK_PT_FAIL;
 }
 
 BResult MirrorServer::CreateFlowSlave(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade)
@@ -1066,21 +1080,12 @@ BResult MirrorServer::AddDisk(AddDiskRequest &req)
 
 BResult MirrorServer::AddDiskImpl(AddDiskRequest &req)
 {
-    if (BioServer::Instance()->IsStandaloneMode()) {
-        LOG_ERROR("Standalone mode does not support adding disk dynamically.");
-        return BIO_INVALID_PARAM;
-    }
-
     if (!mBioConfig->GetDaemonConfig().hasDiskCache) {
         LOG_ERROR("Add disk is not supported when disk cache is disabled.");
         return BIO_INVALID_PARAM;
     }
 
     std::lock_guard<std::mutex> lock(mDiskViewMutex);
-    if (BdmGetNormalDiskNum() >= DISK_DEV_NUM) {
-        LOG_ERROR("The number of available disks must not exceed " << DISK_DEV_NUM << ".");
-        return BIO_ERR;
-    }
     uint32_t diskId = DISK_ID_INVALID;
     BResult ret = BIO_OK;
     req.diskPath[FILE_PATH_MAX_LEN - 1] = '\0';
@@ -1098,9 +1103,17 @@ BResult MirrorServer::AddDiskImpl(AddDiskRequest &req)
         ret = AddOldDiskImpl(diskPath, diskId);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("Add old disk failed, diskPath: " << diskPath << ".");
-            return BIO_INNER_ERR;
+            return BioServer::Instance()->IsStandaloneMode() ? ret : BIO_INNER_ERR;
         }
         return BIO_OK;
+    }
+    if (BdmGetNormalDiskNum() >= DISK_DEV_NUM) {
+        LOG_ERROR("The number of available disks must not exceed " << DISK_DEV_NUM << ".");
+        return BIO_ERR;
+    }
+
+    if (BioServer::Instance()->IsStandaloneMode()) {
+        return BioServer::Instance()->AddStandaloneDisk(diskPath);
     }
 
     BIO_TP_START(SERVER_ADD_NEW_DISK_FAIL, &ret, BIO_INNER_ERR);
@@ -1116,6 +1129,10 @@ BResult MirrorServer::AddDiskImpl(AddDiskRequest &req)
 
 BResult MirrorServer::AddOldDiskImpl(const std::string &diskPath, uint16_t diskId)
 {
+    if (BioServer::Instance()->IsStandaloneMode()) {
+        return BioServer::Instance()->AddStandaloneOldDisk(diskPath, diskId);
+    }
+
     LOG_DEBUG("Start to add old disk, diskPath: " << diskPath << ".");
     // reset disk
     BResult res = BioServer::Instance()->BioDiskReset(diskId);
@@ -1147,23 +1164,31 @@ BResult MirrorServer::AddNewDiskImpl(std::string &diskPath)
     }
 
     // write diskPath to config
+    bool configChanged = true;
     ret = mBioConfig->CreateDiskConfBak(diskPath);
+    if (ret == BIO_EXISTS) {
+        configChanged = false;
+        ret = BIO_OK;
+    }
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Update disk config failed, diskPath: " << diskPath << ", ret: " << ret);
         return ret;
     }
 
     // add disk to bdm
+    uint32_t diskId = DISK_ID_INVALID;
+    uint64_t diskCapacity = 0;
     BIO_TP_START(SERVER_BDM_UPDATE_SUCCESS, &ret, BIO_OK);
-    ret = BioServer::Instance()->BioBdmUpdate(diskPath);
+    ret = BioServer::Instance()->BioAttachDisk(diskPath, diskId, diskCapacity);
     BIO_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Update new disk to bdm failed, diskPath: " << diskPath << ", ret: " << ret);
         return ret;
     }
+    LOG_DEBUG("Update new disk to bdm success, diskPath:" << diskPath << ", diskId:" << diskId <<
+        ", capacity:" << diskCapacity << ".");
 
     // update info to cm
-    uint32_t diskId = diskCount;
     ret = CmAddNewDisk(diskId, CM_DISK_NORMAL, true);
     if (ret != BIO_OK) {
         LOG_ERROR("Update new disk status failed, ret: " << ret);
@@ -1171,10 +1196,12 @@ BResult MirrorServer::AddNewDiskImpl(std::string &diskPath)
     }
 
     // replace config file
-    ret = mBioConfig->ReplaceFile(CONFIG_PATH, CONFIG_PATH_BAK);
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Update new disk to bdm failed, diskPath: " << diskPath << ", ret: " << ret);
-        return ret;
+    if (configChanged) {
+        ret = mBioConfig->CommitDiskConfBak();
+        if (UNLIKELY(ret != BIO_OK)) {
+            LOG_ERROR("Update new disk to bdm failed, diskPath: " << diskPath << ", ret: " << ret);
+            return ret;
+        }
     }
 
     mBioConfig->ResizeDaemonConfigDisks(diskPath);

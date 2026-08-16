@@ -69,6 +69,8 @@ public:
 
     BResult DestroyWCache(uint64_t procId, uint64_t flowId, uint16_t ptId, uint64_t ptv);
 
+    uint32_t MarkPtFlowsReadOnly(uint16_t ptId, uint64_t ptv, uint16_t diskId);
+
     BResult DeleteWCache(uint64_t flowId);
 
     BResult RecoverCache(FlowPtr metaFlow);

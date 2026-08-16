@@ -2178,6 +2178,7 @@ int32_t BdmDiskCreateAllocator(BdmDiskItem *item)
 void BdmDiskDestroyAllocator(BdmDiskItem *item)
 {
     int32_t ret = BdmAllocatorDestroy(item->allocator);
+    item->allocator = 0;
     if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGERROR(0, "destroy allocator failed.");
     }
@@ -2202,6 +2203,19 @@ void BdmDiskFillBdmObj(BdmObj *obj, BdmDiskItem *item)
     obj->ops.nextchunk = BdmDiskGetNextChunk;
     obj->ops.getcap = BdmDiskGetCap;
     obj->opsInfo = (BdmOpsInfo)item;
+}
+
+int32_t BdmGetDiskPath(uint32_t bdmId, char *path, uint32_t pathLen)
+{
+    if (path == NULL || pathLen == 0) {
+        return BDM_CODE_ERR;
+    }
+    BdmObj *obj = BdmGetBdmObj(bdmId);
+    if (obj == NULL || obj->opsInfo == NULL) {
+        return BDM_CODE_NOT_EXIST;
+    }
+    BdmDiskItem *item = (BdmDiskItem *)obj->opsInfo;
+    return strcpy_s(path, pathLen, item->name) == 0 ? BDM_CODE_OK : BDM_CODE_ERR;
 }
 
 static void BdmDiskFillItem(BdmDiskItem *item, BdmCreatePara *para, uint32_t bdmId)

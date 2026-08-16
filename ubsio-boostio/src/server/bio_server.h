@@ -439,7 +439,13 @@ public:
 
     BResult HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeInfos);
 
-    BResult BioBdmUpdate(std::string diskPath);
+    BResult BioAttachDisk(std::string diskPath);
+
+    BResult BioAttachDisk(std::string diskPath, uint32_t &diskId, uint64_t &diskCapacity);
+
+    BResult AddStandaloneDisk(std::string &diskPath);
+
+    BResult AddStandaloneOldDisk(const std::string &diskPath, uint16_t diskId);
 
     BResult BioDiskReset(uint16_t diskId);
 
@@ -516,6 +522,7 @@ private:
     std::atomic<bool> mCrbProcessing{false};
     std::mutex mNodeViewMutex;
     std::mutex mPtViewMutex;
+    std::mutex mStandaloneViewUpdateMutex;
     uint64_t mCurNodeTimes = 0;
     uint64_t mCurPtTimes = 0;
     void *mServerDiagnoseHandle = nullptr;

@@ -30,6 +30,11 @@ namespace ock {
 namespace bio {
 class WCache;
 using WCachePtr = Ref<WCache>;
+enum class WCacheAccessState : uint8_t {
+    READ_WRITE = 0,
+    READ_ONLY,
+};
+
 class WCache {
 public:
     WCache(uint64_t procId, uint64_t flowId, uint16_t ptId, uint64_t ptv, uint16_t diskId, bool isDegrade)
@@ -83,6 +88,16 @@ public:
     inline bool GetState() const
     {
         return mIsNormal.load();
+    }
+
+    inline void MarkReadOnly()
+    {
+        mAccessState.store(WCacheAccessState::READ_ONLY);
+    }
+
+    inline bool IsWritable() const
+    {
+        return mAccessState.load() == WCacheAccessState::READ_WRITE;
     }
 
     inline bool IsIoFinish() const
@@ -220,6 +235,7 @@ private:
         WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
 
     BResult StartEvictSlice(const Key &key, WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
+    bool IsOwnDiskNormal();
 
 private:
     uint64_t mProcId;
@@ -233,6 +249,7 @@ private:
     bool mIsDegrade;
     bool mIsMaster{ true };
     std::atomic<bool> mIsNormal { true };
+    std::atomic<WCacheAccessState> mAccessState { WCacheAccessState::READ_WRITE };
     std::atomic<bool> mStandaloneFault { false };
     bool mIsForced { false };
     bool mUfsEnable{ false };

@@ -53,8 +53,23 @@ public:
 
     bool IsDiskFault(uint16_t diskId) const;
 
+    // Rejoin-safe fault-state helpers. Recoverable means NORMAL or
+    // FAULT_HANDLED; a disk whose failover worker is still pending must be
+    // retried later so a stale fault task cannot re-fault a recovered disk.
+    BResult CheckDiskRecoverable(uint16_t diskId) const;
+    BResult MarkDiskRecovered(uint16_t diskId);
+
+    BResult TrackDisk(uint16_t diskId);
+    BResult UntrackDisk(uint16_t diskId);
+
     BResult FailoverDisk(uint16_t failedDiskId, const CmNodeId &localNid, NodeView &nodeView, PtView &ptView,
         std::vector<std::pair<uint16_t, uint64_t>> &changedPts);
+
+    BResult RejoinDisk(uint16_t diskId, const std::vector<int64_t> &currentDiskCaps, const CmNodeId &localNid,
+        NodeView &nodeView, PtView &ptView, std::vector<CmPtInfo> &changedPts);
+
+    BResult AddDisk(uint16_t diskId, int64_t diskCapacity, const std::vector<int64_t> &currentDiskCaps,
+        const CmNodeId &localNid, NodeView &nodeView, PtView &ptView, std::vector<CmPtInfo> &changedPts);
 
 private:
     enum class DiskState : uint8_t {

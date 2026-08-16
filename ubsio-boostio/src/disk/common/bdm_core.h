@@ -169,6 +169,9 @@ int32_t BdmCalculateVirtualRegion(uint64_t capacity, uint64_t chunkSize, uint32_
 
 int32_t BdmUpdate(char *diskPath, uint64_t chunkSize, uint64_t diskCap);
 
+int32_t BdmAttachDisk(char *diskPath, uint64_t chunkSize, uint64_t diskCap, uint32_t *diskId,
+    uint64_t *virtualCapacity);
+
 uint32_t BdmGetDiskCount(void);
 
 int32_t BdmResetDisk(uint16_t diskId);
