@@ -118,7 +118,15 @@ CMAKE_FLAGS+="-DBUILD_PYTHON=${BUILD_PYTHON} "
 CMAKE_FLAGS+="-DUBSIO_ENABLE_ORIGIN_RUNPATH=${UBSIO_ENABLE_ORIGIN_RUNPATH} "
 
 if [[ "$BUILD_UT" == 'ON' ]]; then
+    if [[ -z "${TEST_TOOL_PATH:-}" ]]; then
+        TEST_TOOL_PATH="${PROJ_DIR}/dist/kv_test_tools"
+    fi
+    if [[ ! -f "${TEST_TOOL_PATH}/googletest/include/gtest/gtest.h" ]]; then
+        echo "ubsio-kv test tools are not installed, installing..."
+        KV_TEST_TOOL_PATH="${TEST_TOOL_PATH}" bash "${PROJ_DIR}/build/install_test_tools.sh"
+    fi
     CMAKE_FLAGS+="-DDEBUG_UT=ON "
+    CMAKE_FLAGS+="-DTEST_TOOL_INSTALL_PATH=${TEST_TOOL_PATH} "
 else
     CMAKE_FLAGS+="-DDEBUG_UT=OFF "
 fi
