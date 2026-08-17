@@ -55,6 +55,16 @@ public:
     static bool ReadAndWritable(const std::string &path);
 
     /*
+     * @brief Check if path is an absolute regular file
+     */
+    static bool IsAbsoluteRegularFile(const std::string &path);
+
+    /*
+     * @brief Join directory and child name
+     */
+    static std::string JoinPath(const std::string &directory, const std::string &name);
+
+    /*
      * @brief Create dir
      */
     static bool MakeDir(const std::string &path, uint32_t mode);
@@ -63,6 +73,11 @@ public:
      * @brief Create dir recursively if parent doesn't exist
      */
     static bool MakeDirRecursive(const std::string &path, uint32_t mode);
+
+    /*
+     * @brief Create directory recursively and replace path with its canonical path
+     */
+    static bool PrepareDirectory(std::string &path, uint32_t mode);
 
     /*
      * @brief Remove the dir without sub dirs
@@ -143,6 +158,24 @@ inline bool FileUtil::ReadAndWritable(const std::string &path)
     return access(reinterpret_cast<const char *>(path.c_str()), F_OK | R_OK | W_OK) != -1;
 }
 
+inline bool FileUtil::IsAbsoluteRegularFile(const std::string &path)
+{
+    if (path.empty() || path.front() != '/') {
+        return false;
+    }
+
+    struct stat pathStat {};
+    return stat(path.c_str(), &pathStat) == 0 && S_ISREG(pathStat.st_mode);
+}
+
+inline std::string FileUtil::JoinPath(const std::string &directory, const std::string &name)
+{
+    if (directory.empty() || directory.back() == '/') {
+        return directory + name;
+    }
+    return directory + "/" + name;
+}
+
 inline bool FileUtil::MakeDir(const std::string &path, uint32_t mode)
 {
     if (path.empty()) {
@@ -185,6 +218,16 @@ inline bool FileUtil::MakeDirRecursive(const std::string &path, uint32_t mode)
     }
 
     return ::mkdir(chPath, mode) == 0 || errno == EEXIST;
+}
+
+inline bool FileUtil::PrepareDirectory(std::string &path, uint32_t mode)
+{
+    if (!MakeDirRecursive(path, mode) || !CanonicalPath(path)) {
+        return false;
+    }
+
+    struct stat pathStat {};
+    return stat(path.c_str(), &pathStat) == 0 && S_ISDIR(pathStat.st_mode);
 }
 
 inline bool FileUtil::Remove(const std::string &path, bool canonicalPath)

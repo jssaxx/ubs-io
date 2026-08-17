@@ -392,7 +392,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     </td>
     <td class="cellrowborder" valign="top" width="15.559999999999999%" headers="mcps1.2.5.1.3 "><p id="p2020523118202"><a name="p2020523118202"></a><a name="p2020523118202"></a>750</p>
     </td>
-    <td class="cellrowborder" valign="top" width="38.2%" headers="mcps1.2.5.1.4 "><p id="p957425410353"><a name="p957425410353"></a><a name="p957425410353"></a>UBS IO Server端日志目录。</p>
+    <td class="cellrowborder" valign="top" width="38.2%" headers="mcps1.2.5.1.4 "><p id="p957425410353"><a name="p957425410353"></a><a name="p957425410353"></a>UBS IO Server端日志目录，默认为/var/log/ubsio，可通过ubsio.log.path配置。</p>
     </td>
     </tr>
     <tr id="row209178378340"><td class="cellrowborder" valign="top" width="27.74%" headers="mcps1.2.5.1.1 "><p id="p991803716346"><a name="p991803716346"></a><a name="p991803716346"></a>/var/log/ubsio/trace</p>
@@ -401,7 +401,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     </td>
     <td class="cellrowborder" valign="top" width="15.559999999999999%" headers="mcps1.2.5.1.3 "><p id="p29182037153420"><a name="p29182037153420"></a><a name="p29182037153420"></a>750</p>
     </td>
-    <td class="cellrowborder" valign="top" width="38.2%" headers="mcps1.2.5.1.4 "><p id="p6574054133516"><a name="p6574054133516"></a><a name="p6574054133516"></a>UBS IO统计日志目录。</p>
+    <td class="cellrowborder" valign="top" width="38.2%" headers="mcps1.2.5.1.4 "><p id="p6574054133516"><a name="p6574054133516"></a><a name="p6574054133516"></a>UBS IO统计日志目录，位于ubsio.log.path配置目录的trace子目录。</p>
     </td>
     </tr>
     <tr id="row195421659132117"><td class="cellrowborder" valign="top" width="27.74%" headers="mcps1.2.5.1.1 "><p id="p155421659172116"><a name="p155421659172116"></a><a name="p155421659172116"></a>sdk初始化函数中的日志路径</p>
@@ -562,7 +562,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     </th>
     </tr>
     </thead>
-    <tbody><tr id="row11875193784211"><td class="cellrowborder" valign="top" width="9.99%" headers="mcps1.2.7.1.1 "><p id="p78755372423"><a name="p78755372423"></a><a name="p78755372423"></a>Log</p>
+    <tbody><tr id="row11875193784211"><td class="cellrowborder" rowspan="2" valign="top" width="9.99%" headers="mcps1.2.7.1.1 "><p id="p78755372423"><a name="p78755372423"></a><a name="p78755372423"></a>Log</p>
     </td>
     <td class="cellrowborder" valign="top" width="20.01%" headers="mcps1.2.7.1.2 "><p id="p987553774211"><a name="p987553774211"></a><a name="p987553774211"></a>ubsio.log.level</p>
     </td>
@@ -573,6 +573,17 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" width="15%" headers="mcps1.2.7.1.5 "><a name="ul16707191194010"></a><a name="ul16707191194010"></a><ul id="ul16707191194010"><li>debug</li><li>info</li><li>warn</li><li>trace</li><li>error</li></ul>
     </td>
     <td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.7.1.6 "><p id="p16875113794216"><a name="p16875113794216"></a><a name="p16875113794216"></a>-</p>
+    </td>
+    </tr>
+    <tr id="rowLogPath"><td class="cellrowborder" valign="top" width="20.01%" headers="mcps1.2.7.1.2 "><p>ubsio.log.path</p>
+    </td>
+    <td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.7.1.3 "><p>服务端日志根目录。</p>
+    </td>
+    <td class="cellrowborder" valign="top" width="15%" headers="mcps1.2.7.1.4 "><p>/var/log/ubsio</p>
+    </td>
+    <td class="cellrowborder" valign="top" width="15%" headers="mcps1.2.7.1.5 "><p>非空且可创建或已存在的目录路径</p>
+    </td>
+    <td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.7.1.6 "><p>普通日志写入该目录，统计日志写入其trace子目录。</p>
     </td>
     </tr>
     <tr id="row2875937154211"><td class="cellrowborder" rowspan="17" valign="top" width="9.99%" headers="mcps1.2.7.1.1 "><p id="p158751937124214"><a name="p158751937124214"></a><a name="p158751937124214"></a>Net</p>

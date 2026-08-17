@@ -19,6 +19,7 @@
 namespace ock {
 namespace bio {
 const auto LOG_LEVEL = std::make_pair("ubsio.log.level", "info");
+const auto LOG_PATH = std::make_pair("ubsio.log.path", "/var/log/ubsio");
 
 const auto NET_DATA_PROTOCOL = std::make_pair("ubsio.net.data.protocol", "tcp");
 const auto NET_RPC_DATA_BUSY_POLL_MODE = std::make_pair("ubsio.net.rpc.data.busy_polling_mode", "false");
@@ -152,6 +153,7 @@ public:
 
     struct DaemonConfig {
         int32_t logLevel = 0;
+        std::string logPath = "/var/log/ubsio";
         uint32_t negotiateDelay = 100;
         uint32_t segment = 4194304;    // 4MB
         uint64_t memCap = 53687091200; // 50GB
@@ -232,9 +234,13 @@ public:
 
     void BakFileProcess(const std::string &configPath);
 
+    BResult Initialize();
+
     BResult Initialize(const std::string &configPath);
 
     void LoadDefaultConf() override;
+
+    void DumpToLog();
 
     const NetConfig &GetNetConfig() const noexcept
     {
@@ -298,8 +304,6 @@ public:
     void AppendDaemonDisk(const std::string &diskPath, int64_t diskCapacity, int64_t physicalCapacity);
 
 private:
-    void DumpToLog();
-
     BResult AutoConfAfterLoadFromFile(const ConfigurationPtr &conf);
 
     BResult AutoConfigNet(const ConfigurationPtr &conf);
@@ -317,6 +321,8 @@ private:
     BResult AutoConfigClient(const ConfigurationPtr &conf);
 
     BResult AutoConfigUnderFs(const ConfigurationPtr &conf);
+
+    BResult PrepareLogDirectories();
 
     BResult SelectStandaloneDiskLegacy(uint16_t diskNum);
 

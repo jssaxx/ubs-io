@@ -12,9 +12,7 @@
 
 #include <algorithm>
 #include <dlfcn.h>
-#include <cstdlib>
 #include <limits>
-#include <sys/stat.h>
 #include <unistd.h>
 #include <mutex>
 #include <utility>
@@ -41,19 +39,6 @@
 namespace ock {
 namespace bio {
 namespace {
-constexpr const char* BIO_CONFIG_ENV = "UBSIO_CONFIG_PATH";
-constexpr uint32_t LOG_DIR_MODE = S_IRWXU | S_IRGRP | S_IXGRP;
-
-bool IsAbsoluteRegularFile(const std::string &path)
-{
-    if (path.empty() || path.front() != '/') {
-        return false;
-    }
-
-    struct stat pathStat {};
-    return stat(path.c_str(), &pathStat) == 0 && S_ISREG(pathStat.st_mode);
-}
-
 std::mutex gMetaEventCallbackLock;
 UbsioMetaEventCallbackC gMetaEventCallback = nullptr;
 void *gMetaEventCallbackContext = nullptr;
@@ -160,17 +145,17 @@ BioServer::BioServer() noexcept
 
 BResult BioServer::InitializeRuntime()
 {
-    std::string path = "/var/log/ubsio/";
-#ifdef DEBUG_UT
-    path = "./";
-#endif
-    FileUtil::MakeDirRecursive(path, LOG_DIR_MODE);
-    std::string logPath = path + "bio" + std::to_string(getpid()) + ".log";
-    if (BioLoggerInit(logPath) != BIO_OK || BioConfigInit() != BIO_OK) {
+    if (BioConfigInit() != BIO_OK) {
         return BIO_INNER_ERR;
     }
 
-    auto &daemonConfig = mConfig->GetDaemonConfig();
+    const auto &daemonConfig = mConfig->GetDaemonConfig();
+    std::string logPath = FileUtil::JoinPath(daemonConfig.logPath, "bio" + std::to_string(getpid()) + ".log");
+    if (BioLoggerInit(logPath) != BIO_OK) {
+        return BIO_INNER_ERR;
+    }
+
+    mConfig->DumpToLog();
     BIO_LOG_RESET_LEVEL(daemonConfig.logLevel);
     return BIO_OK;
 }
@@ -289,29 +274,15 @@ BResult BioServer::BioConfigInit()
 
     mConfig = BioConfig::Instance();
     if (mConfig == nullptr) {
-        LOG_ERROR("Create bio configuration instance failed.");
+        BIO_LOG_STD_ERR("Create bio configuration instance failed.");
         return BIO_ERR;
     }
 
     BResult result = BIO_INNER_ERR;
     BIO_TP_START(CONFIG_INIT_FAIL, &result, -1);
-#ifdef DEBUG_UT
-    const std::string confPath = "./ubsio_old.conf";
-#else
-    std::string confPath = CONFIG_PATH;
-    const char *envConfPath = getenv(BIO_CONFIG_ENV);
-    if (envConfPath != nullptr && envConfPath[0] != '\0') {
-        confPath = envConfPath;
-        if (!IsAbsoluteRegularFile(confPath)) {
-            LOG_ERROR(BIO_CONFIG_ENV << " must be an absolute regular file path, value: " << confPath);
-            return BIO_ERR;
-        }
-    }
-#endif
-    result = mConfig->Initialize(confPath);
+    result = mConfig->Initialize();
     BIO_TP_END;
     if (result != BIO_OK) {
-        LOG_ERROR("Failed to initialize configuration, result: " << result << ".");
         return BIO_ERR;
     }
 
@@ -326,7 +297,7 @@ BResult BioServer::BioLoggerInit(std::string pathName)
     loggerOptions.path = std::move(pathName);
     Logger *logger = Logger::Instance(loggerOptions);
     if (logger == nullptr) {
-        std::cout << "Failed to create logger instance." << std::endl;
+        BIO_LOG_STD_ERR("Failed to create logger instance.");
         return BIO_ERR;
     }
 
@@ -335,7 +306,7 @@ BResult BioServer::BioLoggerInit(std::string pathName)
     ret = logger->Init();
     BIO_TP_END;
     if (ret != BIO_OK) {
-        std::cout << "Failed to init logger, result:" << ret << ", log path:" << loggerOptions.path << "." << std::endl;
+        BIO_LOG_STD_ERR("Failed to init logger, result:" << ret << ", log path:" << loggerOptions.path << ".");
         return BIO_ERR;
     }
     return BIO_OK;
@@ -348,12 +319,7 @@ void BioServer::BioLoggerExit()
 
 BResult BioServer::BioTraceInit()
 {
-#ifdef DEBUG_UT
-    const std::string dumpDir = "./";
-#else
-    const std::string dumpDir = "/var/log/ubsio/trace/";
-#endif
-    FileUtil::MakeDirRecursive(dumpDir, LOG_DIR_MODE);
+    const std::string dumpDir = FileUtil::JoinPath(mConfig->GetDaemonConfig().logPath, "trace");
     auto ret = ock::htracer::HTracerInit(dumpDir);
     ock::htracer::HTracerSetEnable(BioConfig::Instance()->GetDaemonConfig().enableTrace);
     ChkTrue(ret == BIO_OK, BIO_ERR, "Failed to init tracer, result:" << ret << ", dumpDir:" << dumpDir << ".");

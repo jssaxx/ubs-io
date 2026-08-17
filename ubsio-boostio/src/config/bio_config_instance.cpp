@@ -11,6 +11,7 @@
  */
 
 #include <cerrno>
+#include <cstdlib>
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
@@ -26,9 +27,30 @@
 
 namespace ock {
 namespace bio {
+namespace {
+constexpr const char *BIO_CONFIG_ENV = "UBSIO_CONFIG_PATH";
+constexpr uint32_t LOG_DIR_MODE = S_IRWXU | S_IRGRP | S_IXGRP;
 constexpr uint64_t GB_SIZE = 1024 * 1024 * 1024;
 constexpr uint64_t MB_SIZE = 1024 * 1024;
 constexpr uint32_t DISK_PATH_CONFIG_MAX_NUM = DEVICE_SIZE * NO_4;
+
+bool ResolveConfigPath(std::string &configPath)
+{
+#ifdef DEBUG_UT
+    configPath = "./ubsio_old.conf";
+    return true;
+#else
+    const char *envConfPath = getenv(BIO_CONFIG_ENV);
+    if (envConfPath != nullptr && envConfPath[0] != '\0') {
+        configPath = envConfPath;
+        return FileUtil::IsAbsoluteRegularFile(configPath);
+    }
+    configPath = CONFIG_PATH;
+    return true;
+#endif
+}
+
+} // namespace
 
 void BioConfig::LoadDefaultConf()
 {
@@ -51,6 +73,7 @@ void BioConfig::LoadDefaultConf()
 
     /* load log info */
     AddStrConf(LOG_LEVEL, VStrEnum::Create(LOG_LEVEL.first, "error||warn||info||debug||trace"));
+    AddStrConf(LOG_PATH, VStrNotNull::Create(LOG_PATH.first));
     AddIntConf(SEGMENT_SIZE_MB, VIntRange::Create(SEGMENT_SIZE_MB.first, NO_1, NO_16));
     AddIntConf(MEM_CAPACITY_SIZE_GB, VIntRange::Create(MEM_CAPACITY_SIZE_GB.first, NO_U64_0, NO_3 * NO_1024));
     AddIntConf(SDK_MEM_CAPACITY_SIZE_MB, VIntRange::Create(SDK_MEM_CAPACITY_SIZE_MB.first, NO_U64_0, NO_4194304));
@@ -251,6 +274,7 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
 
 BResult BioConfig::AutoConfigDaemonLogAndOther(const ConfigurationPtr &conf)
 {
+    mDaemonConfig.logPath = conf->GetStr(LOG_PATH.first);
     auto logLevel = conf->GetStr(LOG_LEVEL.first);
     if (logLevel == "trace") {
         mDaemonConfig.logLevel = BIOLOG_LEVEL_TRACE;
@@ -511,6 +535,32 @@ void BioConfig::BakFileProcess(const std::string &configPath)
     }
 }
 
+BResult BioConfig::PrepareLogDirectories()
+{
+    StrUtil::StrTrim(mDaemonConfig.logPath);
+    if (!FileUtil::PrepareDirectory(mDaemonConfig.logPath, LOG_DIR_MODE)) {
+        BIO_LOG_STD_ERR("Failed to prepare log directory: " << mDaemonConfig.logPath << ".");
+        return BIO_ERR;
+    }
+
+    std::string traceDirectory = FileUtil::JoinPath(mDaemonConfig.logPath, "trace");
+    if (!FileUtil::PrepareDirectory(traceDirectory, LOG_DIR_MODE)) {
+        BIO_LOG_STD_ERR("Failed to prepare trace directory: " << traceDirectory << ".");
+        return BIO_ERR;
+    }
+    return BIO_OK;
+}
+
+BResult BioConfig::Initialize()
+{
+    std::string configPath;
+    if (!ResolveConfigPath(configPath)) {
+        BIO_LOG_STD_ERR(BIO_CONFIG_ENV << " must be an absolute regular file path, value: " << configPath);
+        return BIO_ERR;
+    }
+    return Initialize(configPath);
+}
+
 BResult BioConfig::Initialize(const std::string &configPath)
 {
     auto dirEndPos = configPath.find_last_of('/');
@@ -521,24 +571,20 @@ BResult BioConfig::Initialize(const std::string &configPath)
     mConfigLockPath = configPath + ".lock";
     BakFileProcess(configPath);
     std::string configurePath = configPath;
-    LOG_INFO("Start to read config file.");
-
     if (mInited) {
         return BIO_OK;
     }
 
     ConfigurationPtr conf = Configuration::GetInstance<BioConfig>();
     if (conf.Get() == nullptr) {
-        LOG_INFO("Create config object failed.");
+        BIO_LOG_STD_ERR("Create config object failed.");
         return BIO_ERR;
     }
 
     if (!conf->ReadConf<BioConfig>(configurePath)) {
-        LOG_ERROR("Read config file failed.");
+        BIO_LOG_STD_ERR("Read config file failed: " << configurePath << ".");
         return BIO_ERR;
     }
-
-    DumpToLog();
 
     std::ostringstream ossTmp;
     /* validate based on validation */
@@ -548,14 +594,19 @@ BResult BioConfig::Initialize(const std::string &configPath)
             ossTmp << item << "\n";
         }
 
-        LOG_ERROR("Invalid configuration with un-proper items: \n" << ossTmp.str() << "\n");
+        BIO_LOG_STD_ERR("Invalid configuration with un-proper items:\n" << ossTmp.str());
         return BIO_ERR;
     }
 
     /* auto config something */
     auto ret = AutoConfAfterLoadFromFile(conf);
     if (ret != BIO_OK) {
-        LOG_ERROR("Module load config file failed");
+        BIO_LOG_STD_ERR("Module load config file failed.");
+        return BIO_ERR;
+    }
+
+    ret = PrepareLogDirectories();
+    if (ret != BIO_OK) {
         return BIO_ERR;
     }
 

@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <cstring>
 #include <sstream>
+#include <string>
 #include <sys/time.h>
 #include <utility>
 
@@ -61,6 +62,14 @@ namespace bio {
 #define LOG_INFO(msg) BIO_LOG_INTERNAL(BIOLOG_LEVEL_INFO, BIO_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
 #define LOG_DEBUG(msg) BIO_LOG_INTERNAL(BIOLOG_LEVEL_DEBUG, BIO_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
 #define LOG_TRACE(msg) BIO_LOG_INTERNAL(BIOLOG_LEVEL_TRACE, BIO_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
+
+#define BIO_LOG_STD_ERR(msg)                                      \
+    do {                                                          \
+        std::ostringstream oss;                                   \
+        oss << "[" << BIO_LOG_FILENAME << ":" << __LINE__ << "]" \
+            << "[" << __FUNCTION__ << "] " << msg;               \
+        ock::bio::Logger::LogToStdErr(BIOLOG_LEVEL_ERROR, oss.str()); \
+    } while (0)
 
 #define ChkTrueNot(ARGS, RET)                     \
     do {                                          \
@@ -115,6 +124,8 @@ public:
 
     int32_t Log(int level, const std::string &message) const;
 
+    static void LogToStdErr(int32_t level, const std::string &message);
+
     void ResetLogLevel(int32_t logLevel);
 
     inline bool IsHigherLevel(int nowLevel) const
@@ -126,7 +137,6 @@ public:
 
 private:
     static bool ValidateParams(const LoggerOptions &options);
-    static void LogToStdErr(const std::ostringstream &oss);
 
 private:
     std::shared_ptr<spdlog::logger> mSpdLogger; /* spd logger for normal log */
