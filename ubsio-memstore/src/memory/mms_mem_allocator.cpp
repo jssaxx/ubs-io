@@ -449,9 +449,9 @@ BResult MmsMemAllocator::MmsAlloc(uint64_t size, uint16_t &numaId, uintptr_t &bl
     AllocScratch &scratch = GetAllocScratch(mArea);
     std::vector<BlockNode *> &blocks = scratch.blocks;
     blocks.reserve(FIXED_CACHE_BATCH_COUNT);
-    ret = mNumaPool->GetBatchBlocksFromPool(numaId, blockIndex, blocks);
+    ret = mNumaPool->GetBatchBlocksFromPool(numaId, blockIndex, FIXED_CACHE_BATCH_COUNT, blocks);
     if (UNLIKELY(ret != MMS_OK)) {
-        ret = mNumaPool->GetBatchBlocksFromOtherPool(numaId, blockIndex, blocks);
+        ret = mNumaPool->GetBatchBlocksFromOtherPool(numaId, blockIndex, FIXED_CACHE_BATCH_COUNT, blocks);
         if (UNLIKELY(ret != MMS_OK)) {
             MEM_LOG_ERROR("All pools is empty, alloc block failed, size:" << mBlockSize[blockIndex] << ".");
             return MMS_ALLOC_FAIL;
@@ -475,6 +475,41 @@ BResult MmsMemAllocator::MmsAlloc(uint64_t size, uint16_t &numaId, uintptr_t &bl
     threadCache[mArea].RecordAllocNumaId(preferNumaId, allocNumaId);
     numaId = allocNumaId;
     MEM_LOG_DEBUG("Mem pool hit, block size:" << mBlockSize[blockIndex] << ".");
+    return MMS_OK;
+}
+
+BResult MmsMemAllocator::MmsAllocDirect(uint64_t size, uint16_t &numaId, uintptr_t &blockAddr)
+{
+    numaId = threadCache[mArea].GetAllocNumaId();
+    if (mAllocMode == MemAllocOptions::ALLOC_MODE_BUDDY) {
+        uint16_t order = 0;
+        auto ret = GetBuddyAllocOrder(size, order);
+        return (ret == MMS_OK) ? BuddyAllocDirect(order, numaId, blockAddr) : ret;
+    }
+
+    uint32_t blockIndex = 0;
+    while (blockIndex < mBlockNum && mBlockSize[blockIndex] < size) {
+        ++blockIndex;
+    }
+    if (UNLIKELY(blockIndex == mBlockNum)) {
+        MEM_LOG_ERROR("Invalid direct alloc size:" << size << ".");
+        return MMS_ERR;
+    }
+
+    std::vector<BlockNode *> &blocks = GetAllocScratch(mArea).blocks;
+    auto ret = mNumaPool->GetBatchBlocksFromPool(numaId, blockIndex, NO_1, blocks);
+    if (UNLIKELY(ret != MMS_OK)) {
+        ret = mNumaPool->GetBatchBlocksFromOtherPool(numaId, blockIndex, NO_1, blocks);
+    }
+    if (UNLIKELY(ret != MMS_OK || blocks.empty())) {
+        MEM_LOG_ERROR("All pools are empty, direct alloc failed, size:" << mBlockSize[blockIndex] << ".");
+        return MMS_ALLOC_FAIL;
+    }
+
+    blockAddr = reinterpret_cast<uintptr_t>(blocks.back());
+    auto header = reinterpret_cast<BlockHeader *>(blockAddr - sizeof(BlockHeader));
+    numaId = header->numaId;
+    blocks.clear();
     return MMS_OK;
 }
 
@@ -524,7 +559,7 @@ BResult MmsMemAllocator::FixedAllocPreferNuma(uint64_t size, uint16_t preferNuma
     AllocScratch &scratch = GetAllocScratch(mArea);
     std::vector<BlockNode *> &blocks = scratch.blocks;
     blocks.reserve(FIXED_CACHE_BATCH_COUNT);
-    ret = mNumaPool->GetBatchBlocksFromPool(preferNumaId, blockIndex, blocks);
+    ret = mNumaPool->GetBatchBlocksFromPool(preferNumaId, blockIndex, FIXED_CACHE_BATCH_COUNT, blocks);
     if (UNLIKELY(ret != MMS_OK)) {
         ret = threadCache[mArea].GetOneBlockFromCache(blockIndex, blockAddr);
         if (LIKELY(ret == MMS_OK)) {
@@ -532,7 +567,7 @@ BResult MmsMemAllocator::FixedAllocPreferNuma(uint64_t size, uint16_t preferNuma
             numaId = header->numaId;
             return MMS_OK;
         }
-        ret = mNumaPool->GetBatchBlocksFromOtherPool(preferNumaId, blockIndex, blocks);
+        ret = mNumaPool->GetBatchBlocksFromOtherPool(preferNumaId, blockIndex, FIXED_CACHE_BATCH_COUNT, blocks);
         if (UNLIKELY(ret != MMS_OK)) {
             MEM_LOG_ERROR("All pools is empty, alloc block failed, size:" << mBlockSize[blockIndex] << ".");
             return MMS_ALLOC_FAIL;
@@ -651,6 +686,29 @@ BResult MmsMemAllocator::MmsFree(uintptr_t blockAddr)
     return threadCache[mArea].AddOneBlockToCache(blockIndex, blockAddr); // 重新归还块到线程的缓存里
 }
 
+BResult MmsMemAllocator::MmsFreeDirect(uintptr_t blockAddr)
+{
+    if (UNLIKELY(blockAddr == 0)) {
+        return MMS_INVALID_PARAM;
+    }
+    if (mAllocMode == MemAllocOptions::ALLOC_MODE_BUDDY) {
+        return ReturnBuddyBlockToPool(blockAddr);
+    }
+
+    auto header = reinterpret_cast<BlockHeader *>(blockAddr - sizeof(BlockHeader));
+    uint32_t blockIndex = 0;
+    while (blockIndex < mBlockNum && mBlockSize[blockIndex] < header->blockSize) {
+        ++blockIndex;
+    }
+    if (UNLIKELY(blockIndex == mBlockNum)) {
+        MEM_LOG_ERROR("Invalid direct free size:" << header->blockSize << ".");
+        return MMS_ERR;
+    }
+
+    std::vector<uintptr_t> blocks{blockAddr};
+    return ReturnBatchBlocksToPool(blockIndex, blocks);
+}
+
 BResult BuddyNumaMemoryPool::Start(uint16_t numaId, uint64_t address, uint64_t size, uint64_t baseBlockSize)
 {
     if (UNLIKELY(baseBlockSize < sizeof(BuddyBlockNode) || size <= sizeof(BlockHeader))) {
@@ -723,12 +781,6 @@ void BuddyNumaMemoryPool::AddFreeChunkUnlocked(uint64_t chunkAddr, uint16_t orde
     mFreeHeads[order] = block;
 }
 
-BuddyBlockNode *BuddyNumaMemoryPool::PopFreeChunk(uint16_t order)
-{
-    std::lock_guard<std::mutex> lock(mFreeLocks[order]);
-    return PopFreeChunkUnlocked(order);
-}
-
 BuddyBlockNode *BuddyNumaMemoryPool::PopFreeChunkUnlocked(uint16_t order)
 {
     BuddyBlockNode *block = mFreeHeads[order];
@@ -747,12 +799,6 @@ BuddyBlockNode *BuddyNumaMemoryPool::PopFreeChunkUnlocked(uint16_t order)
     uint64_t unitIndex = UnitIndex(chunkAddr);
     mFreeStates[unitIndex].store(0, std::memory_order_release);
     return block;
-}
-
-bool BuddyNumaMemoryPool::RemoveFreeChunk(uint64_t unitIndex, uint16_t order)
-{
-    std::lock_guard<std::mutex> lock(mFreeLocks[order]);
-    return RemoveFreeChunkUnlocked(unitIndex, order);
 }
 
 bool BuddyNumaMemoryPool::RemoveFreeChunkUnlocked(uint64_t unitIndex, uint16_t order)
@@ -1027,7 +1073,8 @@ NumaMemoryPool *NumaPoolManager::CreatNumaMemPool(uint16_t numaId)
     return pool;
 }
 
-BResult NumaPoolManager::GetBatchBlocksFromPool(uint16_t numaId, uint64_t blockIndex, std::vector<BlockNode *> &blocks)
+BResult NumaPoolManager::GetBatchBlocksFromPool(uint16_t numaId, uint64_t blockIndex, uint64_t count,
+                                                std::vector<BlockNode *> &blocks)
 {
     mLock.LockRead();
     NumaMemoryPool* pool = GetCurrentNumaPool(numaId);
@@ -1047,7 +1094,7 @@ BResult NumaPoolManager::GetBatchBlocksFromPool(uint16_t numaId, uint64_t blockI
     return MMS_OK;
 }
 
-BResult NumaPoolManager::GetBatchBlocksFromOtherPool(uint16_t numaId, uint64_t blockIndex,
+BResult NumaPoolManager::GetBatchBlocksFromOtherPool(uint16_t numaId, uint64_t blockIndex, uint64_t count,
                                                      std::vector<BlockNode *> &blocks)
 {
     ReadLocker<ReadWriteLock> lock(&mLock);
@@ -1079,21 +1126,6 @@ BResult NumaPoolManager::AddBatchBlocksToPool(uint16_t numaId, uint64_t blockInd
     }
 
     pool->AddBatchBlocks(blockIndex, blocks);
-    mLock.UnLock();
-    return MMS_OK;
-}
-
-BResult NumaPoolManager::AddOneBlocksToPool(uint16_t numaId, uint64_t blockIndex, BlockNode *block)
-{
-    mLock.LockRead();
-    NumaMemoryPool *pool = GetCurrentNumaPool(numaId);
-    if (UNLIKELY(pool == nullptr)) {
-        MEM_LOG_ERROR("Numa pool is not exist, numa id:" << numaId << ", cpu id:" << sched_getcpu() << ".");
-        mLock.UnLock();
-        return MMS_NOT_EXISTS;
-    }
-
-    pool->AddOneBlock(blockIndex, block);
     mLock.UnLock();
     return MMS_OK;
 }
@@ -1334,25 +1366,6 @@ BResult ThreadCache::AddBatchBuddyBlocksToCache(uint16_t order, const uintptr_t 
     return MMS_OK;
 }
 
-uint64_t ThreadCache::GetBatchBuddyBlocksFromCache(uint16_t order, uintptr_t blockAddrs[], uint64_t count)
-{
-    if (order > BUDDY_THREAD_CACHE_MAX_ORDER) {
-        return 0;
-    }
-
-    if (!mBuddyCaches[GetCacheNumaId(mNumaId)][order].empty()) {
-        return GetBatchBuddyBlocksFromCachePreferNuma(order, mNumaId, blockAddrs, count);
-    }
-
-    for (uint16_t numaId = 0; numaId < MAX_NUMAS_NUM; ++numaId) {
-        if (numaId == mNumaId || mBuddyCaches[numaId][order].empty()) {
-            continue;
-        }
-        return GetBatchBuddyBlocksFromCachePreferNuma(order, numaId, blockAddrs, count);
-    }
-    return 0;
-}
-
 uint64_t ThreadCache::GetBatchBuddyBlocksFromCachePreferNuma(uint16_t order, uint16_t preferNumaId,
                                                              uintptr_t blockAddrs[], uint64_t count)
 {
@@ -1393,21 +1406,6 @@ BResult ThreadCache::FlushBuddyCaches()
         }
     }
     return MMS_OK;
-}
-
-std::vector<uintptr_t> ThreadCache::GetBatchBlocksFromCache(uint64_t blockIndex, uint64_t count)
-{
-    if (!mMemCaches[GetCacheNumaId(mNumaId)][blockIndex].empty()) {
-        return GetBatchBlocksFromCachePreferNuma(blockIndex, mNumaId, count);
-    }
-
-    for (uint16_t numaId = 0; numaId < MAX_NUMAS_NUM; ++numaId) {
-        if (numaId == mNumaId || mMemCaches[numaId][blockIndex].empty()) {
-            continue;
-        }
-        return GetBatchBlocksFromCachePreferNuma(blockIndex, numaId, count);
-    }
-    return {};
 }
 
 std::vector<uintptr_t> ThreadCache::GetBatchBlocksFromCachePreferNuma(uint64_t blockIndex, uint16_t preferNumaId,

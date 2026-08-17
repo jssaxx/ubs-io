@@ -27,14 +27,4 @@ public:
 }
 }
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-int ServerDiagnoseInit();
-
-#ifdef __cplusplus
-}
-#endif
-
 #endif // MMS_SERVER_DIAGNOSE_H

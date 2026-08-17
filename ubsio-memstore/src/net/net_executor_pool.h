@@ -12,6 +12,8 @@
 #ifndef NET_EXECUTOR_POOL_H
 #define NET_EXECUTOR_POOL_H
 
+#include <cstdlib>
+#include "securec.h"
 #include "mms_execution.h"
 #include "mms_err.h"
 #include "net_common.h"
@@ -19,6 +21,19 @@
 namespace ock {
 namespace mms {
 using NetTaskHandler = std::function<int32_t(ServiceContext &ctx)>;
+
+class NetTaskContext : public ServiceContext {
+public:
+    ~NetTaskContext() override;
+
+    BResult Clone(ServiceContext &oldCtx);
+
+private:
+    void ReleaseData();
+
+    uint32_t mDataCapacity{0};
+};
+
 class NetTask : public Runnable {
 public:
     explicit NetTask(NetTaskHandler &handler) : mHandler(handler) {}
@@ -32,7 +47,7 @@ public:
 
     inline BResult CloneCtx(ServiceContext &oldCtx)
     {
-        auto ret = ServiceContext::Clone(mContext, oldCtx, true);
+        auto ret = mContext.Clone(oldCtx);
         if (UNLIKELY(ret != MMS_OK)) {
             NET_LOG_ERROR("Failed to clone service ctx for cm event");
             return MMS_ALLOC_FAIL;
@@ -43,7 +58,7 @@ public:
 
 protected:
     NetTaskHandler mHandler;
-    ServiceContext mContext;
+    NetTaskContext mContext;
     friend class NetExecutorPool;
 };
 
@@ -89,4 +104,3 @@ using NetExecutorPoolPtr = Ref<NetExecutorPool>;
 }
 
 #endif // NET_EXECUTOR_POOL_H
-

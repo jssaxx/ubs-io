@@ -129,14 +129,25 @@ BResult MmsClient::Initialize(const MmsOptions &options, ServiceCallback service
 
 void MmsClient::Exit(void)
 {
+    if (!mStarted) {
+        return;
+    }
+    mStarted = false;
+    mServiceable.store(false, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lock(mNotifyMutex);
+        mNotifyShmConsumer.Stop();
+        mNotifyCallback.store(nullptr, std::memory_order_release);
+        mNotifyUserData.store(nullptr, std::memory_order_release);
+    }
     DestroyStartService();
+    ClientKvExit();
+    ClientNetExit();
+    ClientCacheExit();
+    ClientMemExit();
 #ifdef USE_CLI_TOOLS
     ClientDiagnoseExit();
 #endif
-    std::lock_guard<std::mutex> lock(mNotifyMutex);
-    mNotifyShmConsumer.Stop();
-    mNotifyCallback.store(nullptr, std::memory_order_release);
-    mNotifyUserData.store(nullptr, std::memory_order_release);
 }
 
 BResult MmsClient::ClientGlobVarInit(void)
@@ -184,11 +195,6 @@ BResult MmsClient::ClientLoggerInit(void)
         return MMS_ALLOC_FAIL;
     }
     return clientLog->Initialize(level, logType, logFilePath);
-}
-
-void MmsClient::ClientLoggerExit(void)
-{
-    MmsClientLog::Instance()->Exit();
 }
 
 BResult FillNetOptions(const MmsOptions &options, NetOptions &netOptions)
@@ -394,8 +400,10 @@ BResult MmsClient::ClientBasicInit(void)
         return ret;
     }
 
-    if (rsp.serverPid <= 0 || rsp.logLevel > MMSLOG_LEVEL_ERROR || rsp.logLevel < MMSLOG_LEVEL_TRACE ||
-        rsp.memNum > MAX_NUMAS_NUM || rsp.netTimeOut < NO_10 || rsp.netTimeOut > NO_60) {
+    if (rsp.serverPid <= 0 || rsp.ioCtxProtocolVersion != MMS_IOCTX_PROTOCOL_VERSION || rsp.clientGeneration == 0 ||
+        rsp.logLevel > MMSLOG_LEVEL_ERROR || rsp.logLevel < MMSLOG_LEVEL_TRACE ||
+        rsp.memNum == 0 || rsp.memNum > MAX_NUMAS_NUM ||
+        rsp.netTimeOut < NO_10 || rsp.netTimeOut > NO_60) {
         CLIENT_LOG_ERROR("Invalid response, server pid:" << rsp.serverPid << ", log level:" << rsp.logLevel <<
             ", numa num:" << rsp.memNum << ", net timeout:" << rsp.netTimeOut << ".");
         return MMS_INVALID_PARAM;
@@ -411,13 +419,19 @@ BResult MmsClient::ClientBasicInit(void)
     MmsClientLog::Instance()->ResetLogLevel(rsp.logLevel);
 
     for (uint16_t idx = 0; idx < rsp.memNum; idx++) {
+        if (rsp.ioCtxNumaSize[idx] == 0) {
+            CLIENT_LOG_ERROR("Invalid client ioctx size, numa index:" << idx << ".");
+            return MMS_INVALID_PARAM;
+        }
         mNumaId[idx] = rsp.memNumaId[idx];
         mNumaSize[idx] = rsp.memSize[idx];
+        mIoCtxNumaSize[idx] = rsp.ioCtxNumaSize[idx];
     }
     mNumaNum = rsp.memNum;
+    mClientGeneration = rsp.clientGeneration;
     mIoTimeOut = rsp.ioTimeOut;
     mLogLevel = rsp.logLevel;
-    mEnableCrc = rsp.enableCrc;
+    mKeyRouteEnabled = rsp.keyRouteEnabled;
     mDataChangeCallbackSwitch = rsp.dataChangeCallbackSwitch;
     mServerPid = static_cast<uint32_t>(rsp.serverPid);
     mMaxMsgBuffSize = rsp.maxMsgBuffSize;
@@ -429,12 +443,9 @@ BResult MmsClient::ClientBasicInit(void)
     NumaGroupIndex::Instance()->SetNumaInfo(mNumaId, mNumaNum);
     NumaGroupIndex::Instance()->SetGroupInfo(mOptions.netGroupNum);
 
-    CLIENT_LOG_INFO("Client basic init, SERVER PID:" << rsp.serverPid << ".");
+    CLIENT_LOG_INFO("Client basic init, server pid:" << rsp.serverPid
+                                                      << ", generation:" << mClientGeneration << ".");
     return MMS_OK;
-}
-
-void MmsClient::ClientBasicExit(void)
-{
 }
 
 BResult MmsClient::InitMemMgr()
@@ -444,7 +455,7 @@ BResult MmsClient::InitMemMgr()
     for (index = 0; index < mNumaNum; index++) {
         mgrOptions.numaId[index] = mNumaId[index];
         mgrOptions.numaSize[index] = mNumaSize[index];
-        mgrOptions.areaSize[MMAP_AREA_IOCTX][index] = META_SHM_IOCTX_SIZE;
+        mgrOptions.areaSize[MMAP_AREA_IOCTX][index] = mIoCtxNumaSize[index];
         mgrOptions.areaSize[MMAP_AREA_BUCKET][index] = mgrOptions.numaSize[index] / IO_SIZE_1G * IO_SIZE_32M;
         ValueIndexMemCfg cfg{};
         cfg.totalMemSize =
@@ -492,6 +503,7 @@ BResult MmsClient::ClientMemInit(void)
         return ret;
     }
 
+    allocOptions.allocMode = MemAllocOptions::ALLOC_MODE_BUDDY;
     allocOptions.blockNum = NO_1;
     allocOptions.blockRate[NO_0] = NO_10;
     allocOptions.blockSize[NO_0] = mMaxMsgBuffSize;
@@ -507,6 +519,12 @@ BResult MmsClient::ClientMemInit(void)
 
 void MmsClient::ClientMemExit(void)
 {
+    if (mMemAllocator != nullptr) {
+        mMemAllocator->Reset();
+    }
+    if (mMemMgr != nullptr) {
+        mMemMgr->Reset();
+    }
 }
 
 BResult MmsClient::ClientCacheInit(void)
@@ -531,11 +549,15 @@ BResult MmsClient::ClientCacheInit(void)
 
 void MmsClient::ClientCacheExit(void)
 {
+    if (mCache != nullptr) {
+        mCache->Reset();
+    }
 }
 
 BResult MmsClient::ClientKvInit(void)
 {
-    KvClientPara para = {mCache, mNetEngine, mMemMgr, mMemAllocator, mIoTimeOut, mMaxMsgBuffSize};
+    KvClientPara para = {mCache, mNetEngine, mMemMgr, mMemAllocator, mIoTimeOut,
+                         mMaxMsgBuffSize, mClientGeneration, mKeyRouteEnabled, mOptions};
     auto ret = mKvClient->Initialize(para);
     if (ret != MMS_OK) {
         CLIENT_LOG_ERROR("Failed to initialize mirror client, ret:" << ret << ".");
@@ -545,7 +567,9 @@ BResult MmsClient::ClientKvInit(void)
 
 void MmsClient::ClientKvExit(void)
 {
-    return;
+    if (mKvClient != nullptr) {
+        mKvClient->Exit();
+    }
 }
 
 BResult MmsClient::ResetResource()
@@ -563,16 +587,15 @@ BResult MmsClient::ResetResource()
         fd = -1;
     }
 
-    BResult ret = MMS_OK;
-    ret = mMemMgr->Reset();
+    BResult ret = mMemAllocator->Reset();
     if (ret != MMS_OK) {
-        CLIENT_LOG_ERROR("mMemMgr reset failed, ret:" << ret << ".");
+        CLIENT_LOG_ERROR("mMemAllocator reset failed, ret:" << ret << ".");
         return ret;
     }
 
-    ret = mMemAllocator->Reset();
+    ret = mMemMgr->Reset();
     if (ret != MMS_OK) {
-        CLIENT_LOG_ERROR("mMemAllocator reset failed, ret:" << ret << ".");
+        CLIENT_LOG_ERROR("mMemMgr reset failed, ret:" << ret << ".");
         return ret;
     }
 
@@ -689,7 +712,13 @@ BResult MmsClient::BuildThreadTask(void)
         return ret;
     }
 
+    ret = CheckServiceState(mServiceable);
+    if (ret != MMS_OK) {
+        CLIENT_LOG_ERROR("Check service state after reconnect failed, ret:" << ret << ".");
+        return ret;
+    }
     mStarted = true;
+    mServiceCallback(mServiceable.load(std::memory_order_acquire));
     ret = ReregisterNotifyCallback(interval);
     if (ret != MMS_OK) {
         CLIENT_LOG_ERROR("Re-register notify callback failed, ret:" << ret << ".");
@@ -717,6 +746,10 @@ BResult MmsClient::BuildServices(void)
         return ret;
     }
 
+    ret = mKvClient->Rebuild();
+    if (ret != MMS_OK) {
+        CLIENT_LOG_WARN("Rebuild direct rpc failed, ret:" << ret << ". Get will fallback to local proxy.");
+    }
     return MMS_OK;
 }
 
@@ -794,54 +827,35 @@ void MmsClient::BackCheckStateTask()
 }
 
 #ifdef USE_CLI_TOOLS
-using ClientDiagnose = int (*)();
 BResult MmsClient::ClientDiagnoseInit(void)
 {
-    uint32_t procPid = 600U;
-    std::string diagName = "mms_c";
+    uint32_t procPid = static_cast<uint32_t>(getpid());
+    std::string diagName = "mms_c_" + std::to_string(procPid);
     BResult ret = cli_agent_init(procPid, const_cast<char *>(diagName.c_str()));
     if (ret != MMS_OK) {
         CLIENT_LOG_ERROR("Failed to Initialize cli, ret:" << ret << ".");
         return MMS_INNER_ERR;
     }
 
-    void *handler = dlopen("libclient_diagnose.so", RTLD_NOW);
-    if (handler == nullptr) {
-        CLIENT_LOG_ERROR("Failed to open library libclient_diagnose.so, error " << dlerror() << ".");
-        return MMS_INNER_ERR;
-    }
-    ClientDiagnose clientInitFunc = reinterpret_cast<ClientDiagnose>(dlsym(handler, "ClientDiagnoseInit"));
-    if (clientInitFunc == nullptr) {
-        CLIENT_LOG_ERROR("Failed to find ClientDiagnoseInit, error:" << dlerror() << ".");
-        if (dlclose(handler) != MMS_OK) {
-            CLIENT_LOG_ERROR("Failed to close client diagnose library, error:" << dlerror() << ".");
-        }
-        return MMS_INNER_ERR;
-    }
-
-    ret = clientInitFunc();
+    ret = diagnose::MmsClientCommand::Initialize();
     if (ret != MMS_OK) {
         CLIENT_LOG_ERROR("Failed to Initialize client diagnose, ret:" << ret << ".");
-        if (dlclose(handler) != MMS_OK) {
-            CLIENT_LOG_ERROR("Failed to close client diagnose library, error:" << dlerror() << ".");
-        }
+        cli_agent_destroy(procPid);
         return ret;
     }
-    mClientDiagnoseHandler = handler;
+    mClientDiagnoseInited = true;
     return MMS_OK;
 }
 
 void MmsClient::ClientDiagnoseExit(void)
 {
-    if (mClientDiagnoseHandler == nullptr) {
+    if (!mClientDiagnoseInited) {
         return;
     }
 
-    cli_unregister_command(const_cast<char *>("mms"));
-    if (dlclose(mClientDiagnoseHandler) != MMS_OK) {
-        CLIENT_LOG_ERROR("Failed to close client diagnose library, error:" << dlerror() << ".");
-    }
-    mClientDiagnoseHandler = nullptr;
+    diagnose::MmsClientCommand::Destroy();
+    cli_agent_destroy(static_cast<uint32_t>(getpid()));
+    mClientDiagnoseInited = false;
 }
 #endif
 }

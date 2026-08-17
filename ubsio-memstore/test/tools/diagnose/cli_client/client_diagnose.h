@@ -25,14 +25,4 @@ public:
 }
 }
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-extern int ClientDiagnoseInit();
-
-#ifdef __cplusplus
-}
-#endif
-
 #endif // MMS_CLIENT_DIAGNOSE_H

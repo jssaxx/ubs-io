@@ -85,8 +85,10 @@ public:
 
     BResult MmsAlloc(uint64_t size, uint16_t &numaId, uintptr_t &blockAddr);
     BResult MmsAllocPreferNuma(uint64_t size, uint16_t preferNumaId, uint16_t &numaId, uintptr_t &blockAddr);
+    BResult MmsAllocDirect(uint64_t size, uint16_t &numaId, uintptr_t &blockAddr);
 
     BResult MmsFree(uintptr_t blockAddr);
+    BResult MmsFreeDirect(uintptr_t blockAddr);
 
     BResult ReturnBuddyBlockToPool(uintptr_t blockAddr);
     BResult ReturnBatchBuddyBlocksToPool(const uintptr_t blockAddrs[], uint64_t count);
@@ -310,8 +312,6 @@ private:
     }
 
     void AddFreeChunk(uint64_t chunkAddr, uint16_t order);
-    BuddyBlockNode *PopFreeChunk(uint16_t order);
-    bool RemoveFreeChunk(uint64_t unitIndex, uint16_t order);
     void AddFreeChunkUnlocked(uint64_t chunkAddr, uint16_t order);
     BuddyBlockNode *PopFreeChunkUnlocked(uint16_t order);
     bool RemoveFreeChunkUnlocked(uint64_t unitIndex, uint16_t order);
@@ -371,11 +371,12 @@ public:
 
     NumaMemoryPool* CreatNumaMemPool(uint16_t numaId);
 
-    BResult GetBatchBlocksFromPool(uint16_t numaId, uint64_t blockIndex, std::vector<BlockNode *> &blocks);
-    BResult GetBatchBlocksFromOtherPool(uint16_t numaId, uint64_t blockIndex, std::vector<BlockNode *> &blocks);
+    BResult GetBatchBlocksFromPool(uint16_t numaId, uint64_t blockIndex, uint64_t count,
+                                   std::vector<BlockNode *> &blocks);
+    BResult GetBatchBlocksFromOtherPool(uint16_t numaId, uint64_t blockIndex, uint64_t count,
+                                        std::vector<BlockNode *> &blocks);
 
     BResult AddBatchBlocksToPool(uint16_t numaId, uint64_t blockIndex, std::vector<BlockNode*>& blocks);
-    BResult AddOneBlocksToPool(uint16_t numaId, uint64_t blockIndex, BlockNode *block);
 
     inline BResult Reset()
     {
@@ -450,8 +451,6 @@ public:
 
     BResult AddBatchBlocksToCache(uint64_t blockIndex, std::vector<uintptr_t> &blockAddrs);
 
-    std::vector<uintptr_t> GetBatchBlocksFromCache(uint64_t blockIndex, uint64_t count);
-
     std::vector<uintptr_t> GetBatchBlocksFromCachePreferNuma(uint64_t blockIndex, uint16_t preferNumaId,
                                                              uint64_t count);
     void GetBatchBlocksFromCachePreferNuma(uint64_t blockIndex, uint16_t preferNumaId, uint64_t count,
@@ -464,8 +463,6 @@ public:
     BResult AddOneBuddyBlockToCache(uint16_t order, uintptr_t blockAddr);
 
     BResult AddBatchBuddyBlocksToCache(uint16_t order, const uintptr_t blockAddrs[], uint64_t count);
-
-    uint64_t GetBatchBuddyBlocksFromCache(uint16_t order, uintptr_t blockAddrs[], uint64_t count);
 
     uint64_t GetBatchBuddyBlocksFromCachePreferNuma(uint16_t order, uint16_t preferNumaId, uintptr_t blockAddrs[],
                                                     uint64_t count);

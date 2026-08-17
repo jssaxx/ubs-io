@@ -98,5 +98,6 @@ int main(int argc, char **argv)
     while (gDaemonRunning) {
         sleep(5);
     }
+    MmsExit();
     return 0;
 }

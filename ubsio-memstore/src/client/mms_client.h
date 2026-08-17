@@ -99,11 +99,9 @@ private:
     void BackCheckStateTask();
     BResult ClientGlobVarInit(void);
     BResult ClientLoggerInit(void);
-    void ClientLoggerExit(void);
     BResult ClientNetInit(const MmsOptions &options);
     void ClientNetExit(void);
     BResult ClientBasicInit(void);
-    void ClientBasicExit(void);
     BResult InitMemMgr();
     BResult ClientMemInit(void);
     void ClientMemExit(void);
@@ -150,12 +148,14 @@ private:
     MmsOptions mOptions;
 
     uint16_t mNumaNum = 0;
-    uint16_t mNumaId[MAX_NUMAS_NUM];
-    uint64_t mNumaSize[MAX_NUMAS_NUM];
-    int32_t mAreaFd[MMAP_AREA_BUTT];
-    uint32_t mIoTimeOut;
-    int32_t mLogLevel;
-    bool mEnableCrc;
+    uint16_t mNumaId[MAX_NUMAS_NUM] = {0};
+    uint64_t mNumaSize[MAX_NUMAS_NUM] = {0};
+    uint64_t mIoCtxNumaSize[MAX_NUMAS_NUM] = {0};
+    uint64_t mClientGeneration = 0;
+    int32_t mAreaFd[MMAP_AREA_BUTT] = {-1, -1, -1, -1};
+    uint32_t mIoTimeOut = 0;
+    int32_t mLogLevel = 0;
+    bool mKeyRouteEnabled = false;
     bool mDataChangeCallbackSwitch = false;
     uint32_t mMaxMsgBuffSize;
     DataBlockInfo mBlockInfo{};
@@ -171,7 +171,7 @@ private:
     std::atomic<bool> mServiceCheckStarted{false};
     std::atomic<bool> mServerOnline{false};
 #ifdef USE_CLI_TOOLS
-    void *mClientDiagnoseHandler = nullptr;
+    bool mClientDiagnoseInited = false;
 #endif
 
     DEFINE_REF_COUNT_VARIABLE;

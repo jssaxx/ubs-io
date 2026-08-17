@@ -57,13 +57,28 @@ inline static bool KeyValid(const char *key, uint16_t keyLen)
     return true;
 }
 
+inline static bool ValueValid(const char *value, uint32_t valueLen)
+{
+    return value != nullptr && valueLen != 0 && valueLen <= MAX_VALUE_SIZE;
+}
+
+inline static bool UpdateValueValid(const char *value, uint32_t valueLen, uint32_t offset)
+{
+    return ValueValid(value, valueLen) && offset <= MAX_VALUE_SIZE - valueLen;
+}
+
+inline static bool IoRangeValid(uint32_t offset, uint32_t length)
+{
+    return length != 0 && length <= MAX_VALUE_SIZE && offset <= MAX_VALUE_SIZE - length;
+}
+
 inline static bool GetItemValid(const GetItems &item)
 {
     if (UNLIKELY(!KeyValid(item.key, item.keyLen) || item.value == nullptr || item.realLength == nullptr ||
                  item.result == nullptr)) {
         return false;
     }
-    return *item.value == nullptr || item.length != 0;
+    return *item.value == nullptr || IoRangeValid(item.offset, item.length);
 }
 
 CResult Mms::Initialize(const MmsOptions &options, ServiceCallback service)
@@ -97,8 +112,8 @@ CResult Mms::Put(PutItems *itemList, uint32_t itemNum)
     }
 
     for (uint32_t i = 0; i < itemNum; i++) {
-        if (UNLIKELY(!KeyValid(itemList[i].key, itemList[i].keyLen) || itemList[i].value == nullptr ||
-                     itemList[i].valueLen == 0 || itemList[i].valueAddr == nullptr ||
+        if (UNLIKELY(!KeyValid(itemList[i].key, itemList[i].keyLen) ||
+                     !ValueValid(itemList[i].value, itemList[i].valueLen) || itemList[i].valueAddr == nullptr ||
                      itemList[i].result == nullptr)) {
             return RET_MMS_EPERM;
         }
@@ -143,8 +158,9 @@ CResult Mms::Update(UpdateItems *itemList, uint32_t itemNum)
     }
 
     for (uint32_t i = 0; i < itemNum; i++) {
-        if (UNLIKELY(!KeyValid(itemList[i].key, itemList[i].keyLen) || itemList[i].value == nullptr ||
-                     itemList[i].valueLen == 0 || itemList[i].result == nullptr)) {
+        if (UNLIKELY(!KeyValid(itemList[i].key, itemList[i].keyLen) ||
+                     !UpdateValueValid(itemList[i].value, itemList[i].valueLen, itemList[i].offset) ||
+                     itemList[i].result == nullptr)) {
             return RET_MMS_EPERM;
         }
         *itemList[i].result = static_cast<int32_t>(MMS_OK);
@@ -186,8 +202,9 @@ CResult Mms::Replace(ReplaceItems *itemList, uint32_t itemNum)
     }
 
     for (uint32_t i = 0; i < itemNum; i++) {
-        if (UNLIKELY(!KeyValid(itemList[i].key, itemList[i].keyLen) || itemList[i].value == nullptr ||
-                     itemList[i].valueLen == 0 || itemList[i].result == nullptr)) {
+        if (UNLIKELY(!KeyValid(itemList[i].key, itemList[i].keyLen) ||
+                     !UpdateValueValid(itemList[i].value, itemList[i].valueLen, itemList[i].offset) ||
+                     itemList[i].result == nullptr)) {
             return RET_MMS_EPERM;
         }
         *itemList[i].result = static_cast<int32_t>(MMS_OK);

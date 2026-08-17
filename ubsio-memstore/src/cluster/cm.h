@@ -15,8 +15,6 @@
 #include <string>
 #include <vector>
 #include <map>
-#include <unordered_set>
-#include <atomic>
 #include <functional>
 #include <sstream>
 #include <iomanip>
@@ -152,6 +150,11 @@ using CmNodeHandler = std::function<BResult(const std::map<uint16_t, CmNodeInfo>
 using CmPtHandler = std::function<BResult(const std::map<uint16_t, CmPtInfo> &ptInfos, bool serviceable)>;
 using CmPtMigrateHandler = std::function<BResult(uint16_t ptId)>;
 
+struct CmKeyRoute {
+    const char *key;
+    uint16_t keyLen;
+};
+
 class Cm;
 using CmPtr = Ref<Cm>;
 class Cm {
@@ -253,11 +256,12 @@ public:
     inline BResult GetPtInfo(uint16_t ptId, CmPtInfo &ptInfo)
     {
         ReadLocker<ReadWriteLock> lock(&mPLock);
-        if (mPtInfos.find(ptId) != mPtInfos.end()) {
-            ptInfo.Clone(mPtInfos[ptId]);
-            return MMS_OK;
+        auto iter = mPtInfos.find(ptId);
+        if (iter == mPtInfos.end()) {
+            return MMS_ERR;
         }
-        return MMS_ERR;
+        ptInfo.Clone(iter->second);
+        return MMS_OK;
     }
 
     inline BResult GetPtInfo(uint16_t &ptId, uint64_t &ptv, uint16_t remoteId[], uint16_t &remoteNum)
@@ -305,6 +309,155 @@ public:
         return MMS_OK;
     }
 
+    static inline uint16_t HashKeyToPt(const char *key, uint16_t keyLen, uint16_t ptNum)
+    {
+        if (key == nullptr || keyLen == 0 || keyLen > MAX_KEY_LENGTH || ptNum == 0) {
+            return 0;
+        }
+
+        uint64_t hash = 14695981039346656037ULL;
+        for (uint16_t index = 0; index < keyLen; ++index) {
+            hash ^= static_cast<unsigned char>(key[index]);
+            hash *= 1099511628211ULL;
+        }
+        return static_cast<uint16_t>(hash % ptNum);
+    }
+
+    inline BResult GetPtInfoByKey(const char *key, uint16_t keyLen, uint16_t &ptId, uint64_t &ptv,
+                                  uint16_t remoteId[], uint16_t &remoteNum)
+    {
+        ReadLocker<ReadWriteLock> lock(&mPLock);
+        if (key == nullptr || keyLen == 0 || keyLen > MAX_KEY_LENGTH || mOptions.groups.maxPtNum == 0) {
+            return MMS_INVALID_PARAM;
+        }
+
+        ptId = HashKeyToPt(key, keyLen, mOptions.groups.maxPtNum);
+        auto iter = mPtInfos.find(ptId);
+        if (iter == mPtInfos.end() || iter->second.state != CM_PT_NORMAL) {
+            LOG_WARN("Not ready, key:" << std::string(key, keyLen) << ", ptId:" << ptId << ".");
+            return MMS_INNER_RETRY;
+        }
+
+        ptv = iter->second.version;
+        remoteNum = 0;
+        uint16_t runningCopyNum = 0;
+        bool localCopy = false;
+        for (const auto &elem : iter->second.copys) {
+            if (elem.state != CM_COPY_RUNNING) {
+                continue;
+            }
+            runningCopyNum++;
+            if (elem.nodeId != mNodeId) {
+                remoteId[remoteNum] = elem.nodeId;
+                remoteNum++;
+            } else {
+                localCopy = true;
+            }
+        }
+        if (runningCopyNum == 0 || (!localCopy && remoteNum == 0)) {
+            LOG_WARN("No running copy, key:" << std::string(key, keyLen) << ", ptId:" << ptId << ".");
+            return MMS_INNER_RETRY;
+        }
+        return MMS_OK;
+    }
+
+    inline BResult ResolveBatchPtIds(const CmKeyRoute items[], uint32_t itemNum, uint16_t ptIds[])
+    {
+        return ResolveBatchPtIdsFromItems(items, itemNum, ptIds);
+    }
+
+    template <typename Item>
+    inline BResult ResolveBatchPtIdsFromItems(const Item items[], uint32_t itemNum, uint16_t ptIds[])
+    {
+        ReadLocker<ReadWriteLock> lock(&mPLock);
+        uint16_t ptNum = mOptions.groups.maxPtNum;
+        if (items == nullptr || ptIds == nullptr || itemNum == 0 || ptNum == 0) {
+            return MMS_INVALID_PARAM;
+        }
+
+        static thread_local std::vector<uint8_t> checked;
+        checked.assign(ptNum, 0);
+        for (uint32_t index = 0; index < itemNum; ++index) {
+            if (items[index].key == nullptr || items[index].keyLen == 0 ||
+                items[index].keyLen > MAX_KEY_LENGTH) {
+                return MMS_INVALID_PARAM;
+            }
+
+            uint16_t ptId = HashKeyToPt(items[index].key, items[index].keyLen, ptNum);
+            ptIds[index] = ptId;
+            if (checked[ptId] != 0) {
+                continue;
+            }
+
+            auto iter = mPtInfos.find(ptId);
+            if (iter == mPtInfos.end() || iter->second.state != CM_PT_NORMAL) {
+                return MMS_INNER_RETRY;
+            }
+            bool runningCopy = false;
+            for (const auto &copy : iter->second.copys) {
+                if (copy.state == CM_COPY_RUNNING) {
+                    runningCopy = true;
+                    break;
+                }
+            }
+            if (!runningCopy) {
+                return MMS_INNER_RETRY;
+            }
+            checked[ptId] = 1;
+        }
+        return MMS_OK;
+    }
+
+    inline BResult ValidateBatchOwner(const CmKeyRoute items[], uint32_t itemNum, uint64_t expectedPtVersion,
+                                      uint16_t targetNid)
+    {
+        return ValidateBatchOwnerItems(items, itemNum, expectedPtVersion, targetNid);
+    }
+
+    template <typename Item>
+    inline BResult ValidateBatchOwnerItems(const Item items[], uint32_t itemNum, uint64_t expectedPtVersion,
+                                           uint16_t targetNid)
+    {
+        ReadLocker<ReadWriteLock> lock(&mPLock);
+        uint16_t ptNum = mOptions.groups.maxPtNum;
+        if (items == nullptr || itemNum == 0 || ptNum == 0 || expectedPtVersion != mPtViewVersion) {
+            return expectedPtVersion == mPtViewVersion ? MMS_INVALID_PARAM : MMS_NEED_UPDATE_PT_VERSION;
+        }
+
+        static thread_local std::vector<uint8_t> checked;
+        checked.assign(ptNum, 0);
+        for (uint32_t index = 0; index < itemNum; ++index) {
+            if (items[index].key == nullptr || items[index].keyLen == 0 ||
+                items[index].keyLen > MAX_KEY_LENGTH) {
+                return MMS_INVALID_PARAM;
+            }
+
+            uint16_t ptId = HashKeyToPt(items[index].key, items[index].keyLen, ptNum);
+            if (checked[ptId] != 0) {
+                continue;
+            }
+            auto iter = mPtInfos.find(ptId);
+            if (iter == mPtInfos.end() || iter->second.state != CM_PT_NORMAL) {
+                return MMS_INNER_RETRY;
+            }
+            bool masterRunning = false;
+            for (const auto &copy : iter->second.copys) {
+                if (copy.nodeId == iter->second.masterNodeId && copy.state == CM_COPY_RUNNING) {
+                    masterRunning = true;
+                    break;
+                }
+            }
+            if (!masterRunning) {
+                return MMS_INNER_RETRY;
+            }
+            if (iter->second.masterNodeId != targetNid) {
+                return MMS_NEED_UPDATE_PT_VERSION;
+            }
+            checked[ptId] = 1;
+        }
+        return MMS_OK;
+    }
+
     inline BResult UpdatePtState(uint16_t ptId)
     {
         LOG_INFO("update pt state.");
@@ -340,7 +493,7 @@ public:
     inline uint64_t GetPtVersion()
     {
         ReadLocker<ReadWriteLock> lock(&mPLock);
-        return mPtInfo.version;
+        return mPtViewVersion;
     }
 
     inline uint32_t GetOnlineNodesNum() const
@@ -386,6 +539,7 @@ public:
     std::map<uint16_t, CmPtInfo> mPtInfos;
 
     CmPtInfo mPtInfo;
+    uint64_t mPtViewVersion{0};
 
     ReadWriteLock mNLock;
     ReadWriteLock mPLock;
@@ -397,4 +551,3 @@ public:
 }
 }
 #endif // MMSCORE_MMS_CM_H
-

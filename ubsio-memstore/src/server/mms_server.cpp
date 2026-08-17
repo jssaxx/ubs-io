@@ -11,17 +11,21 @@
  */
 
 #include <unistd.h>
+#include <cerrno>
+#include <cstring>
+#include <sys/mman.h>
 #include <utility>
 #include "expire_checker.h"
 #include "mms_log.h"
 #include "mms_trace.h"
 #include "mms_functions.h"
+#include "mms_message.h"
 #include "mms_monotonic.h"
 #include "mms_server.h"
 
 #ifdef USE_CLI_TOOLS
 #include "cli.h"
-#include <dlfcn.h>
+#include "server_diagnose.h"
 #endif
 
 namespace ock {
@@ -340,6 +344,7 @@ BResult MmsServer::InitIOCtxMemAllocator()
         return ret;
     }
 
+    allocOptions.allocMode = MemAllocOptions::ALLOC_MODE_BUDDY;
     allocOptions.blockNum = NO_1;
     allocOptions.blockRate[NO_0] = NO_10;
     allocOptions.blockSize[NO_0] = mConfig->GetNetConfig().msgMaxBuffSize;
@@ -356,6 +361,75 @@ BResult MmsServer::InitIOCtxMemAllocator()
         return ret;
     }
 
+    return MMS_OK;
+}
+
+BResult MmsServer::InitForwardMemAllocator()
+{
+    const auto &memConfig = mConfig->GetMemConfig();
+    uint64_t forwardSizePerNuma = memConfig.forwardMemSizePerNuma;
+    if (UNLIKELY(memConfig.numaNum == 0 || memConfig.numaNum > MAX_NUMAS_NUM ||
+                 forwardSizePerNuma == 0 || memConfig.numaNum > UINT64_MAX / forwardSizePerNuma)) {
+        LOG_ERROR("Invalid forwarding memory config, numa count:" << memConfig.numaNum
+                                                                    << ", size per numa:"
+                                                                    << forwardSizePerNuma << ".");
+        return MMS_INVALID_PARAM;
+    }
+
+    mForwardMemSize = static_cast<uint64_t>(memConfig.numaNum) * forwardSizePerNuma;
+    void *address = mmap(nullptr, mForwardMemSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (UNLIKELY(address == MAP_FAILED)) {
+        uint64_t requestedSize = mForwardMemSize;
+        mForwardMemSize = 0;
+        LOG_ERROR("Allocate forwarding memory failed, size:" << requestedSize << ", error:" << strerror(errno)
+                                                               << ".");
+        return MMS_ALLOC_FAIL;
+    }
+    mForwardMemAddress = reinterpret_cast<uintptr_t>(address);
+
+    MemAllocOptions allocOptions{};
+    uint64_t offset = 0;
+    for (uint16_t index = 0; index < memConfig.numaNum; ++index) {
+        allocOptions.numaId[index] = memConfig.numaId[index];
+        allocOptions.numaSize[index] = forwardSizePerNuma;
+        allocOptions.numaAddress[index] = mForwardMemAddress + offset;
+        if (NumaAvailable() != -1 &&
+            BindMemoryToNuma(reinterpret_cast<void *>(mForwardMemAddress + offset), forwardSizePerNuma,
+                             memConfig.numaId[index]) < 0) {
+            LOG_ERROR("Bind forwarding memory to NUMA failed, numa id:" << memConfig.numaId[index] << ".");
+            munmap(reinterpret_cast<void *>(mForwardMemAddress), mForwardMemSize);
+            mForwardMemAddress = 0;
+            mForwardMemSize = 0;
+            return MMS_ERR;
+        }
+        offset += forwardSizePerNuma;
+    }
+    allocOptions.numaNum = memConfig.numaNum;
+    allocOptions.allocMode = MemAllocOptions::ALLOC_MODE_BUDDY;
+    allocOptions.blockNum = NO_1;
+    allocOptions.blockRate[NO_0] = NO_10;
+    allocOptions.blockSize[NO_0] = mConfig->GetNetConfig().msgMaxBuffSize;
+
+    mForwardMemAllocator = MakeRef<MmsMemAllocator>(MMAP_AREA_IOCTX);
+    if (UNLIKELY(mForwardMemAllocator == nullptr)) {
+        munmap(reinterpret_cast<void *>(mForwardMemAddress), mForwardMemSize);
+        mForwardMemAddress = 0;
+        mForwardMemSize = 0;
+        return MMS_ALLOC_FAIL;
+    }
+    auto ret = mForwardMemAllocator->Initialize(allocOptions);
+    if (UNLIKELY(ret != MMS_OK)) {
+        LOG_ERROR("Initialize forwarding memory allocator failed, ret:" << ret << ".");
+        mForwardMemAllocator = nullptr;
+        munmap(reinterpret_cast<void *>(mForwardMemAddress), mForwardMemSize);
+        mForwardMemAddress = 0;
+        mForwardMemSize = 0;
+        return ret;
+    }
+    LOG_INFO("Initialize server-only forwarding memory success, address:" << mForwardMemAddress
+                                                                           << ", size:" << mForwardMemSize
+                                                                           << ", size per numa:"
+                                                                           << forwardSizePerNuma << ".");
     return MMS_OK;
 }
 
@@ -382,15 +456,19 @@ BResult MmsServer::MmsMemInit()
         return ret;
     }
 
-    if (mConfig->GetBasicConfig().isSeparateMode) {
-        LOG_INFO("Separate mode, no needed to init ioctx allocator.");
-        return MMS_OK;
-    }
-
     ret = InitIOCtxMemAllocator();
     if (UNLIKELY(ret != MMS_OK)) {
         LOG_ERROR("Init ioctx memory allocator failed, ret:" << ret << ".");
         return ret;
+    }
+
+    bool needForwardMemory = mConfig->IsSingleNode() || !mConfig->GetBasicConfig().multicastSwitch;
+    if (needForwardMemory) {
+        ret = InitForwardMemAllocator();
+        if (UNLIKELY(ret != MMS_OK)) {
+            LOG_ERROR("Init forwarding memory allocator failed, ret:" << ret << ".");
+            return ret;
+        }
     }
 
     return MMS_OK;
@@ -398,6 +476,12 @@ BResult MmsServer::MmsMemInit()
 
 void MmsServer::MmsMemExit()
 {
+    mForwardMemAllocator = nullptr;
+    if (mForwardMemAddress != 0 && mForwardMemSize != 0) {
+        munmap(reinterpret_cast<void *>(mForwardMemAddress), mForwardMemSize);
+        mForwardMemAddress = 0;
+        mForwardMemSize = 0;
+    }
 }
 
 BResult MmsServer::MmsMulticastNetInit()
@@ -489,6 +573,14 @@ BResult MmsServer::InitUnicastNetEngine()
     NetMemList memList;
     auto ret = MmsMemMgr::Instance()->GetAreaMemDesc(memList.address, memList.size, memList.num);
     ChkTrue(ret == MMS_OK, ret, "Mem mgr get k/v mem failed, result:" << ret << ".");
+    bool needForwardMemory = mConfig->IsSingleNode() || !mConfig->GetBasicConfig().multicastSwitch;
+    if (needForwardMemory) {
+        ChkTrue(memList.num < NO_8 && mForwardMemAddress != 0 && mForwardMemSize != 0, MMS_NOT_INITIALIZED,
+                "Forwarding memory is not initialized or net memory list is full.");
+        memList.address[memList.num] = mForwardMemAddress;
+        memList.size[memList.num] = mForwardMemSize;
+        ++memList.num;
+    }
     bool startRpcResources = !mConfig->IsSingleNode() && !mConfig->GetBasicConfig().multicastSwitch;
     NetEngineInitOptions initOptions;
     initOptions.timeoutSec = timeoutSec;
@@ -510,6 +602,10 @@ BResult MmsServer::RegisterServerChannelBrokenHandler()
     auto channelBroken = [this](uint32_t nodeId, uint32_t pid) -> void {
         if (pid == 0) {
             NetReConnect(nodeId);
+            return;
+        }
+        if (!mNetEngine->HasChannel(nodeId, pid)) {
+            ReleaseClientIoCtx(pid);
         }
     };
     auto ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
@@ -591,6 +687,14 @@ BResult MmsServer::MmsNetInit()
         return ret;
     }
 
+    const auto &memConfig = mConfig->GetMemConfig();
+    ret = mClientIoCtxManager.Initialize(memConfig.numaId, memConfig.numaNum,
+                                         memConfig.clientIoCtxSizePerNuma, mNetEngine);
+    if (UNLIKELY(ret != MMS_OK)) {
+        LOG_ERROR("Initialize client ioctx manager failed, ret:" << ret << ".");
+        return ret;
+    }
+
     if (mConfig->IsSingleNode()) {
         return MMS_OK;
     }
@@ -610,6 +714,7 @@ BResult MmsServer::MmsNetInit()
 
 void MmsServer::MmsNetExit()
 {
+    mClientIoCtxManager.Exit();
     if (mNetEngine != nullptr) {
         mNetEngine->Stop();
         mNetEngine = nullptr;
@@ -619,6 +724,32 @@ void MmsServer::MmsNetExit()
         mMulticastEngine->Stop();
         mMulticastEngine = nullptr;
     }
+}
+
+BResult MmsServer::AcquireClientIoCtx(uint32_t clientPid, ClientIoCtxPtr &ioCtx)
+{
+    return mClientIoCtxManager.Acquire(clientPid, ioCtx);
+}
+
+BResult MmsServer::ResolveClientIoCtx(uint32_t clientPid, uint64_t generation, uint64_t offset, uint64_t length,
+                                      ClientIoCtxPtr &ioCtx, uintptr_t &address) const
+{
+    return mClientIoCtxManager.Resolve(clientPid, generation, offset, length, ioCtx, address);
+}
+
+std::vector<ClientIoCtxInfo> MmsServer::GetClientIoCtxInfos() const
+{
+    return mClientIoCtxManager.GetInfos();
+}
+
+ClientIoCtxStats MmsServer::GetClientIoCtxStats() const
+{
+    return mClientIoCtxManager.GetStats();
+}
+
+void MmsServer::ReleaseClientIoCtx(uint32_t clientPid)
+{
+    mClientIoCtxManager.Release(clientPid);
 }
 
 BResult MmsServer::MmsCacheInit()
@@ -654,10 +785,10 @@ BResult MmsServer::MmsCmInit()
     options.role = ROLE_TOGETHER;
     options.zkIpMask = mConfig->GetCmConfig().zkHost;
     options.groups.groupId = 0;
-    options.groups.replicaNum = static_cast<uint16_t>(mConfig->GetCmConfig().nodeNum);
+    options.groups.replicaNum = static_cast<uint16_t>(mConfig->GetCmConfig().replicaNum);
     options.groups.initialNodeNum = static_cast<uint16_t>(mConfig->GetCmConfig().nodeNum);
     options.groups.maxNodeNum = static_cast<uint16_t>(mConfig->GetCmConfig().nodeNum);
-    options.groups.maxPtNum = static_cast<uint16_t>(mConfig->GetCmConfig().nodeNum);
+    options.groups.maxPtNum = static_cast<uint16_t>(mConfig->GetCmConfig().ptNum);
     options.nodeId = static_cast<uint32_t>(mConfig->GetCmConfig().nodeId);
     options.hbTempTimeout = static_cast<uint32_t>(mConfig->GetCmConfig().registeredTimeoutSec);
 
@@ -741,7 +872,6 @@ void MmsServer::MmsCrbSchedulerExit()
 }
 
 #ifdef USE_CLI_TOOLS
-using ServerDiagnose = int (*)();
 BResult MmsServer::MmsServerDiagnoseInit()
 {
     uint32_t procPid = 800U;
@@ -753,46 +883,25 @@ BResult MmsServer::MmsServerDiagnoseInit()
         return MMS_ERR;
     }
 
-    const char *soFileName = "libserver_diagnose.so";
-    void *handler = nullptr;
-    handler = dlopen(soFileName, RTLD_NOW);
-    if (handler == nullptr) {
-        LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
-        return MMS_ERR;
-    }
-
-    ServerDiagnose serverInitFunc = reinterpret_cast<ServerDiagnose>(dlsym(handler, "ServerDiagnoseInit"));
-    if (serverInitFunc == nullptr) {
-        LOG_ERROR("Failed to find ServerDiagnoseInit, error:" << dlerror() << ".");
-        if (dlclose(handler) != MMS_OK) {
-            LOG_ERROR("Failed to close server diagnose library, error:" << dlerror() << ".");
-        }
-        return MMS_ERR;
-    }
-
-    ret = serverInitFunc();
+    ret = diagnose::MmsServerCommand::Initialize();
     if (ret != MMS_OK) {
         LOG_ERROR("Failed to Initialize server diagnose, ret:" << ret << ".");
-        if (dlclose(handler) != MMS_OK) {
-            LOG_ERROR("Failed to close server diagnose library, error:" << dlerror() << ".");
-        }
+        cli_agent_destroy(procPid);
         return ret;
     }
-    mServerDiagnoseHandler = handler;
+    mServerDiagnoseInited = true;
     return MMS_OK;
 }
 
 void MmsServer::MmsServerDiagnoseExit()
 {
-    if (mServerDiagnoseHandler == nullptr) {
+    if (!mServerDiagnoseInited) {
         return;
     }
 
-    cli_unregister_command(const_cast<char *>("mms"));
-    if (dlclose(mServerDiagnoseHandler) != MMS_OK) {
-        LOG_ERROR("Failed to close server diagnose library, error:" << dlerror() << ".");
-    }
-    mServerDiagnoseHandler = nullptr;
+    diagnose::MmsServerCommand::Destroy();
+    cli_agent_destroy(800U);
+    mServerDiagnoseInited = false;
 }
 #endif
 BResult MmsServer::HandleNodeEvent(const std::map<uint16_t, CmNodeInfo> &nodeInfos)

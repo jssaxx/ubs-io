@@ -100,6 +100,7 @@ int main(int argc, char *argv[])
                  "../conf/mms.conf");
     // Cluster Manager
     (void)system("sed -i 's#mms.cm.node.num = .*#mms.cm.node.num = 1#g' ../conf/mms.conf");
+    (void)system("sed -i 's/mms.cm.replica.num =.*/mms.cm.replica.num = 1/g' ../conf/mms.conf");
     (void)system("sed -i 's/mms.cm.node.id =.*/#mms.cm.node.id =/g' ../conf/mms.conf");
     (void)system("sed -i 's/mms.cm.zk_host =.*/mms.cm.zk_host = 127.0.0.1:2181/g' ../conf/mms.conf");
     (void)system("sed -i 's/mms.net.tls.enable = true.*/mms.net.tls.enable = false/g' ../conf/mms.conf");

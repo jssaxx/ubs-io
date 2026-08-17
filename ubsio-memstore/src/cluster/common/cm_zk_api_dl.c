@@ -15,6 +15,7 @@
 #include <dlfcn.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdlib.h>
 
 #include "cm_comm.h"
 #include "cm_log.h"
@@ -31,7 +32,21 @@ ZookeeperCloseFn ZookeeperClose = NULL;
 ZooStateFn ZooState = NULL;
 ZooRecvTimeoutFn ZooRecvTimeout = NULL;
 ZooSetDebugLevelFn ZooSetDebugLevel = NULL;
-DeallocateStringVectorFn DeallocateStringVector = NULL;
+
+static void DeallocateStringVectorLocal(struct String_vector *strings)
+{
+    if (strings == NULL) {
+        return;
+    }
+    for (int32_t i = 0; i < strings->count; ++i) {
+        free(strings->data[i]);
+    }
+    free(strings->data);
+    strings->data = NULL;
+    strings->count = 0;
+}
+
+DeallocateStringVectorFn DeallocateStringVector = DeallocateStringVectorLocal;
 
 #define DLSYM(handle, type, ptr, sym)                     \
     do {                                                  \

@@ -127,6 +127,30 @@ TEST(TestPtCalc, test_fixed_calculator_failure_paths)
     FreePtFixtures(nodeList, stateList, ptList);
 }
 
+TEST(TestPtCalc, test_fixed_calculator_single_replica)
+{
+    NodeInfoList *nodeList = AllocNodeInfoList(TEST_NODE_NUM);
+    NodeStateList *stateList = AllocNodeStateList(TEST_NODE_NUM);
+    PtEntryList *ptList = AllocPtEntryList(TEST_PT_NUM);
+    Calculator calc = CreateViewCalculator(TEST_NODE_NUM, TEST_PT_NUM, 1, 1);
+    ASSERT_NE(calc, nullptr);
+
+    EXPECT_EQ(ViewCalculatorInitial(calc, nodeList, stateList, ptList), CM_OK);
+    EXPECT_EQ(ptList->ptNum, TEST_PT_NUM);
+    EXPECT_EQ(ptList->maxCopyNum, 1);
+    EXPECT_EQ(ptList->minCopyNum, 1);
+    for (uint16_t ptId = 0; ptId < TEST_PT_NUM; ++ptId) {
+        PtEntry &entry = ptList->ptEntryList[ptId];
+        EXPECT_EQ(entry.state, PT_STATE_NORMAL);
+        EXPECT_EQ(entry.copyNum, 1);
+        EXPECT_NE(entry.masterNodeId, NODE_ID_INVALID);
+        EXPECT_EQ(entry.copyList[0].state, PT_COPY_STATE_RUNNING);
+    }
+
+    DestoryViewCalculator(calc);
+    FreePtFixtures(nodeList, stateList, ptList);
+}
+
 TEST(TestPtCalc, test_update_node_state_and_finish)
 {
     PtEntryList *ptList = AllocPtEntryList(2);

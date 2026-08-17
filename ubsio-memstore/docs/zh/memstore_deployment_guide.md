@@ -221,15 +221,15 @@ MMS 软件安装前需要将前置依赖的软件安装成功，建议参考各�
     |Network|mms.net.rpc.ip_mask| RPC 网卡 IP 掩码。                                               |192.168.100.100/24| IPv4 CIDR 格式，例如 `*.*.*.*/#`，其中 `#` 为 [0, 32]。                |
     |Network|mms.net.rpc.listen_port| RPC 监听端口。                                                   |7500| [7201, 7800]                                                 |
     |Network|mms.net.multicast.listen_port| 组播监听端口。                                                     |7501| [7201, 7800]                                                 |
-    |Network|mms.net.rpc.protocol| RPC 通信协议。                                                   |rdma| tcp/rdma                                                     |
-    |Network|mms.net.multicast.protocol| 组播通信协议。                                                     |rdma| tcp/rdma。UB 通信场景需要配置为 tcp。                                   |
-    |Network|mms.net.rpc.connect.count| RPC 每个 channel 中的连接数。                                       |1| [1, 16]                                                      |
+    |Network|mms.net.rpc.protocol| RPC 通信协议。                                                   |rdma| tcp/rdma/ub                                                  |
+    |Network|mms.net.multicast.protocol| 组播通信协议。                                                     |rdma| tcp/rdma。UB 通信场景需要配置为 tcp。                                  |
+    |Network|mms.net.rpc.connect.count| RPC 每个 channel 中的连接数。                                       |2| [1, 16]                                                      |
     |Network|mms.net.rpc.busy_polling_mode| RPC worker 是否使用 busy polling。                               |true| true/false                                                   |
-    |Network|mms.net.rpc.worker.groups| RPC worker group 配置。                                        |1,1| 多个 group 用英文逗号分隔，每个数字表示对应 group 的 worker 数。                  |
-    |Network|mms.net.rpc.worker.groups.cpuset| RPC worker 绑核配置。                                            |10-10,50-50| 与 `mms.net.rpc.worker.groups` 一一对应，`x-y` 表示绑定到 CPU x 到 y。    |
+    |Network|mms.net.rpc.worker.groups| RPC worker group 配置。                                        |2,2| 多个 group 用英文逗号分隔，每个数字表示对应 group 的 worker 数。                  |
+    |Network|mms.net.rpc.worker.groups.cpuset| RPC worker 绑核配置。                                            |10-11,50-51| 与 `mms.net.rpc.worker.groups` 一一对应，`x-y` 表示绑定到 CPU x 到 y。    |
     |Network|mms.net.ipc.busy_polling_mode| IPC worker 是否使用 busy polling。                               |true| true/false                                                   |
-    |Network|mms.net.ipc.worker.groups| IPC worker group 配置。                                        |1,1| 多个 group 用英文逗号分隔，每个数字表示对应 group 的 worker 数。                  |
-    |Network|mms.net.ipc.worker.groups.cpuset| IPC worker 绑核配置。                                            |12-12,52-52| 与 `mms.net.ipc.worker.groups` 一一对应，`x-y` 表示绑定到 CPU x 到 y。    |
+    |Network|mms.net.ipc.worker.groups| IPC worker group 配置。                                        |2,2| 多个 group 用英文逗号分隔，每个数字表示对应 group 的 worker 数。                  |
+    |Network|mms.net.ipc.worker.groups.cpuset| IPC worker 绑核配置。                                            |12-13,52-53| 与 `mms.net.ipc.worker.groups` 一一对应，`x-y` 表示绑定到 CPU x 到 y。    |
     |Network|mms.net.ipc.notify.groups| 数据变更通知专用 IPC worker group 配置。                               |1| 追加在普通 IPC group 后，仅在数据变更通知开关开启时使用。                           |
     |Network|mms.net.ipc.notify.groups.cpuset| 数据变更通知专用 IPC worker 绑核配置。                                   |54-54| 与 `mms.net.ipc.notify.groups` 一一对应，避免与主干 IO worker 绑到同一 CPU。 |
     |Network|mms.net.request.executor.thread.num| 网络请求处理线程数。                                                  |8| [8, 256]                                                     |

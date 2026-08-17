@@ -44,19 +44,19 @@
     root:/cli>ls
     <AppId><State><AppName>
      800      1    mms_s
-     600      1    mms_c
+     <client_pid>      1    mms_c_<client_pid>
     ```
 
-   > 注意：600是client的编号，分离部署起mms_console后才有，800是server的编号。
+   > 注意：client 编号为业务进程 PID，可通过 `ls` 查询；800是server的编号。
 
 5. 绑定client端进程
 
     ```cmd
-    root:/cli>attach 600
-    Attach AppId<600> success
+    root:/cli>attach <client_pid>
+    Attach AppId<client_pid> success
     ```
 
-   > 注意：分离部署就attach 600，融合部署attach 800。
+   > 注意：分离部署 attach `ls` 查询到的 client PID，融合部署 attach 800。
 
 ## 测试指令
 
@@ -65,19 +65,19 @@ show: 查询一些信息
     mms show [node/pt/net/multicast]
 
 put value: 写数据
-    mms put [userId] [key] [filePath] [length]
+    mms put [key] [filePath] [length]
 
 get value: 读数据
-    mms get [userId] [key] [offset] [length] [filePath]
+    mms get [key] [offset] [length] [filePath]
 
 update value: 更新数据
-    mms update [userId] [key] [filePath] [offset] [length]
+    mms update [key] [filePath] [offset] [length]
 
 replace value: 替换数据，数据已经存在:更新，数据不存在:写入
-    mms replace [userId] [key] [filePath] [offset] [length]
+    mms replace [key] [filePath] [offset] [length]
 
 delete object: 删除某个key/value
-    mms delete [userId] [key]
+    mms delete [key]
 
 catchup: 开始数据恢复
     mms catchup
@@ -89,10 +89,10 @@ notify: io里数据变更通知字段的填充值
     mms notify [open/close]
 
 perf: 批量操作命令
-    mms perf [put/get/update/replace/delete/mixes] [bs(Kb)] [ioDepth] [batchNum] [size(Mb)] [userId] [numaNum] [cpuNum] [cpuStart] [readRate]
+    mms perf [put/get/update/replace/delete/mixes] [bs(Kb)] [ioDepth] [batchNum] [size(Mb)] [numaNum] [cpuNum] [cpuStart]
 
 perfcheck: 数据一致性校验
-    mms perfcheck [lwrite/rwrite] [filePath] [bs(Kb)] [ioDepth] [batchNum] [size(Mb)] [userId] [numaNum] [cpuNum] [cpuStart]
+    mms perfcheck [bs(Kb)] [ioDepth] [batchNum] [size(Mb)] [numaNum] [cpuNum] [cpuStart]
 
 exit
     exit console

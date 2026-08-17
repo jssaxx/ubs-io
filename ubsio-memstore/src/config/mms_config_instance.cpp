@@ -19,6 +19,8 @@ namespace mms {
 constexpr uint64_t GB_SIZE = 1024 * 1024 * 1024;
 constexpr uint64_t MB_SIZE = 1024 * 1024;
 constexpr long MAX_MEM_NUMA_SIZE_GB = 4096;
+constexpr int32_t MIN_FORWARD_MEM_SIZE_MB = 64;
+constexpr int32_t MAX_FORWARD_MEM_SIZE_MB = 4096;
 static constexpr ValidatorTag COMMON_VALIDATOR_TAG = NO_0;
 static constexpr ValidatorTag INTER_NODE_VALIDATOR_TAG = NO_1;
 
@@ -99,6 +101,10 @@ void MmsConfig::LoadDefaultConf()
     AddStrConf(MEM_NUMA_ID, VStrNotNull::Create(MEM_NUMA_ID.first));
     AddStrConf(MEM_NUMA_SIZE, VStrNotNull::Create(MEM_NUMA_SIZE.first));
     AddIntConf(MEM_VALUE_BLOCK_SIZE, VIntRange::Create(MEM_VALUE_BLOCK_SIZE.first, NO_1, NO_64));
+    AddIntConf(MEM_FORWARD_SIZE_PER_NUMA,
+        VIntRange::Create(MEM_FORWARD_SIZE_PER_NUMA.first, MIN_FORWARD_MEM_SIZE_MB, MAX_FORWARD_MEM_SIZE_MB));
+    AddIntConf(MEM_CLIENT_IOCTX_SIZE_PER_NUMA,
+        VIntRange::Create(MEM_CLIENT_IOCTX_SIZE_PER_NUMA.first, MIN_FORWARD_MEM_SIZE_MB, MAX_FORWARD_MEM_SIZE_MB));
 
     LoadDefaultSecurityConf();
     LoadDefaultBasicConf();
@@ -119,7 +125,7 @@ void MmsConfig::LoadDefaultNetConf()
     AddIntConf(NET_MULTICAST_PORT, VIntRange::Create(NET_MULTICAST_PORT.first, NO_7201, NO_7800),
                INTER_NODE_VALIDATOR_TAG);
 
-    AddStrConf(NET_RPC_PROTOCOL, VStrEnum::Create(NET_RPC_PROTOCOL.first, "tcp||rdma"), INTER_NODE_VALIDATOR_TAG);
+    AddStrConf(NET_RPC_PROTOCOL, VStrEnum::Create(NET_RPC_PROTOCOL.first, "tcp||rdma||ub"), INTER_NODE_VALIDATOR_TAG);
     AddStrConf(NET_MULTICAST_PROTOCOL, VStrEnum::Create(NET_MULTICAST_PROTOCOL.first, "tcp||rdma"),
                INTER_NODE_VALIDATOR_TAG);
     AddIntConf(NET_RPC_CONNECT_COUNT, VIntRange::Create(NET_RPC_CONNECT_COUNT.first, NO_1, NO_16),
@@ -176,6 +182,8 @@ void MmsConfig::LoadDefaultClusterConf()
     AddIntConf(CM_NODE_ID, VIntRange::Create(CM_NODE_ID.first, NO_0, NO_MAX_VALUE16));
     AddIntConf(CM_NODE_REGISTER_TIMEOUT, VIntRange::Create(CM_NODE_REGISTER_TIMEOUT.first, NO_10, NO_60));
     AddStrConf(CM_ZK_HOST, VStrNotNull::Create(CM_ZK_HOST.first));
+    AddIntConf(CM_REPLICA_NUM, VIntRange::Create(CM_REPLICA_NUM.first, NO_0, MAX_NODES_NUM));
+    AddIntConf(CM_PT_NUM, VIntRange::Create(CM_PT_NUM.first, NO_0, NO_1024));
 }
 
 BResult MmsConfig::AutoConfAfterLoadFromFile(const ConfigurationPtr &conf)
@@ -289,6 +297,10 @@ BResult MmsConfig::AutoConfigMem(const ConfigurationPtr &conf)
     }
 
     mMemConfig.numaNum = static_cast<uint16_t>(numaIdsVec.size());
+    mMemConfig.forwardMemSizePerNuma =
+        static_cast<uint64_t>(conf->GetInt(MEM_FORWARD_SIZE_PER_NUMA.first)) * IO_SIZE_1M;
+    mMemConfig.clientIoCtxSizePerNuma =
+        static_cast<uint64_t>(conf->GetInt(MEM_CLIENT_IOCTX_SIZE_PER_NUMA.first)) * IO_SIZE_1M;
 
     auto ret = CheckNumaInfo(mMemConfig.numaNum, mMemConfig.numaId);
     if (ret != MMS_OK) {
@@ -436,7 +448,14 @@ BResult MmsConfig::AutoConfigNet(const ConfigurationPtr &conf)
     ChkTrueNot(ret == MMS_OK, ret);
 
     mNetConfig.multicastProtocol = conf->GetStr(NET_MULTICAST_PROTOCOL.first);
-    mNetConfig.protocol = conf->GetStr(NET_RPC_PROTOCOL.first) == "rdma" ? NO_0 : NO_1;
+    std::string protocol = conf->GetStr(NET_RPC_PROTOCOL.first);
+    if (protocol == "rdma") {
+        mNetConfig.protocol = NO_0;
+    } else if (protocol == "ub") {
+        mNetConfig.protocol = NO_7;
+    } else {
+        mNetConfig.protocol = NO_1;
+    }
     mNetConfig.handleRequestThreadNum = conf->GetInt(NET_RECV_REQUEST_HANDLE_THREAD_NUM.first);
     mNetConfig.handleRequestQueueSize = conf->GetInt(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE.first);
     if (UNLIKELY(AutoConfigNetMulticast(conf) != MMS_OK)) {
@@ -448,6 +467,19 @@ BResult MmsConfig::AutoConfigNet(const ConfigurationPtr &conf)
 BResult MmsConfig::AutoConfigCm(const ConfigurationPtr &conf)
 {
     mCmConfig.nodeNum = conf->GetInt(CM_NODE_NUM.first);
+    mCmConfig.replicaNum = conf->GetInt(CM_REPLICA_NUM.first);
+    if (mCmConfig.replicaNum == 0) {
+        mCmConfig.replicaNum = mCmConfig.nodeNum;
+    }
+    if (mCmConfig.replicaNum != NO_1 && mCmConfig.replicaNum != mCmConfig.nodeNum) {
+        LOG_ERROR("Invalid replica num:" << mCmConfig.replicaNum << ", node num:" << mCmConfig.nodeNum << ".");
+        return MMS_INVALID_PARAM;
+    }
+
+    mCmConfig.ptNum = conf->GetInt(CM_PT_NUM.first);
+    if (mCmConfig.ptNum == 0) {
+        mCmConfig.ptNum = mCmConfig.nodeNum;
+    }
     mCmConfig.nodeId = conf->GetInt(CM_NODE_ID.first);
     mCmConfig.registeredTimeoutSec = conf->GetInt(CM_NODE_REGISTER_TIMEOUT.first);
     mCmConfig.zkHost = conf->GetStr(CM_ZK_HOST.first);

@@ -10,11 +10,6 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <chrono>
-#include <iostream>
-#include <memory>
-#include <csignal>
-#include <sys/resource.h>
 #include <time.h>
 #include <unordered_map>
 #include <fstream>
@@ -22,6 +17,8 @@
 #include <mutex>
 #include <ctime>
 #include <atomic>
+#include <limits>
+#include <new>
 #include "tracer.h"
 #include "cli.h"
 #include "mms_config_instance.h"
@@ -34,7 +31,7 @@
 using namespace ock::mms;
 
 static void MmsServerDebugProcess(int argc, char *argv[]) noexcept;
-static void MmsServerDebugHelp(char *command, int detail) noexcept;
+static void MmsServerDebugHelp(char *, int) noexcept;
 
 static void InitRandom()
 {
@@ -132,14 +129,19 @@ int diagnose::MmsServerCommand::Initialize() noexcept
     auto result = cli_register_command(&command);
     if (result != 0) {
         printf("register MmsServer diagnose failed.");
+        return result;
     }
     mInited = true;
-    return result;
+    return 0;
 }
 
 void diagnose::MmsServerCommand::Destroy() noexcept
 {
+    if (!mInited) {
+        return;
+    }
     cli_unregister_command((char *)"mms");
+    mInited = false;
 }
 
 static uint32_t mUpdateLength = 0;
@@ -207,11 +209,56 @@ static void RefreshKeyLen(DeleteItems *itemList, uint32_t itemNum)
     }
 }
 
-static constexpr uint32_t DIAG_KEY_BUFFER_LEN = 128;
+static constexpr uint32_t DIAG_KEY_BUFFER_LEN = MAX_KEY_SIZE;
+
+static bool CliKeyValid(const char *key)
+{
+    size_t keyLen = key == nullptr ? 0 : strnlen(key, MAX_KEY_SIZE);
+    if (keyLen == 0 || keyLen >= MAX_KEY_SIZE) {
+        cli_print_buffer("Invalid key, valid length range:[1,%u].\n", MAX_KEY_LENGTH);
+        return false;
+    }
+    return true;
+}
+
+static bool ParseUint32Arg(const std::string &text, const char *name, uint32_t &value)
+{
+    if (text.empty()) {
+        cli_print_buffer("Invalid %s:%s, expected uint32.\n", name, text.c_str());
+        return false;
+    }
+
+    uint64_t parsed = 0;
+    for (char ch : text) {
+        if (ch < '0' || ch > '9') {
+            cli_print_buffer("Invalid %s:%s, expected uint32.\n", name, text.c_str());
+            return false;
+        }
+        parsed = parsed * NO_10 + static_cast<uint32_t>(ch - '0');
+        if (parsed > std::numeric_limits<uint32_t>::max()) {
+            cli_print_buffer("Invalid %s:%s, expected uint32.\n", name, text.c_str());
+            return false;
+        }
+    }
+    value = static_cast<uint32_t>(parsed);
+    return true;
+}
+
+static bool ParseIoRange(const std::string &offsetText, const std::string &lengthText, uint32_t &offset,
+                         uint32_t &length)
+{
+    if (!ParseUint32Arg(offsetText, "offset", offset) || !ParseUint32Arg(lengthText, "length", length)) {
+        return false;
+    }
+    if (length == 0 || length > MAX_VALUE_SIZE || offset > MAX_VALUE_SIZE - length) {
+        cli_print_buffer("Invalid IO range, offset:%u, length:%u, max:%u.\n", offset, length, MAX_VALUE_SIZE);
+        return false;
+    }
+    return true;
+}
 
 struct PerfTestParam {
     bool done;
-    uint64_t usrId;
     uint32_t id;
     uint32_t cpu;
     uint32_t batchNum;
@@ -224,7 +271,7 @@ struct PerfTestParam {
 
 static void FillPerfKey(const PerfTestParam *param, const char *key, int32_t keyIndex)
 {
-    int ret = snprintf(const_cast<char *>(key), DIAG_KEY_BUFFER_LEN, "key_%lu_%u_%u_%d", param->usrId, param->id,
+    int ret = snprintf(const_cast<char *>(key), DIAG_KEY_BUFFER_LEN, "key_%u_%u_%d", param->id,
                        param->cpu, keyIndex);
     if (ret < 0) {
         cli_print_buffer("Format key failed.\n");
@@ -233,35 +280,30 @@ static void FillPerfKey(const PerfTestParam *param, const char *key, int32_t key
 
 typedef void *(*perfTestRunner)(void *param);
 
-static bool CanConvertToUint64(const std::string &str, uint64_t &val)
+static void HandlePut(const std::vector<std::string> &cmds)
 {
-    try {
-        std::size_t pos;
-        val = std::stoull(str, &pos);
-        if (pos < str.size() && str.find_first_not_of(" \t\n\v\f\r", pos) != std::string::npos) {
-            return false;
-        }
-        return true;
-    } catch (const std::invalid_argument &ia) {
-        return false;
-    } catch (const std::out_of_range &oor) {
-        return false;
+    auto key = cmds[1].c_str();
+    if (!CliKeyValid(key)) {
+        return;
     }
-}
-
-static void HandlePut(std::vector<std::string> cmds)
-{
-    uint64_t userId = std::stoull(cmds[1]);
-    auto key = cmds[2].c_str();
-    auto filePath = cmds[3].c_str();
-    uint32_t length = std::stoul(cmds[4]);
+    auto filePath = cmds[2].c_str();
+    uint32_t length = 0;
+    if (!ParseUint32Arg(cmds[3], "length", length) || length == 0 || length > MAX_VALUE_SIZE) {
+        cli_print_buffer("Invalid value length:%s, valid range:[1,%u].\n", cmds[3].c_str(), MAX_VALUE_SIZE);
+        return;
+    }
 
     FILE *fp = nullptr;
     if ((fp = fopen(filePath, "r")) == nullptr) {
         cli_print_buffer("fopen file failed, file: %s.\n", filePath);
         return;
     }
-    char *value = new char[length];
+    char *value = new (std::nothrow) char[length];
+    if (value == nullptr) {
+        cli_print_buffer("Allocate value buffer failed, length:%u.\n", length);
+        fclose(fp);
+        return;
+    }
     if (fread(value, sizeof(char), length, fp) != length) {
         cli_print_buffer("Read value from file failed, errno:%d.\n", errno);
         delete[] value;
@@ -274,16 +316,16 @@ static void HandlePut(std::vector<std::string> cmds)
     PutItems item = MakePutItem(key, value, length, &valueAddr, &result);
 
     auto ret = MmsPut(&item, NO_1);
-    if (ret != RET_MMS_OK) {
-        cli_print_buffer("Failed to put a value, result:%d.\n", ret);
+    if (ret != RET_MMS_OK || result != RET_MMS_OK) {
+        cli_print_buffer("Failed to put a value, result:%d, item result:%d.\n", ret, result);
     } else {
-        cli_print_buffer("Put value success, key:%s, length:%llu.\n", key, length);
+        cli_print_buffer("Put value success, key:%s, length:%u.\n", key, length);
     }
     delete[] value;
     fclose(fp);
 }
 
-static void HandleCatchUp(std::vector<std::string> cmds)
+static void HandleCatchUp()
 {
     auto ret = MmsStartCatchUpTask();
     if (ret != RET_MMS_OK) {
@@ -293,20 +335,30 @@ static void HandleCatchUp(std::vector<std::string> cmds)
     }
 }
 
-static void HandleGet(std::vector<std::string> cmds)
+static void HandleGet(const std::vector<std::string> &cmds)
 {
-    uint64_t userId = std::stoull(cmds[1]);
-    auto key = cmds[2].c_str();
-    uint32_t offset = std::stoul(cmds[3]);
-    uint32_t length = std::stoul(cmds[4]);
-    auto filePath = cmds[5].c_str();
+    auto key = cmds[1].c_str();
+    if (!CliKeyValid(key)) {
+        return;
+    }
+    uint32_t offset = 0;
+    uint32_t length = 0;
+    if (!ParseIoRange(cmds[2], cmds[3], offset, length)) {
+        return;
+    }
+    auto filePath = cmds[4].c_str();
 
     FILE *fp = nullptr;
     if ((fp = fopen(filePath, "w")) == nullptr) {
         cli_print_buffer("fopen file failed, file:%s.\n", filePath);
         return;
     }
-    char *value = new char[length];
+    char *value = new (std::nothrow) char[length];
+    if (value == nullptr) {
+        cli_print_buffer("Allocate value buffer failed, length:%u.\n", length);
+        fclose(fp);
+        return;
+    }
     char *valuePtr = value;
     uint32_t realLen = length;
     int32_t result = RET_MMS_OK;
@@ -314,10 +366,10 @@ static void HandleGet(std::vector<std::string> cmds)
     GetItems item = MakeGetItem(key, offset, length, &valuePtr, &realLen, &result);
 
     auto ret = MmsGet(&item, NO_1);
-    if (ret != RET_MMS_OK) {
-        cli_print_buffer("Failed to get a value, result:%d.\n", ret);
+    if (ret != RET_MMS_OK || result != RET_MMS_OK) {
+        cli_print_buffer("Failed to get a value, result:%d, item result:%d.\n", ret, result);
     } else {
-        cli_print_buffer("Get value success, key:%s, offset:%llu, length:%llu, realLen:%llu.\n",
+        cli_print_buffer("Get value success, key:%s, offset:%u, length:%u, realLen:%u.\n",
             key, offset, length, realLen);
         if (fwrite(value, sizeof(char), realLen, fp) != realLen) {
             cli_print_buffer("fwrite value to file failed, errno:%d.\n", errno);
@@ -327,20 +379,30 @@ static void HandleGet(std::vector<std::string> cmds)
     fclose(fp);
 }
 
-static void HandleUpdate(std::vector<std::string> cmds)
+static void HandleUpdate(const std::vector<std::string> &cmds)
 {
-    uint64_t userId = std::stoull(cmds[1]);
-    auto key = cmds[2].c_str();
-    auto filePath = cmds[3].c_str();
-    uint32_t offset = std::stoul(cmds[4]);
-    uint32_t length = std::stoul(cmds[5]);
+    auto key = cmds[1].c_str();
+    if (!CliKeyValid(key)) {
+        return;
+    }
+    auto filePath = cmds[2].c_str();
+    uint32_t offset = 0;
+    uint32_t length = 0;
+    if (!ParseIoRange(cmds[3], cmds[4], offset, length)) {
+        return;
+    }
 
     FILE *fp = nullptr;
     if ((fp = fopen(filePath, "r")) == nullptr) {
         cli_print_buffer("fopen file failed, file: %s.\n", filePath);
         return;
     }
-    char *value = new char[length];
+    char *value = new (std::nothrow) char[length];
+    if (value == nullptr) {
+        cli_print_buffer("Allocate value buffer failed, length:%u.\n", length);
+        fclose(fp);
+        return;
+    }
     if (fread(value, sizeof(char), length, fp) != length) {
         cli_print_buffer("Read value from file failed, errno:%d.\n", errno);
         delete[] value;
@@ -352,29 +414,39 @@ static void HandleUpdate(std::vector<std::string> cmds)
     UpdateItems item = MakeUpdateItem(key, value, offset, length, &result);
 
     auto ret = MmsUpdate(&item, NO_1);
-    if (ret != RET_MMS_OK) {
-        cli_print_buffer("Failed to update a value, result:%d.\n", ret);
+    if (ret != RET_MMS_OK || result != RET_MMS_OK) {
+        cli_print_buffer("Failed to update a value, result:%d, item result:%d.\n", ret, result);
     } else {
-        cli_print_buffer("Update value success, key:%s, length:%llu.\n", key, length);
+        cli_print_buffer("Update value success, key:%s, length:%u.\n", key, length);
     }
     delete[] value;
     fclose(fp);
 }
 
-static void HandleReplace(std::vector<std::string> cmds)
+static void HandleReplace(const std::vector<std::string> &cmds)
 {
-    uint64_t userId = std::stoull(cmds[1]);
-    auto key = cmds[2].c_str();
-    auto filePath = cmds[3].c_str();
-    uint32_t offset = std::stoul(cmds[4]);
-    uint32_t length = std::stoul(cmds[5]);
+    auto key = cmds[1].c_str();
+    if (!CliKeyValid(key)) {
+        return;
+    }
+    auto filePath = cmds[2].c_str();
+    uint32_t offset = 0;
+    uint32_t length = 0;
+    if (!ParseIoRange(cmds[3], cmds[4], offset, length)) {
+        return;
+    }
 
     FILE *fp = nullptr;
     if ((fp = fopen(filePath, "r")) == nullptr) {
         cli_print_buffer("fopen file failed, file: %s.\n", filePath);
         return;
     }
-    char *value = new char[length];
+    char *value = new (std::nothrow) char[length];
+    if (value == nullptr) {
+        cli_print_buffer("Allocate value buffer failed, length:%u.\n", length);
+        fclose(fp);
+        return;
+    }
     if (fread(value, sizeof(char), length, fp) != length) {
         cli_print_buffer("Read value from file failed, errno:%d.\n", errno);
         delete[] value;
@@ -386,26 +458,28 @@ static void HandleReplace(std::vector<std::string> cmds)
     ReplaceItems item = MakeUpdateItem(key, value, offset, length, &result);
 
     auto ret = MmsReplace(&item, NO_1);
-    if (ret != RET_MMS_OK) {
-        cli_print_buffer("Failed to replace a value, result:%d.\n", ret);
+    if (ret != RET_MMS_OK || result != RET_MMS_OK) {
+        cli_print_buffer("Failed to replace a value, result:%d, item result:%d.\n", ret, result);
     } else {
-        cli_print_buffer("Replace value success, key:%s, offset:%llu, length:%llu.\n", key, offset, length);
+        cli_print_buffer("Replace value success, key:%s, offset:%u, length:%u.\n", key, offset, length);
     }
     delete[] value;
     fclose(fp);
 }
 
-static void HandleDelete(std::vector<std::string> cmds)
+static void HandleDelete(const std::vector<std::string> &cmds)
 {
-    uint64_t userId = std::stoull(cmds[1]);
-    auto key = cmds[2].c_str();
+    auto key = cmds[1].c_str();
+    if (!CliKeyValid(key)) {
+        return;
+    }
 
     int32_t result = RET_MMS_OK;
     DeleteItems item = MakeDeleteItem(key, &result);
 
     auto ret = MmsDelete(&item, NO_1);
-    if (ret != RET_MMS_OK) {
-        cli_print_buffer("Failed to delete, key%s, result:%d.\n", key, ret);
+    if (ret != RET_MMS_OK || result != RET_MMS_OK) {
+        cli_print_buffer("Failed to delete, key:%s, result:%d, item result:%d.\n", key, ret, result);
     } else {
         cli_print_buffer("Delete key success, key:%s.\n", key);
     }
@@ -413,7 +487,12 @@ static void HandleDelete(std::vector<std::string> cmds)
 
 static void HandleSet(std::vector<std::string> cmds)
 {
-    mUpdateLength = std::stoul(cmds[1]);
+    uint32_t length = 0;
+    if (!ParseUint32Arg(cmds[1], "length", length) || length > MAX_VALUE_SIZE) {
+        cli_print_buffer("Invalid update length:%s, valid range:[0,%u].\n", cmds[1].c_str(), MAX_VALUE_SIZE);
+        return;
+    }
+    mUpdateLength = length;
     cli_print_buffer("reset update length: %u.\n", mUpdateLength);
 }
 
@@ -441,7 +520,7 @@ static void *PerfTestPutImpl(void *param)
     }
 
     PerfTestParam *getParam = (PerfTestParam *)param;
-    std::atomic<int32_t> keyIndex(0);
+    int32_t keyIndex = 0;
 
     uint32_t length = (mUpdateLength != 0) ? mUpdateLength : getParam->length;
 
@@ -461,7 +540,7 @@ static void *PerfTestPutImpl(void *param)
 
     for (uint32_t idx = 0; idx < getParam->count; idx++) {
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            FillPerfKey(getParam, itemList[i].key, keyIndex.load());
+            FillPerfKey(getParam, itemList[i].key, keyIndex);
             keyIndex++;
         }
         RefreshKeyLen(itemList, getParam->batchNum);
@@ -491,7 +570,7 @@ static void *PerfTestGetImpl(void *param)
     }
 
     PerfTestParam *getParam = (PerfTestParam *)param;
-    std::atomic<int32_t> keyIndex(0);
+    int32_t keyIndex = 0;
 
     uint32_t length = (mUpdateLength != 0) ? mUpdateLength : getParam->length;
 
@@ -512,7 +591,7 @@ static void *PerfTestGetImpl(void *param)
 
     for (uint32_t idx = 0; idx < getParam->count; idx++) {
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            FillPerfKey(getParam, itemList[i].key, keyIndex.load());
+            FillPerfKey(getParam, itemList[i].key, keyIndex);
             keyIndex++;
         }
         RefreshKeyLen(itemList, getParam->batchNum);
@@ -543,7 +622,7 @@ static void *PerfTestUpdateImpl(void *param)
     }
 
     PerfTestParam *getParam = (PerfTestParam *)param;
-    std::atomic<int32_t> keyIndex(0);
+    int32_t keyIndex = 0;
 
     uint32_t length = (mUpdateLength != 0) ? mUpdateLength : getParam->length;
 
@@ -560,7 +639,7 @@ static void *PerfTestUpdateImpl(void *param)
 
     for (uint32_t idx = 0; idx < getParam->count; idx++) {
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            FillPerfKey(getParam, itemList[i].key, keyIndex.load());
+            FillPerfKey(getParam, itemList[i].key, keyIndex);
             keyIndex++;
         }
         RefreshKeyLen(itemList, getParam->batchNum);
@@ -589,7 +668,7 @@ static void *PerfTestReplaceImpl(void *param)
     }
 
     PerfTestParam *getParam = (PerfTestParam *)param;
-    std::atomic<int32_t> keyIndex(0);
+    int32_t keyIndex = 0;
 
     uint32_t length = (mUpdateLength != 0) ? mUpdateLength : getParam->length;
 
@@ -606,7 +685,7 @@ static void *PerfTestReplaceImpl(void *param)
 
     for (uint32_t idx = 0; idx < getParam->count; idx++) {
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            FillPerfKey(getParam, itemList[i].key, keyIndex.load());
+            FillPerfKey(getParam, itemList[i].key, keyIndex);
             keyIndex++;
         }
         RefreshKeyLen(itemList, getParam->batchNum);
@@ -635,7 +714,7 @@ static void *PerfTestDeleteImpl(void *param)
     }
 
     PerfTestParam *getParam = (PerfTestParam *)param;
-    std::atomic<int32_t> keyIndex(0);
+    int32_t keyIndex = 0;
 
     DeleteItems *itemList = new DeleteItems[getParam->batchNum];
     int32_t *results = new int32_t[getParam->batchNum]();
@@ -648,7 +727,7 @@ static void *PerfTestDeleteImpl(void *param)
 
     for (uint32_t idx = 0; idx < getParam->count; idx++) {
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            FillPerfKey(getParam, itemList[i].key, keyIndex.load());
+            FillPerfKey(getParam, itemList[i].key, keyIndex);
             keyIndex++;
         }
         RefreshKeyLen(itemList, getParam->batchNum);
@@ -676,7 +755,7 @@ static void *PerfTestMixesImpl(void *param)
     }
 
     PerfTestParam *getParam = (PerfTestParam *)param;
-    std::atomic<int32_t> keyIndex(0);
+    int32_t keyIndex = 0;
 
     uint32_t length = (mUpdateLength != 0) ? mUpdateLength : getParam->length;
 
@@ -711,7 +790,7 @@ static void *PerfTestMixesImpl(void *param)
 
     for (uint32_t idx = 0; idx < 10; idx++) {
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            FillPerfKey(getParam, putList[i].key, keyIndex.load());
+            FillPerfKey(getParam, putList[i].key, keyIndex);
             keyIndex++;
         }
         RefreshKeyLen(putList, getParam->batchNum);
@@ -727,7 +806,7 @@ static void *PerfTestMixesImpl(void *param)
         int32_t randnum = rand();
         if (randnum % 10 >= readRate) {
             for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            FillPerfKey(getParam, putList[i].key, keyIndex.load());
+            FillPerfKey(getParam, putList[i].key, keyIndex);
                 keyIndex++;
             }
             RefreshKeyLen(putList, getParam->batchNum);
@@ -738,7 +817,7 @@ static void *PerfTestMixesImpl(void *param)
             }
         } else {
             for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            FillPerfKey(getParam, getList[i].key, randnum % keyIndex.load());
+            FillPerfKey(getParam, getList[i].key, randnum % keyIndex);
             }
             RefreshKeyLen(getList, getParam->batchNum);
             auto ret = MmsGet(getList, getParam->batchNum);
@@ -842,7 +921,7 @@ static void *PerfTestPutCheckData(void *param)
 
     PerfTestParam *getParam = (PerfTestParam *)checkPara->para;
     std::unordered_map<std::string, uint32_t> &dataCrc = *(checkPara->dataCrc);
-    std::atomic<int32_t> keyIndex(0);
+    int32_t keyIndex = 0;
 
     uint32_t length = (mUpdateLength != 0) ? mUpdateLength : getParam->length;
     getParam->result = 0;
@@ -859,7 +938,7 @@ static void *PerfTestPutCheckData(void *param)
 
     for (uint32_t idx = 0; idx < getParam->count; idx++) {
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            FillPerfKey(getParam, itemList[i].key, keyIndex.load());
+            FillPerfKey(getParam, itemList[i].key, keyIndex);
             std::string keyStr(itemList[i].key);
             FillRandomData(const_cast<char *>(itemList[i].value), length);
             std::string filePath = "./perf_input/" + keyStr;
@@ -903,7 +982,7 @@ static void *PerfTestGetCheckData(void *param)
 
     PerfTestParam *getParam = (PerfTestParam *)checkPara->para;
     std::unordered_map<std::string, uint32_t> &dataCrc = *(checkPara->dataCrc);
-    std::atomic<int32_t> keyIndex(0);
+    int32_t keyIndex = 0;
 
     getParam->result = 0;
     uint32_t length = (mUpdateLength != 0) ? mUpdateLength : getParam->length;
@@ -925,7 +1004,7 @@ static void *PerfTestGetCheckData(void *param)
 
     for (uint32_t idx = 0; idx < getParam->count; idx++) {
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            FillPerfKey(getParam, itemList[i].key, keyIndex.load());
+            FillPerfKey(getParam, itemList[i].key, keyIndex);
             keyIndex++;
         }
 
@@ -963,24 +1042,59 @@ static void *PerfTestGetCheckData(void *param)
     return nullptr;
 }
 
-static void HandlePerf(std::vector<std::string> cmds)
+static bool ParsePerfParameters(const std::vector<std::string> &cmds, size_t first, uint32_t &bs,
+                                uint32_t &ioDepth, uint32_t &batchNum, uint64_t &size, uint32_t &numaNum,
+                                uint32_t &cpuNum, uint32_t &cpuStart)
+{
+    uint32_t bsKb = 0;
+    uint32_t sizeMb = 0;
+    if (!ParseUint32Arg(cmds[first], "bs", bsKb) ||
+        !ParseUint32Arg(cmds[first + 1], "ioDepth", ioDepth) ||
+        !ParseUint32Arg(cmds[first + 2], "batchNum", batchNum) ||
+        !ParseUint32Arg(cmds[first + 3], "size", sizeMb) ||
+        !ParseUint32Arg(cmds[first + 4], "numaNum", numaNum) ||
+        !ParseUint32Arg(cmds[first + 5], "cpuNum", cpuNum) ||
+        !ParseUint32Arg(cmds[first + 6], "cpuStart", cpuStart)) {
+        return false;
+    }
+    if (bsKb == 0 || bsKb > MAX_VALUE_SIZE / KB_UNIT || ioDepth == 0 || batchNum == 0 || sizeMb == 0 ||
+        numaNum == 0 || numaNum > MAX_NUMAS_NUM || cpuNum == 0 || cpuStart >= CPU_SETSIZE) {
+        cli_print_buffer("Invalid perf parameters, bs(KiB):%u, ioDepth:%u, batchNum:%u, size(MiB):%u, "
+                         "numaNum:%u, cpuNum:%u, cpuStart:%u.\n", bsKb, ioDepth, batchNum, sizeMb, numaNum,
+                         cpuNum, cpuStart);
+        return false;
+    }
+    bs = bsKb * KB_UNIT;
+    size = static_cast<uint64_t>(sizeMb) * IO_SIZE_1M;
+    return true;
+}
+
+static void HandlePerf(const std::vector<std::string> &cmds)
 {
     auto rw = cmds[1].c_str();
-    uint32_t bs = (std::stoul(cmds[2]) * 1024);
-    uint32_t ioDepth = std::stoul(cmds[3]);
-    uint32_t batchNum = std::stoul(cmds[4]);
-    uint64_t size = (std::stoul(cmds[5]) * 1024 * 1024);
-    uint64_t userId = std::stoul(cmds[6]);
-    uint32_t numaNum = std::stol(cmds[7]);
-    uint32_t cpuNum = std::stol(cmds[8]);
-    uint32_t cpuStart = std::stol(cmds[9]);
+    uint32_t bs = 0;
+    uint32_t ioDepth = 0;
+    uint32_t batchNum = 0;
+    uint64_t size = 0;
+    uint32_t numaNum = 0;
+    uint32_t cpuNum = 0;
+    uint32_t cpuStart = 0;
+    if (!ParsePerfParameters(cmds, 2, bs, ioDepth, batchNum, size, numaNum, cpuNum, cpuStart)) {
+        return;
+    }
     uint16_t readWriteRate = 7; // 默认7:3
-    if (memcmp(rw, "mixes", sizeof("mixes")) == 0 && (cmds.size() == 11)) {
-        readWriteRate = std::stol(cmds[10]);
+    if (memcmp(rw, "mixes", sizeof("mixes")) == 0 && (cmds.size() == 10)) {
+        uint32_t rate = 0;
+        if (!ParseUint32Arg(cmds[9], "readRate", rate) || rate > NO_10) {
+            cli_print_buffer("Invalid read rate:%s, valid range:[0,10].\n", cmds[9].c_str());
+            return;
+        }
+        readWriteRate = static_cast<uint16_t>(rate);
     }
     auto count = size / bs / batchNum / ioDepth;
-    if (bs == 0 || batchNum == 0 || ioDepth == 0) {
-        cli_print_buffer("Invalid para, bs:%u, batchNum:%u, ioDepth:%u", bs, batchNum, ioDepth);
+    if (count == 0 || count > std::numeric_limits<uint32_t>::max()) {
+        cli_print_buffer("Invalid test round count:%llu, bs:%u, batchNum:%u, ioDepth:%u.\n",
+                         static_cast<unsigned long long>(count), bs, batchNum, ioDepth);
         return;
     }
 
@@ -1002,26 +1116,36 @@ static void HandlePerf(std::vector<std::string> cmds)
         return;
     }
 
-    cli_print_buffer("Perf test start, operate:%s, bs:%u, ioDepth:%u, batchNum:%u, size:%u, count:%u.\n", rw, bs, ioDepth,
-                 batchNum, size, count);
+    cli_print_buffer("Perf test start, operate:%s, bs:%u, ioDepth:%u, batchNum:%u, size:%llu, count:%llu.\n", rw,
+                     bs, ioDepth, batchNum, static_cast<unsigned long long>(size),
+                     static_cast<unsigned long long>(count));
     pthread_t *th = (pthread_t *)malloc(sizeof(pthread_t) * ioDepth);
     PerfTestParam *param = (PerfTestParam *)malloc(sizeof(PerfTestParam) * ioDepth);
     if (th == nullptr || param == nullptr) {
         cli_print_buffer("Malloc memory failed.\n");
+        free(param);
+        free(th);
         return;
     }
     uint32_t index = 0;
     for (uint32_t i = 0; i < ioDepth; i++) {
         for (uint32_t j = 0; j < numaNum; j++) {
+            uint64_t cpu = static_cast<uint64_t>(cpuStart) + i + static_cast<uint64_t>(j) * cpuNum;
+            if (cpu >= CPU_SETSIZE) {
+                cli_print_buffer("Invalid CPU index:%llu, CPU_SETSIZE:%u.\n",
+                                 static_cast<unsigned long long>(cpu), CPU_SETSIZE);
+                free(param);
+                free(th);
+                return;
+            }
             param[index].done = false;
-            param[index].usrId = userId;
             param[index].id = index;
-            param[index].cpu = cpuStart + i + j * cpuNum;
+            param[index].cpu = static_cast<uint32_t>(cpu);
             param[index].batchNum = batchNum;
             param[index].result = RET_MMS_OK;
             sem_init(&param[index].sem, 0, 0);
             param[index].length = bs;
-            param[index].count = count;
+            param[index].count = static_cast<uint32_t>(count);
             param[index].readWriteRate = readWriteRate;
             index++;
             if (index == ioDepth) {
@@ -1083,25 +1207,23 @@ static void HandlePerf(std::vector<std::string> cmds)
     float cost_sec = stopT.tv_sec - startT.tv_sec;
     float cost_usec = stopT.tv_usec - startT.tv_usec;
     float time_use = cost_sec * 1000000U + cost_usec;
-    auto totalCount = static_cast<double>(count * ioDepth) ;
-    auto totalSize = static_cast<double>(count * bs);
-    double dataPerf = static_cast<double>(((totalSize / 1048576U) * 1000000U / time_use) * ioDepth);
-    double iops = static_cast<double>(totalCount * 1000000U) / time_use;
-    int bwFactor = 1;
-
+    uint64_t totalCount = static_cast<uint64_t>(count) * ioDepth * batchNum;
+    uint64_t totalSize = totalCount * bs;
+    double dataPerf = static_cast<double>(totalSize) / 1048576U * 1000000U / time_use;
+    double iops = static_cast<double>(totalCount) * 1000000U / time_use;
     time_t rawtime;
-    struct tm *timeinfo = nullptr;
     struct tm timebuf{};
     rawtime = time(nullptr);
-    timeinfo = localtime_r(&rawtime, &timebuf);
-    cli_print_buffer("Perf Test Result: @ %s\n", asctime(timeinfo));
-    cli_print_buffer("  IO depth                   : %lu\n", ioDepth);
-    cli_print_buffer("  IO size                    : %lu\n", bs);
-    cli_print_buffer("  total IO count             : %d\n", static_cast<int>(totalCount));
+    localtime_r(&rawtime, &timebuf);
+    cli_print_buffer("Perf Test Result: @ %s\n", asctime(&timebuf));
+    cli_print_buffer("  IO depth                   : %u\n", ioDepth);
+    cli_print_buffer("  IO size                    : %u\n", bs);
+    cli_print_buffer("  total IO count             : %llu\n", static_cast<unsigned long long>(totalCount));
     cli_print_buffer("  total spent                : %.2f ms\n", time_use / 1000U);
-    cli_print_buffer("  throughput                 : %.4f MB/s\n", dataPerf * bwFactor);
+    cli_print_buffer("  throughput                 : %.4f MB/s\n", dataPerf);
     cli_print_buffer("  IOPS                       : %.2f /s\n", iops);
-    cli_print_buffer("  latency                    : %.2f (us)\n", time_use / count);
+    cli_print_buffer("  batch latency              : %.2f (us)\n", time_use / count);
+    cli_print_buffer("  latency                    : %.2f (us)\n", time_use / count / batchNum);
     cli_print_buffer("Perf Test End.\n");
 
     mIsReady = false;
@@ -1110,20 +1232,24 @@ static void HandlePerf(std::vector<std::string> cmds)
     free(th);
 }
 
-static bool HandlePerfCheckImpl(std::vector<std::string> cmds, std::unordered_map<std::string, uint32_t> &dataCrc)
+static bool HandlePerfCheckImpl(const std::vector<std::string> &cmds,
+                                std::unordered_map<std::string, uint32_t> &dataCrc)
 {
-    uint32_t bs = (std::stoul(cmds[3]) * 1024);
-    uint32_t ioDepth = std::stoul(cmds[4]);
-    uint32_t batchNum = std::stoul(cmds[5]);
-    uint64_t size = (std::stoul(cmds[6]) * 1024 * 1024);
-    uint64_t userId = std::stoul(cmds[7]);
-    uint32_t numaNum = std::stol(cmds[8]);
-    uint32_t cpuNum = std::stol(cmds[9]);
-    uint32_t cpuStart = std::stol(cmds[10]);
-    auto rw = cmds[11].c_str();
+    uint32_t bs = 0;
+    uint32_t ioDepth = 0;
+    uint32_t batchNum = 0;
+    uint64_t size = 0;
+    uint32_t numaNum = 0;
+    uint32_t cpuNum = 0;
+    uint32_t cpuStart = 0;
+    if (!ParsePerfParameters(cmds, 3, bs, ioDepth, batchNum, size, numaNum, cpuNum, cpuStart)) {
+        return false;
+    }
+    auto rw = cmds[10].c_str();
     auto count = size / bs / batchNum / ioDepth;
-    if (bs == 0 || batchNum == 0 || ioDepth == 0) {
-        cli_print_buffer("Invalid para, bs:%u, batchNum:%u, ioDepth:%u", bs, batchNum, ioDepth);
+    if (count == 0 || count > std::numeric_limits<uint32_t>::max()) {
+        cli_print_buffer("Invalid test round count:%llu, bs:%u, batchNum:%u, ioDepth:%u.\n",
+                         static_cast<unsigned long long>(count), bs, batchNum, ioDepth);
         return false;
     }
 
@@ -1137,27 +1263,39 @@ static bool HandlePerfCheckImpl(std::vector<std::string> cmds, std::unordered_ma
         return false;
     }
 
-    cli_print_buffer("Perf check test start, operate:%s, bs:%u, ioDepth:%u, batchNum:%u, size:%u, count:%u.\n", rw, bs,
-                 ioDepth, batchNum, size, count);
+    cli_print_buffer("Perf check test start, operate:%s, bs:%u, ioDepth:%u, batchNum:%u, size:%llu, count:%llu.\n",
+                     rw, bs, ioDepth, batchNum, static_cast<unsigned long long>(size),
+                     static_cast<unsigned long long>(count));
     pthread_t *th = (pthread_t *)malloc(sizeof(pthread_t) * ioDepth);
     PerfTestParam *param = (PerfTestParam *)malloc(sizeof(PerfTestParam) * ioDepth);
     CheckPara *checkParas = (CheckPara *) malloc(sizeof(CheckPara) * ioDepth);
     if (th == nullptr || param == nullptr || checkParas == nullptr) {
         cli_print_buffer("Malloc memory failed.\n");
+        free(checkParas);
+        free(param);
+        free(th);
         return false;
     }
 
     uint32_t index = 0;
     for (uint32_t i = 0; i < ioDepth; i++) {
         for (uint32_t j = 0; j < numaNum; j++) {
+            uint64_t cpu = static_cast<uint64_t>(cpuStart) + i + static_cast<uint64_t>(j) * cpuNum;
+            if (cpu >= CPU_SETSIZE) {
+                cli_print_buffer("Invalid CPU index:%llu, CPU_SETSIZE:%u.\n",
+                                 static_cast<unsigned long long>(cpu), CPU_SETSIZE);
+                free(checkParas);
+                free(param);
+                free(th);
+                return false;
+            }
             param[index].done = false;
-            param[index].usrId = userId;
             param[index].id = index;
-            param[index].cpu = cpuStart + i + j * cpuNum;
+            param[index].cpu = static_cast<uint32_t>(cpu);
             param[index].batchNum = batchNum;
             param[index].result = RET_MMS_OK;
             param[index].length = bs;
-            param[index].count = count;
+            param[index].count = static_cast<uint32_t>(count);
             index++;
             if (index == ioDepth) {
                 break;
@@ -1330,7 +1468,7 @@ static void MmsServerHandleShow(std::vector<std::string> cmds)
     std::string cmdType(cType);
     if (cmdType == "net") {
         if (cmds.size() != 2) {
-            cli_print_buffer("Input parameters failed!, num:%u.\n", cmds.size());
+            cli_print_buffer("Input parameters failed!, num:%zu.\n", cmds.size());
             return;
         }
         std::string protoStr[4U] = { "RDMA", "TCP", "UDS", "SHM" };
@@ -1352,7 +1490,7 @@ static void MmsServerHandleShow(std::vector<std::string> cmds)
         cli_print_buffer("mms rpc schedule threads:%u \n", executorNum);
     } else if (cmdType == "pt") {
         if (cmds.size() != 2) {
-            cli_print_buffer("Input parameters failed!, num:%u.\n", cmds.size());
+            cli_print_buffer("Input parameters failed!, num:%zu.\n", cmds.size());
             return;
         }
         std::map<uint16_t, CmPtInfo> ptView = MmsServer::Instance()->GetCm()->GetPtView();
@@ -1364,7 +1502,7 @@ static void MmsServerHandleShow(std::vector<std::string> cmds)
         cli_print_buffer("Local status  %d\n", status);
     } else if (cmdType == "node") {
         if (cmds.size() != 2) {
-            cli_print_buffer("Input parameters failed!, num:%u.\n", cmds.size());
+            cli_print_buffer("Input parameters failed!, num:%zu.\n", cmds.size());
             return;
         }
         std::map<uint16_t, CmNodeInfo> nodeView = MmsServer::Instance()->GetCm()->GetNodeView();
@@ -1382,8 +1520,34 @@ static void MmsServerHandleShow(std::vector<std::string> cmds)
         }
         std::string subsribersInfos = instance->GetMulticastInfoStr();
         cli_print_buffer(subsribersInfos.c_str());
+    } else if (cmdType == "client") {
+        auto infos = MmsServer::Instance()->GetClientIoCtxInfos();
+        auto stats = MmsServer::Instance()->GetClientIoCtxStats();
+        uint64_t averageCreateUs =
+            stats.createAttemptTotal == 0 ? 0 : stats.createLatencyTotalUs / stats.createAttemptTotal;
+        cli_print_buffer("Client IOCTX view, count:%u\n", static_cast<uint32_t>(infos.size()));
+        cli_print_buffer("Summary: active:%u creating:%u capacity:%llu peak_active:%u peak_capacity:%llu "
+                         "attempts:%llu created:%llu released:%llu failed:%llu waited:%llu create_avg_us:%llu "
+                         "create_max_us:%llu\n",
+                         stats.activeClients, stats.creatingClients,
+                         static_cast<unsigned long long>(stats.activeCapacity), stats.peakClients,
+                         static_cast<unsigned long long>(stats.peakCapacity),
+                         static_cast<unsigned long long>(stats.createAttemptTotal),
+                         static_cast<unsigned long long>(stats.createdTotal),
+                         static_cast<unsigned long long>(stats.releasedTotal),
+                         static_cast<unsigned long long>(stats.createFailedTotal),
+                         static_cast<unsigned long long>(stats.createWaitTotal),
+                         static_cast<unsigned long long>(averageCreateUs),
+                         static_cast<unsigned long long>(stats.createLatencyMaxUs));
+        cli_print_buffer("PID\tGENERATION\tSTATE\tSIZE\n");
+        for (const auto &info : infos) {
+            cli_print_buffer("%u\t%llu\t%u\t%llu\n", info.pid,
+                             static_cast<unsigned long long>(info.generation),
+                             static_cast<uint32_t>(info.state),
+                             static_cast<unsigned long long>(info.totalSize));
+        }
     } else {
-        cli_print_buffer("Input parameters failed!, num:%u.\n", cmds.size());
+        cli_print_buffer("Input parameters failed!, num:%zu.\n", cmds.size());
     }
 }
 
@@ -1408,20 +1572,20 @@ static void HandleServerTrace(std::vector<std::string> cmds)
     }
 }
 
-static void MmsServerDebugHelp(char *command, int detail) noexcept
+static void MmsServerDebugHelp(char *, int) noexcept
 {
-    cli_print_buffer("\tshow: mms show [node/pt/net/multicast]\n");
-    cli_print_buffer("\tput value: mms put [userId] [key] [filePath] [length]\n");
-    cli_print_buffer("\tget value: mms get [userId] [key] [offset] [length] [filePath]\n");
-    cli_print_buffer("\tupdate value: mms update [userId] [key] [filePath] [offset] [length]\n");
-    cli_print_buffer("\treplace value: mms replace [userId] [key] [filePath] [offset] [length]\n");
-    cli_print_buffer("\tdelete object: mms delete [userId] [key]\n");
+    cli_print_buffer("\tshow: mms show [node/pt/net/multicast/client]\n");
+    cli_print_buffer("\tput value: mms put [key] [filePath] [length]\n");
+    cli_print_buffer("\tget value: mms get [key] [offset] [length] [filePath]\n");
+    cli_print_buffer("\tupdate value: mms update [key] [filePath] [offset] [length]\n");
+    cli_print_buffer("\treplace value: mms replace [key] [filePath] [offset] [length]\n");
+    cli_print_buffer("\tdelete object: mms delete [key]\n");
     cli_print_buffer("\tcatchup: mms catchup\n");
     cli_print_buffer("\ttrace: mms trace [open/close/show/clear]\n");
     cli_print_buffer("\tnotify: mms notify [open/close]\n");
     cli_print_buffer("\tperf: mms perf [put/get/update/replace/delete/mixes] [bs(Kb)] [ioDepth] [batchNum] [size(Mb)] "
-                 "[userId] [numaNum] [cpuNum] [cpuStart] [readRate]\n");
-    cli_print_buffer("\tperf: mms perfcheck [lwrite/rwrite] [filePath] [bs(Kb)] [ioDepth] [batchNum] [size(Mb)] [userId] "
+                 "[numaNum] [cpuNum] [cpuStart] [readRate]\n");
+    cli_print_buffer("\tperf: mms perfcheck [lwrite/rwrite] [filePath] [bs(Kb)] [ioDepth] [batchNum] [size(Mb)] "
                  "[numaNum] [cpuNum] [cpuStart]\n");
     cli_print_buffer("\texit: exit console\n");
 }
@@ -1457,74 +1621,75 @@ static void MmsServerDebugProcess(int argc, char *argv[]) noexcept
 
     std::string cmdType = cmds[0];
     if (cmdType == "put") {
-        if (cmds.size() != 5) {
-            cli_print_buffer("Input parameters failed!, num:%u.\n", cmds.size());
+        if (cmds.size() != 4) {
+            cli_print_buffer("Input parameters failed!, num:%zu.\n", cmds.size());
             return;
         }
         HandlePut(cmds);
     } else if (cmdType == "catchup") {
         if (cmds.size() != 1) {
-            cli_print_buffer("Input parameters failed!, num:%u.\n", cmds.size());
+            cli_print_buffer("Input parameters failed!, num:%zu.\n", cmds.size());
             return;
         }
-        HandleCatchUp(cmds);
+        HandleCatchUp();
     } else if (cmdType == "get") {
-        if (cmds.size() != 6) {
-            cli_print_buffer("Input parameters failed!, num:%u.\n", cmds.size());
+        if (cmds.size() != 5) {
+            cli_print_buffer("Input parameters failed!, num:%zu.\n", cmds.size());
             return;
         }
         HandleGet(cmds);
     } else if (cmdType == "update") {
-        if (cmds.size() != 6) {
-            cli_print_buffer("Input parameters failed!, num:%u.\n", cmds.size());
+        if (cmds.size() != 5) {
+            cli_print_buffer("Input parameters failed!, num:%zu.\n", cmds.size());
             return;
         }
         HandleUpdate(cmds);
     } else if (cmdType == "replace") {
-        if (cmds.size() != 6) {
-            cli_print_buffer("Input parameters failed!, num:%u.\n", cmds.size());
+        if (cmds.size() != 5) {
+            cli_print_buffer("Input parameters failed!, num:%zu.\n", cmds.size());
             return;
         }
         HandleReplace(cmds);
     } else if (cmdType == "delete") {
-        if (cmds.size() != 3) {
-            cli_print_buffer("Input parameters failed!, num:%u.\n", cmds.size());
+        if (cmds.size() != 2) {
+            cli_print_buffer("Input parameters failed!, num:%zu.\n", cmds.size());
             return;
         }
         HandleDelete(cmds);
     } else if (cmdType == "show") {
         if (cmds.size() < 2) {
-            cli_print_buffer("Input parameters failed!, num:%d\n", cmds.size());
+            cli_print_buffer("Input parameters failed!, num:%zu\n", cmds.size());
             return;
         }
         MmsServerHandleShow(cmds);
     } else if (cmdType == "trace") {
         if (cmds.size() != 2) {
-            cli_print_buffer("Input parameters failed!, num:%d\n", cmds.size());
+            cli_print_buffer("Input parameters failed!, num:%zu\n", cmds.size());
             return;
         }
         HandleServerTrace(cmds);
     } else if (cmdType == "perf") {
-        if (cmds.size() < 10) {
-            cli_print_buffer("Input parameters failed!, num:%u\n", cmds.size());
+        bool validArgs = cmds.size() == 9 || (cmds.size() == 10 && cmds[1] == "mixes");
+        if (!validArgs) {
+            cli_print_buffer("Input parameters failed!, num:%zu\n", cmds.size());
             return;
         }
         HandlePerf(cmds);
     } else if (cmdType == "perfcheck") {
-        if (cmds.size() != 11) {
-            cli_print_buffer("Input parameters failed!, num:%u\n", cmds.size());
+        if (cmds.size() != 10) {
+            cli_print_buffer("Input parameters failed!, num:%zu\n", cmds.size());
             return;
         }
         HandlePerfCheck(cmds);
     } else if (cmdType == "set") {
         if (cmds.size() != 2) {
-            cli_print_buffer("Input parameters failed!, num:%u\n", cmds.size());
+            cli_print_buffer("Input parameters failed!, num:%zu\n", cmds.size());
             return;
         }
         HandleSet(cmds);
     } else if (cmdType == "notify") {
         if (cmds.size() != 2) {
-            cli_print_buffer("Input parameters failed!, num:%u\n", cmds.size());
+            cli_print_buffer("Input parameters failed!, num:%zu\n", cmds.size());
             return;
         }
         HandleNotify(cmds);
@@ -1533,9 +1698,4 @@ static void MmsServerDebugProcess(int argc, char *argv[]) noexcept
     } else {
         MmsServerDebugHelp(argv[0], 1);
     }
-}
-
-int ServerDiagnoseInit()
-{
-    return ock::mms::diagnose::MmsServerCommand::Initialize();
 }

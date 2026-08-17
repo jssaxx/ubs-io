@@ -90,11 +90,6 @@ public:
     BResult Start();
     void Stop();
 
-    inline void SetLocalNodeId(const uint32_t &nodeId)
-    {
-        mLocalNodeId = nodeId;
-    }
-
     BResult AsyncConnect(ConnectInfo &info, AsyncConnHandler &handler, uintptr_t ctx);
     BResult SyncConnect(ConnectInfo &info);
 
@@ -105,7 +100,6 @@ private:
 
     bool mStarted = false;
     ExecutorServicePtr mExeService = nullptr;
-    uint32_t mLocalNodeId = UINT32_MAX;
     NetEngine *mEngine = nullptr;
     std::mutex mMutex;
     std::string mName;

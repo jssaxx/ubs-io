@@ -38,10 +38,18 @@ public:
     inline uint16_t GetCurCPUNumaNode() const
     {
         int cpu = sched_getcpu();
-        if (cpu < 0 || cpu >= static_cast<int>(mCpuNum)) {
+        if (cpu < 0) {
             return 0;
         }
 
+        return GetCPUNumaNode(static_cast<uint32_t>(cpu));
+    }
+
+    inline uint16_t GetCPUNumaNode(uint32_t cpu) const
+    {
+        if (cpu >= mCpuNum) {
+            return 0;
+        }
         return mCpuToNumaMap[cpu];
     }
 
@@ -197,4 +205,3 @@ private:
 }
 
 #endif  // MMS_COMM_H
-

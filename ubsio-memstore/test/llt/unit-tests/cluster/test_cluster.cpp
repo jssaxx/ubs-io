@@ -11,7 +11,11 @@
  */
 
 #include <mockcpp/mockcpp.hpp>
+#include <algorithm>
+#include <array>
 #include <cstring>
+#include <string>
+#include <vector>
 #include "gtest/gtest.h"
 #include "mms_types.h"
 #include "cm.h"
@@ -37,6 +41,58 @@
 
 using namespace ock::mms;
 bool TestCluster::gSetup = false;
+
+namespace {
+class CmRouteStateGuard {
+public:
+    explicit CmRouteStateGuard(const CmPtr &cm)
+        : mCm(cm), mOptions(cm->mOptions), mNodeId(cm->mNodeId), mPtInfos(cm->mPtInfos),
+          mPtInfo(cm->mPtInfo), mPtViewVersion(cm->mPtViewVersion)
+    {}
+
+    ~CmRouteStateGuard()
+    {
+        mCm->mOptions = mOptions;
+        mCm->mNodeId = mNodeId;
+        mCm->mPtInfos = mPtInfos;
+        mCm->mPtInfo = mPtInfo;
+        mCm->mPtViewVersion = mPtViewVersion;
+    }
+
+private:
+    CmPtr mCm;
+    CmOptions mOptions;
+    uint16_t mNodeId;
+    std::map<uint16_t, CmPtInfo> mPtInfos;
+    CmPtInfo mPtInfo;
+    uint64_t mPtViewVersion;
+};
+
+std::string FindKeyForPt(uint16_t targetPt, uint16_t ptNum, uint32_t startIndex = 0)
+{
+    for (uint32_t index = startIndex; index < startIndex + 100000; ++index) {
+        std::string key = "route-key-" + std::to_string(index);
+        if (Cm::HashKeyToPt(key.data(), static_cast<uint16_t>(key.size()), ptNum) == targetPt) {
+            return key;
+        }
+    }
+    return {};
+}
+
+void SetPt(CmPtr &cm, uint16_t ptId, uint64_t version, uint16_t masterNodeId,
+           const std::vector<uint16_t> &copyNodeIds)
+{
+    CmPtInfo ptInfo;
+    ptInfo.ptId = ptId;
+    ptInfo.version = version;
+    ptInfo.state = CM_PT_NORMAL;
+    ptInfo.masterNodeId = masterNodeId;
+    for (uint16_t nodeId : copyNodeIds) {
+        ptInfo.copys.push_back({nodeId, CM_COPY_RUNNING});
+    }
+    cm->mPtInfos[ptId] = ptInfo;
+}
+}
 
 void TestCluster::SetUp()
 {
@@ -484,6 +540,21 @@ TEST_F(TestCluster, test_get_pt_info)
     cm->GetPtView();
 }
 
+TEST_F(TestCluster, test_get_pt_version_uses_global_view_version)
+{
+    auto cm = Cm::Instance();
+    uint64_t oldViewVersion = cm->mPtViewVersion;
+    uint64_t oldLocalVersion = cm->mPtInfo.version;
+
+    cm->mPtViewVersion = NO_10;
+    cm->mPtInfo.version = NO_2;
+    EXPECT_EQ(cm->GetPtVersion(), NO_10);
+    EXPECT_EQ(cm->GetLocalPtVersion(), NO_2);
+
+    cm->mPtViewVersion = oldViewVersion;
+    cm->mPtInfo.version = oldLocalVersion;
+}
+
 TEST_F(TestCluster, test_get_pt_info_return_err)
 {
     LOG_INFO("test_get_pt_info_return_err");
@@ -506,6 +577,143 @@ TEST_F(TestCluster, test_get_pt_info_not_normal)
 
     auto ret = cm->GetPtInfo(ptId, ptv, remoteIds, remoteNum);
     EXPECT_EQ(ret, MMS_OK);
+}
+
+TEST_F(TestCluster, test_get_pt_info_by_key_covers_local_and_remote_owner)
+{
+    auto cm = Cm::Instance();
+    CmRouteStateGuard guard(cm);
+
+    cm->mOptions.groups.maxPtNum = NO_4;
+    cm->mNodeId = NO_0;
+    cm->mPtInfos.clear();
+    for (uint16_t ptId = 0; ptId < NO_4; ++ptId) {
+        uint16_t ownerNid = ptId % NO_2;
+        SetPt(cm, ptId, NO_10 + ptId, ownerNid, {ownerNid});
+    }
+
+    std::string localKey = FindKeyForPt(NO_0, NO_4);
+    std::string remoteKey = FindKeyForPt(NO_1, NO_4);
+    ASSERT_FALSE(localKey.empty());
+    ASSERT_FALSE(remoteKey.empty());
+    uint16_t ptId = 0;
+    uint64_t ptv = 0;
+    uint16_t remoteIds[MAX_NODES_NUM] = {0};
+    uint16_t remoteNum = 0;
+    ASSERT_EQ(cm->GetPtInfoByKey(localKey.data(), static_cast<uint16_t>(localKey.size()), ptId, ptv,
+                                 remoteIds, remoteNum), MMS_OK);
+    EXPECT_EQ(ptId, NO_0);
+    EXPECT_EQ(remoteNum, NO_0);
+
+    ASSERT_EQ(cm->GetPtInfoByKey(remoteKey.data(), static_cast<uint16_t>(remoteKey.size()), ptId, ptv,
+                                 remoteIds, remoteNum), MMS_OK);
+    EXPECT_EQ(ptId, NO_1);
+    EXPECT_EQ(remoteNum, NO_1);
+    EXPECT_EQ(remoteIds[NO_0], NO_1);
+}
+
+TEST_F(TestCluster, test_hash_max_length_key_to_pt)
+{
+    std::array<char, MAX_KEY_LENGTH> key{};
+    for (size_t index = 0; index < key.size(); ++index) {
+        key[index] = static_cast<char>('a' + index % 26);
+    }
+
+    constexpr uint16_t ptNum = 128;
+    uint64_t expectedHash = 14695981039346656037ULL;
+    for (char value : key) {
+        expectedHash ^= static_cast<unsigned char>(value);
+        expectedHash *= 1099511628211ULL;
+    }
+
+    EXPECT_EQ(Cm::HashKeyToPt(key.data(), static_cast<uint16_t>(key.size()), ptNum), expectedHash % ptNum);
+    EXPECT_EQ(Cm::HashKeyToPt(key.data(), static_cast<uint16_t>(key.size() + NO_1), ptNum), 0);
+    EXPECT_EQ(Cm::HashKeyToPt(nullptr, NO_1, ptNum), 0);
+    EXPECT_EQ(Cm::HashKeyToPt(key.data(), 0, ptNum), 0);
+    EXPECT_EQ(Cm::HashKeyToPt(key.data(), NO_1, 0), 0);
+}
+
+TEST_F(TestCluster, test_hash_key_to_pt_is_deterministic_and_balanced)
+{
+    constexpr uint16_t ptNum = NO_16;
+    constexpr uint32_t keyNum = 65536;
+    std::array<uint32_t, ptNum> counts{};
+
+    const std::string fixedKey = "deterministic-key";
+    EXPECT_EQ(Cm::HashKeyToPt(fixedKey.data(), static_cast<uint16_t>(fixedKey.size()), ptNum),
+              Cm::HashKeyToPt(fixedKey.data(), static_cast<uint16_t>(fixedKey.size()), ptNum));
+
+    for (uint32_t index = 0; index < keyNum; ++index) {
+        std::string key = "distribution-key-" + std::to_string(index);
+        uint16_t ptId = Cm::HashKeyToPt(key.data(), static_cast<uint16_t>(key.size()), ptNum);
+        counts[ptId]++;
+    }
+
+    auto minmax = std::minmax_element(counts.begin(), counts.end());
+    EXPECT_GT(*minmax.first, 0U);
+    EXPECT_LT(*minmax.second - *minmax.first, keyNum / ptNum / NO_5);
+}
+
+TEST_F(TestCluster, test_natural_single_and_batch_routes_are_consistent)
+{
+    auto cm = Cm::Instance();
+    CmRouteStateGuard guard(cm);
+    constexpr uint16_t ptNum = NO_4;
+    constexpr uint64_t ptVersion = 100;
+    cm->mOptions.groups.maxPtNum = ptNum;
+    cm->mNodeId = NO_0;
+    cm->mPtViewVersion = ptVersion;
+    cm->mPtInfos.clear();
+    for (uint16_t ptId = 0; ptId < ptNum; ++ptId) {
+        SetPt(cm, ptId, ptVersion, ptId % NO_2, {static_cast<uint16_t>(ptId % NO_2)});
+    }
+
+    std::string pt0KeyA = FindKeyForPt(NO_0, ptNum);
+    std::string pt1Key = FindKeyForPt(NO_1, ptNum);
+    std::string pt0KeyB = FindKeyForPt(NO_0, ptNum, 100000);
+    ASSERT_FALSE(pt0KeyA.empty());
+    ASSERT_FALSE(pt1Key.empty());
+    ASSERT_FALSE(pt0KeyB.empty());
+    CmKeyRoute items[] = {
+        {pt0KeyA.data(), static_cast<uint16_t>(pt0KeyA.size())},
+        {pt1Key.data(), static_cast<uint16_t>(pt1Key.size())},
+        {pt0KeyB.data(), static_cast<uint16_t>(pt0KeyB.size())},
+    };
+    uint16_t ptIds[NO_3] = {};
+    ASSERT_EQ(cm->ResolveBatchPtIds(items, NO_3, ptIds), MMS_OK);
+    for (uint16_t index = 0; index < NO_3; ++index) {
+        EXPECT_EQ(ptIds[index], Cm::HashKeyToPt(items[index].key, items[index].keyLen, ptNum));
+    }
+
+    struct GenericRouteItem {
+        const char *key;
+        uint16_t keyLen;
+        uint16_t reserved;
+    } genericItems[] = {
+        {items[NO_0].key, items[NO_0].keyLen, 0},
+        {items[NO_1].key, items[NO_1].keyLen, 0},
+    };
+    EXPECT_EQ(cm->ResolveBatchPtIdsFromItems(genericItems, NO_2, ptIds), MMS_OK);
+
+    CmKeyRoute ownerItems[] = {items[NO_0], items[NO_2]};
+    EXPECT_EQ(cm->ValidateBatchOwner(ownerItems, NO_2, ptVersion, NO_0), MMS_OK);
+    GenericRouteItem genericOwnerItems[] = {
+        {items[NO_0].key, items[NO_0].keyLen, 0},
+        {items[NO_2].key, items[NO_2].keyLen, 0},
+    };
+    EXPECT_EQ(cm->ValidateBatchOwnerItems(genericOwnerItems, NO_2, ptVersion, NO_0), MMS_OK);
+    EXPECT_EQ(cm->ValidateBatchOwner(ownerItems, NO_2, ptVersion, NO_1), MMS_NEED_UPDATE_PT_VERSION);
+    EXPECT_EQ(cm->ValidateBatchOwner(ownerItems, NO_2, ptVersion - NO_1, NO_0), MMS_NEED_UPDATE_PT_VERSION);
+    EXPECT_EQ(cm->ResolveBatchPtIds(nullptr, NO_2, ptIds), MMS_INVALID_PARAM);
+    EXPECT_EQ(cm->ResolveBatchPtIds(items, 0, ptIds), MMS_INVALID_PARAM);
+
+    CmKeyRoute emptyKey = {"", 0};
+    std::array<char, MAX_KEY_LENGTH + NO_1> longKey{};
+    CmKeyRoute overlongKey = {longKey.data(), static_cast<uint16_t>(longKey.size())};
+    EXPECT_EQ(cm->ResolveBatchPtIds(&emptyKey, NO_1, ptIds), MMS_INVALID_PARAM);
+    EXPECT_EQ(cm->ResolveBatchPtIds(&overlongKey, NO_1, ptIds), MMS_INVALID_PARAM);
+    EXPECT_EQ(cm->ValidateBatchOwner(nullptr, NO_1, ptVersion, NO_0), MMS_INVALID_PARAM);
+    EXPECT_EQ(cm->ValidateBatchOwner(items, 0, ptVersion, NO_0), MMS_INVALID_PARAM);
 }
 
 TEST_F(TestCluster, test_update_pt_state)

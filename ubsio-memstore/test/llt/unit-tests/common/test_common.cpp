@@ -14,6 +14,7 @@
 #include "mms_log.h"
 #include "mms_comm.h"
 #include "mms_crc_util.h"
+#include "mms_message.h"
 #include "mms_sequence.h"
 
 using namespace ock::mms;
@@ -94,4 +95,65 @@ TEST_F(TestCommon, test_sequence)
     EXPECT_EQ(ret, MMS_OK);
     free(data1);
     free(data);
+}
+
+TEST_F(TestCommon, test_decode_request_layout_validation)
+{
+    UpdateCrcSwitch(false);
+    constexpr uint32_t keyLen = NO_3;
+    constexpr uint32_t encodedKeyLen = keyLen + NO_1;
+    constexpr uint32_t valueLen = NO_3;
+    uint64_t requestLen = sizeof(IoDataRequest) + sizeof(IoLocDesc) + encodedKeyLen + valueLen;
+    std::vector<uint8_t> request(requestLen, 0);
+    auto *req = reinterpret_cast<IoDataRequest *>(request.data());
+    req->num = NO_1;
+    auto *desc = reinterpret_cast<IoLocDesc *>(request.data() + sizeof(IoDataRequest));
+    desc->keyLen = encodedKeyLen;
+    desc->valueLen = valueLen;
+    auto *key = reinterpret_cast<char *>(desc + NO_1);
+    ASSERT_EQ(memcpy_s(key, encodedKeyLen, "key", keyLen), EOK);
+    key[keyLen] = '\0';
+    auto *value = key + encodedKeyLen;
+    ASSERT_EQ(memcpy_s(value, valueLen, "val", valueLen), EOK);
+
+    uint32_t itemNum = 0;
+    std::vector<DecodePutItem> putItems(NO_1);
+    EXPECT_EQ(DeCodePutRequest(putItems, itemNum, reinterpret_cast<uint64_t>(request.data()), request.size()), MMS_OK);
+    ASSERT_EQ(itemNum, NO_1);
+    EXPECT_EQ(putItems[NO_0].keyLen, keyLen);
+    EXPECT_EQ(putItems[NO_0].valueLen, valueLen);
+
+    std::vector<DecodeUpdateItem> updateItems(NO_1);
+    EXPECT_EQ(DeCodeUpdateRequest(updateItems, itemNum, reinterpret_cast<uint64_t>(request.data()), request.size()),
+              MMS_OK);
+    EXPECT_EQ(DeCodeReplaceRequest(updateItems, itemNum, reinterpret_cast<uint64_t>(request.data()), request.size()),
+              MMS_OK);
+
+    EXPECT_EQ(DeCodePutRequest(putItems, itemNum, reinterpret_cast<uint64_t>(request.data()), request.size() - NO_1),
+              MMS_INVALID_PARAM);
+    desc->keyLen = 0;
+    EXPECT_EQ(DeCodePutRequest(putItems, itemNum, reinterpret_cast<uint64_t>(request.data()), request.size()),
+              MMS_INVALID_PARAM);
+    desc->keyLen = encodedKeyLen;
+    key[keyLen] = 'x';
+    EXPECT_EQ(DeCodePutRequest(putItems, itemNum, reinterpret_cast<uint64_t>(request.data()), request.size()),
+              MMS_INVALID_PARAM);
+    key[keyLen] = '\0';
+    EXPECT_EQ(DeCodePutRequest(putItems, itemNum, 0, 0), MMS_INVALID_PARAM);
+
+    uint64_t deleteLen = sizeof(IoDataRequest) + sizeof(IoLocDesc) + encodedKeyLen;
+    std::vector<uint8_t> deleteRequest(deleteLen, 0);
+    auto *deleteReq = reinterpret_cast<IoDataRequest *>(deleteRequest.data());
+    deleteReq->num = NO_1;
+    auto *deleteDesc = reinterpret_cast<IoLocDesc *>(deleteRequest.data() + sizeof(IoDataRequest));
+    deleteDesc->keyLen = encodedKeyLen;
+    auto *deleteKey = reinterpret_cast<char *>(deleteDesc + NO_1);
+    ASSERT_EQ(memcpy_s(deleteKey, encodedKeyLen, "key", keyLen), EOK);
+    deleteKey[keyLen] = '\0';
+    std::vector<DecodeDeleteItem> deleteItems(NO_1);
+    EXPECT_EQ(DeCodeDeleteRequest(deleteItems, itemNum, reinterpret_cast<uint64_t>(deleteRequest.data()),
+                                  deleteRequest.size()), MMS_OK);
+    deleteDesc->valueLen = NO_1;
+    EXPECT_EQ(DeCodeDeleteRequest(deleteItems, itemNum, reinterpret_cast<uint64_t>(deleteRequest.data()),
+                                  deleteRequest.size()), MMS_INVALID_PARAM);
 }
