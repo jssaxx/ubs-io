@@ -82,6 +82,8 @@ public:
         return mTruncateOffset;
     }
 
+    uint64_t GetAllocatedLen();
+
     inline void SetWrittenOffset(uint64_t writtenOffset)
     {
         mWritenOffset = writtenOffset;

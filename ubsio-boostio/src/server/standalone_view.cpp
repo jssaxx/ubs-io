@@ -11,7 +11,13 @@
  */
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
+#include <limits>
+#include <sstream>
+#include <string>
+#include <system_error>
+#include <utility>
 #include <vector>
 #include "bdm_core.h"
 #include "bio_log.h"
@@ -22,6 +28,36 @@ namespace bio {
 namespace {
 constexpr uint16_t STANDALONE_NODE_ID = 0;
 constexpr uint64_t STANDALONE_PT_VERSION = 1;
+
+std::string FormatPtView(const StandaloneView::PtView &ptView)
+{
+    std::ostringstream oss;
+    oss << "{\"ptCount\":" << ptView.size() << ",\"ptEntries\":[";
+    bool firstPt = true;
+    for (const auto &ptEntry : ptView) {
+        if (!firstPt) {
+            oss << ",";
+        }
+        firstPt = false;
+
+        const CmPtInfo &pt = ptEntry.second;
+        oss << "{\"mapPtId\":" << ptEntry.first << ",\"ptInfo\":{"
+            << "\"version\":" << pt.version << ",\"referNum\":" << pt.referNum << ",\"ptId\":" << pt.ptId
+            << ",\"state\":" << pt.state << ",\"masterNodeId\":" << pt.masterNodeId
+            << ",\"masterDiskId\":" << pt.masterDiskId << ",\"copys\":[";
+        for (uint32_t index = 0; index < pt.copys.size(); ++index) {
+            if (index != 0) {
+                oss << ",";
+            }
+            const CmPtCopy &copy = pt.copys[index];
+            oss << "{\"nodeId\":" << copy.nodeId << ",\"diskId\":" << copy.diskId << ",\"state\":"
+                << copy.state << "}";
+        }
+        oss << "]}}";
+    }
+    oss << "]}";
+    return oss.str();
+}
 
 CmDiskStatus ToCmDiskStatus(uint16_t diskId)
 {
@@ -70,6 +106,41 @@ BResult BuildPtDiskMap(const std::vector<int64_t> &diskCaps, uint32_t diskNum, u
         return BIO_ERR;
     }
 
+    return BIO_OK;
+}
+
+BResult ComputePtTargetDistribution(const std::vector<uint16_t> &diskIds, const std::vector<int64_t> &diskCaps,
+    uint32_t ptNum, std::map<uint16_t, uint32_t> &targetPtCount)
+{
+    long double totalCapacity = 0;
+    for (uint16_t diskId : diskIds) {
+        if (diskId >= diskCaps.size() || diskCaps[diskId] <= 0) {
+            LOG_ERROR("Invalid standalone add disk capacity, diskId:" << diskId << ", diskCapNum:" <<
+                diskCaps.size() << ".");
+            return BIO_INVALID_PARAM;
+        }
+        totalCapacity += static_cast<long double>(diskCaps[diskId]);
+    }
+
+    std::vector<std::pair<long double, uint16_t>> remainders;
+    uint32_t assignedPtNum = 0;
+    for (uint16_t diskId : diskIds) {
+        long double ideal = static_cast<long double>(diskCaps[diskId]) * ptNum / totalCapacity;
+        uint32_t target = static_cast<uint32_t>(ideal);
+        targetPtCount[diskId] = target;
+        assignedPtNum += target;
+        remainders.emplace_back(ideal - target, diskId);
+    }
+    std::sort(remainders.begin(), remainders.end(), [](const std::pair<long double, uint16_t> &left,
+        const std::pair<long double, uint16_t> &right) {
+        if (left.first != right.first) {
+            return left.first > right.first;
+        }
+        return left.second < right.second;
+    });
+    for (uint32_t index = 0; assignedPtNum < ptNum; ++index, ++assignedPtNum) {
+        ++targetPtCount[remainders[index].second];
+    }
     return BIO_OK;
 }
 }
@@ -136,6 +207,505 @@ BResult StandaloneView::Build(const BioConfigPtr &config, CmNodeId &localNid, No
 
     LOG_INFO("Standalone view build success, nodeId:" << localNid.VNodeId() << ", ptNum:" << ptView.size() <<
         ", diskNum:" << diskNum << ".");
+    return BIO_OK;
+}
+
+StandaloneView::~StandaloneView()
+{
+    Stop();
+}
+
+BResult StandaloneView::Start(uint32_t diskNum, FaultHandler handler)
+{
+    if (diskNum == 0 || handler == nullptr) {
+        LOG_ERROR("Start standalone fault worker with invalid input, diskNum:" << diskNum << ".");
+        return BIO_INVALID_PARAM;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(mFaultMutex);
+        if (mRunning) {
+            return BIO_OK;
+        }
+        mDiskStates.assign(diskNum, DiskState::NORMAL);
+        for (uint16_t diskId = 0; diskId < diskNum; ++diskId) {
+            if (BdmGetDiskStatus(diskId) != BDM_DISK_STATE_NORMAL) {
+                mDiskStates[diskId] = DiskState::FAULT_PENDING;
+            }
+        }
+        mFaultHandler = std::move(handler);
+        mRunning = true;
+    }
+
+    BdmRegisterDiskFaultHandler(HandleDiskFault, this);
+    try {
+        mFaultThread = std::thread(&StandaloneView::FaultWorker, this);
+    } catch (const std::system_error &error) {
+        BdmRegisterDiskFaultHandler(nullptr, nullptr);
+        std::lock_guard<std::mutex> lock(mFaultMutex);
+        mRunning = false;
+        mFaultHandler = nullptr;
+        LOG_ERROR("Start standalone fault worker failed, error:" << error.what() << ".");
+        return BIO_ERR;
+    }
+    mFaultCv.notify_one();
+    return BIO_OK;
+}
+
+void StandaloneView::Stop()
+{
+    BdmRegisterDiskFaultHandler(nullptr, nullptr);
+    {
+        std::lock_guard<std::mutex> lock(mFaultMutex);
+        if (!mRunning) {
+            return;
+        }
+        mRunning = false;
+    }
+    mFaultCv.notify_all();
+    if (mFaultThread.joinable()) {
+        mFaultThread.join();
+    }
+    std::lock_guard<std::mutex> lock(mFaultMutex);
+    mFaultHandler = nullptr;
+}
+
+int32_t StandaloneView::HandleDiskFault(uint16_t diskId, void *context)
+{
+    if (context == nullptr) {
+        return BIO_INVALID_PARAM;
+    }
+    return static_cast<StandaloneView *>(context)->ReportDiskFault(diskId);
+}
+
+int32_t StandaloneView::ReportDiskFault(uint16_t diskId)
+{
+    {
+        std::lock_guard<std::mutex> lock(mFaultMutex);
+        if (!mRunning) {
+            return BIO_OK;
+        }
+        if (diskId >= mDiskStates.size()) {
+            LOG_ERROR("Report invalid standalone fault disk, diskId:" << diskId << ", diskNum:" <<
+                mDiskStates.size() << ".");
+            return BIO_INVALID_PARAM;
+        }
+        if (mDiskStates[diskId] != DiskState::NORMAL) {
+            LOG_INFO("Ignore repeated standalone disk fault, diskId:" << diskId << ".");
+            return BIO_OK;
+        }
+        mDiskStates[diskId] = DiskState::FAULT_PENDING;
+    }
+    mFaultCv.notify_one();
+    return BIO_OK;
+}
+
+bool StandaloneView::HasPendingFaultLocked() const
+{
+    return std::find(mDiskStates.begin(), mDiskStates.end(), DiskState::FAULT_PENDING) != mDiskStates.end();
+}
+
+void StandaloneView::FaultWorker()
+{
+    bool running = true;
+    while (running) {
+        std::vector<uint16_t> pendingDisks;
+        FaultHandler handler;
+        {
+            std::unique_lock<std::mutex> lock(mFaultMutex);
+            mFaultCv.wait(lock, [this]() { return !mRunning || HasPendingFaultLocked(); });
+            running = mRunning;
+            if (!running) {
+                continue;
+            }
+            for (uint16_t diskId = 0; diskId < mDiskStates.size(); ++diskId) {
+                if (mDiskStates[diskId] == DiskState::FAULT_PENDING) {
+                    pendingDisks.push_back(diskId);
+                }
+            }
+            handler = mFaultHandler;
+        }
+
+        bool needRetry = false;
+        for (uint16_t diskId : pendingDisks) {
+            BResult ret = handler == nullptr ? BIO_ERR : handler(diskId);
+            std::lock_guard<std::mutex> lock(mFaultMutex);
+            if (ret == BIO_OK) {
+                mDiskStates[diskId] = DiskState::FAULT_HANDLED;
+                LOG_INFO("Handle standalone disk fault success, diskId:" << diskId << ".");
+            } else {
+                needRetry = true;
+                LOG_ERROR("Handle standalone disk fault failed, diskId:" << diskId << ", ret:" << ret << ".");
+            }
+        }
+        if (needRetry) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+}
+
+bool StandaloneView::IsDiskFault(uint16_t diskId) const
+{
+    std::lock_guard<std::mutex> lock(mFaultMutex);
+    return diskId < mDiskStates.size() && mDiskStates[diskId] != DiskState::NORMAL;
+}
+
+BResult StandaloneView::CheckDiskRecoverable(uint16_t diskId) const
+{
+    std::lock_guard<std::mutex> lock(mFaultMutex);
+    if (diskId >= mDiskStates.size()) {
+        LOG_ERROR("Check recoverable disk with invalid id, diskId:" << diskId << ", diskNum:" <<
+            mDiskStates.size() << ".");
+        return BIO_INVALID_PARAM;
+    }
+    if (mDiskStates[diskId] == DiskState::FAULT_PENDING) {
+        LOG_INFO("Standalone disk fault is still being handled, diskId:" << diskId << ".");
+        return BIO_INNER_RETRY;
+    }
+    return BIO_OK;
+}
+
+BResult StandaloneView::MarkDiskRecovered(uint16_t diskId)
+{
+    std::lock_guard<std::mutex> lock(mFaultMutex);
+    if (diskId >= mDiskStates.size()) {
+        LOG_ERROR("Recover standalone disk with invalid id, diskId:" << diskId << ", diskNum:" <<
+            mDiskStates.size() << ".");
+        return BIO_INVALID_PARAM;
+    }
+    if (mDiskStates[diskId] == DiskState::FAULT_PENDING) {
+        LOG_INFO("Standalone disk fault is still being handled, diskId:" << diskId << ".");
+        return BIO_INNER_RETRY;
+    }
+    mDiskStates[diskId] = DiskState::NORMAL;
+    LOG_INFO("Mark standalone disk recovered, diskId:" << diskId << ".");
+    return BIO_OK;
+}
+
+BResult StandaloneView::TrackDisk(uint16_t diskId)
+{
+    std::lock_guard<std::mutex> lock(mFaultMutex);
+    if (diskId != mDiskStates.size()) {
+        LOG_ERROR("Register standalone disk with non-contiguous id, diskId:" << diskId << ", diskNum:" <<
+            mDiskStates.size() << ".");
+        return BIO_INVALID_PARAM;
+    }
+    mDiskStates.emplace_back(DiskState::NORMAL);
+    return BIO_OK;
+}
+
+BResult StandaloneView::UntrackDisk(uint16_t diskId)
+{
+    std::lock_guard<std::mutex> lock(mFaultMutex);
+    if (diskId + 1 != mDiskStates.size()) {
+        LOG_ERROR("Unregister standalone disk with non-last id, diskId:" << diskId << ", diskNum:" <<
+            mDiskStates.size() << ".");
+        return BIO_INVALID_PARAM;
+    }
+    mDiskStates.pop_back();
+    return BIO_OK;
+}
+
+BResult StandaloneView::FailoverDisk(uint16_t failedDiskId, const CmNodeId &localNid, NodeView &nodeView,
+    PtView &ptView, std::vector<std::pair<uint16_t, uint64_t>> &changedPts)
+{
+    changedPts.clear();
+    auto nodeIter = nodeView.find(localNid);
+    if (nodeIter == nodeView.end()) {
+        LOG_ERROR("Standalone local node is missing when handling disk fault, diskId:" << failedDiskId << ".");
+        return BIO_ERR;
+    }
+
+    bool foundFailedDisk = false;
+    std::vector<uint16_t> healthyDisks;
+    for (auto &disk : nodeIter->second.disks) {
+        if (disk.diskId == failedDiskId) {
+            disk.diskStatus = CM_DISK_FAULT;
+            foundFailedDisk = true;
+        }
+        if (disk.diskStatus == CM_DISK_NORMAL && !IsDiskFault(disk.diskId)) {
+            healthyDisks.push_back(disk.diskId);
+        }
+    }
+    if (!foundFailedDisk) {
+        LOG_ERROR("Standalone fault disk is missing from node view, diskId:" << failedDiskId << ".");
+        return BIO_INVALID_PARAM;
+    }
+    LOG_INFO("Standalone pt view before disk fault rebuild, diskId:" << failedDiskId << ", ptView:" <<
+        FormatPtView(ptView) << ".");
+
+    std::map<uint16_t, uint32_t> assignedPtCount;
+    for (uint16_t diskId : healthyDisks) {
+        assignedPtCount.emplace(diskId, 0);
+    }
+    for (const auto &ptEntry : ptView) {
+        auto countIter = assignedPtCount.find(ptEntry.second.masterDiskId);
+        if (countIter != assignedPtCount.end()) {
+            ++countIter->second;
+        }
+    }
+
+    uint32_t changedPtCount = 0;
+    for (auto &ptEntry : ptView) {
+        CmPtInfo &pt = ptEntry.second;
+        if (pt.masterDiskId != failedDiskId || pt.state == CM_PT_FAULT) {
+            continue;
+        }
+
+        ++pt.version;
+        ++changedPtCount;
+        changedPts.emplace_back(ptEntry.first, pt.version);
+        if (healthyDisks.empty()) {
+            pt.state = CM_PT_FAULT;
+            pt.copys.clear();
+            pt.copys.push_back({ localNid.VNodeId(), failedDiskId, CM_COPY_DOWN });
+            continue;
+        }
+
+        uint16_t targetDiskId = healthyDisks.front();
+        uint32_t minPtCount = std::numeric_limits<uint32_t>::max();
+        for (uint16_t diskId : healthyDisks) {
+            uint32_t ptCount = assignedPtCount[diskId];
+            if (ptCount < minPtCount || (ptCount == minPtCount && diskId < targetDiskId)) {
+                minPtCount = ptCount;
+                targetDiskId = diskId;
+            }
+        }
+        ++assignedPtCount[targetDiskId];
+        pt.state = CM_PT_NORMAL;
+        pt.masterNodeId = localNid.VNodeId();
+        pt.masterDiskId = targetDiskId;
+        pt.copys.clear();
+        pt.copys.push_back({ localNid.VNodeId(), targetDiskId, CM_COPY_RUNNING });
+    }
+
+    LOG_INFO("Standalone pt view after disk fault rebuild, diskId:" << failedDiskId << ", ptView:" <<
+        FormatPtView(ptView) << ".");
+    LOG_INFO("Rebuild standalone view for disk fault, diskId:" << failedDiskId << ", changedPtCount:" <<
+        changedPtCount << ", healthyDiskCount:" << healthyDisks.size() << ".");
+    return BIO_OK;
+}
+
+BResult StandaloneView::AddDisk(uint16_t diskId, int64_t diskCapacity,
+    const std::vector<int64_t> &currentDiskCaps, const CmNodeId &localNid, NodeView &nodeView, PtView &ptView,
+    std::vector<CmPtInfo> &changedPts)
+{
+    changedPts.clear();
+    auto nodeIter = nodeView.find(localNid);
+    if (nodeIter == nodeView.end() || ptView.empty() || diskCapacity <= 0) {
+        LOG_ERROR("Invalid standalone add disk view, diskId:" << diskId << ", capacity:" << diskCapacity << ".");
+        return BIO_INVALID_PARAM;
+    }
+    for (const auto &disk : nodeIter->second.disks) {
+        if (disk.diskId == diskId) {
+            return BIO_EXISTS;
+        }
+    }
+
+    std::vector<int64_t> diskCaps = currentDiskCaps;
+    if (diskId != diskCaps.size()) {
+        LOG_ERROR("Standalone add disk id is not contiguous, diskId:" << diskId << ", diskCapNum:" <<
+            diskCaps.size() << ".");
+        return BIO_INVALID_PARAM;
+    }
+    diskCaps.emplace_back(diskCapacity);
+    nodeIter->second.disks.push_back({ diskId, CM_DISK_NORMAL });
+
+    std::vector<uint16_t> normalDisks;
+    for (const auto &disk : nodeIter->second.disks) {
+        if (disk.diskStatus == CM_DISK_NORMAL && (disk.diskId == diskId || !IsDiskFault(disk.diskId))) {
+            normalDisks.push_back(disk.diskId);
+        }
+    }
+    std::map<uint16_t, uint32_t> targetPtCount;
+    BResult ret = ComputePtTargetDistribution(normalDisks, diskCaps, static_cast<uint32_t>(ptView.size()), targetPtCount);
+    if (ret != BIO_OK) {
+        return ret;
+    }
+
+    std::map<uint16_t, std::vector<uint16_t>> ptsByDisk;
+    for (const auto &ptEntry : ptView) {
+        ptsByDisk[ptEntry.second.masterDiskId].push_back(ptEntry.first);
+    }
+    uint32_t needMove = targetPtCount[diskId];
+    std::vector<uint16_t> changedPtIds;
+    for (const auto &diskPts : ptsByDisk) {
+        if (diskPts.first == diskId || changedPtIds.size() >= needMove) {
+            continue;
+        }
+        uint32_t target = targetPtCount.count(diskPts.first) == 0 ? 0 : targetPtCount[diskPts.first];
+        uint32_t surplus = diskPts.second.size() > target ? diskPts.second.size() - target : 0;
+        for (uint16_t ptId : diskPts.second) {
+            if (surplus == 0 || changedPtIds.size() >= needMove) {
+                break;
+            }
+            if (ptView[ptId].version == std::numeric_limits<uint64_t>::max()) {
+                LOG_ERROR("Standalone pt version overflow, ptId:" << ptId << ".");
+                return BIO_ERR;
+            }
+            changedPtIds.push_back(ptId);
+            --surplus;
+        }
+    }
+    if (changedPtIds.size() != needMove) {
+        LOG_ERROR("Standalone add disk cannot reach target, diskId:" << diskId << ", target:" << needMove <<
+            ", changed:" << changedPtIds.size() << ".");
+        return BIO_ERR;
+    }
+
+    LOG_INFO("Standalone pt view before add disk rebuild, diskId:" << diskId << ", ptView:" <<
+        FormatPtView(ptView) << ".");
+    for (uint16_t ptId : changedPtIds) {
+        CmPtInfo &pt = ptView[ptId];
+        changedPts.push_back(pt);
+        ++pt.version;
+        pt.state = CM_PT_NORMAL;
+        pt.masterNodeId = localNid.VNodeId();
+        pt.masterDiskId = diskId;
+        pt.copys.clear();
+        pt.copys.push_back({ localNid.VNodeId(), diskId, CM_COPY_RUNNING });
+    }
+    LOG_INFO("Standalone pt view after add disk rebuild, diskId:" << diskId << ", ptView:" <<
+        FormatPtView(ptView) << ".");
+    LOG_INFO("Rebuild standalone view for add disk, diskId:" << diskId << ", changedPtCount:" <<
+        changedPtIds.size() << ", targetPtCount:" << needMove << ".");
+    return BIO_OK;
+}
+
+BResult StandaloneView::RejoinDisk(uint16_t diskId, const std::vector<int64_t> &currentDiskCaps,
+    const CmNodeId &localNid, NodeView &nodeView, PtView &ptView, std::vector<CmPtInfo> &changedPts)
+{
+    changedPts.clear();
+    auto nodeIter = nodeView.find(localNid);
+    if (nodeIter == nodeView.end() || ptView.empty()) {
+        LOG_ERROR("Invalid standalone rejoin disk view, diskId:" << diskId << ".");
+        return BIO_INVALID_PARAM;
+    }
+    if (diskId >= currentDiskCaps.size() || currentDiskCaps[diskId] <= 0) {
+        LOG_ERROR("Invalid standalone rejoin disk capacity, diskId:" << diskId << ", diskCapNum:" <<
+            currentDiskCaps.size() << ".");
+        return BIO_INVALID_PARAM;
+    }
+
+    bool foundDisk = false;
+    for (auto &disk : nodeIter->second.disks) {
+        if (disk.diskId != diskId) {
+            continue;
+        }
+        foundDisk = true;
+        if (disk.diskStatus == CM_DISK_NORMAL) {
+            return BIO_EXISTS;
+        }
+        if (disk.diskStatus != CM_DISK_FAULT) {
+            LOG_ERROR("Standalone rejoin disk with invalid status, diskId:" << diskId << ", status:" <<
+                disk.diskStatus << ".");
+            return BIO_INVALID_PARAM;
+        }
+        disk.diskStatus = CM_DISK_NORMAL;
+    }
+    if (!foundDisk) {
+        LOG_ERROR("Standalone rejoin disk is missing from node view, diskId:" << diskId << ".");
+        return BIO_INVALID_PARAM;
+    }
+
+    // A faulted disk owns no usable PTs: after failover its NORMAL PTs were
+    // moved away, and the only entries that can still point at it are the
+    // PT_FAULT copies left by an all-disk fault. Those are not repaired in
+    // place; they are re-assigned below through the same migration path as
+    // every other PT: version++, NORMAL, copy RUNNING.
+    std::vector<uint16_t> normalDisks;
+    for (const auto &disk : nodeIter->second.disks) {
+        if (disk.diskStatus == CM_DISK_NORMAL && (disk.diskId == diskId || !IsDiskFault(disk.diskId))) {
+            normalDisks.push_back(disk.diskId);
+        }
+    }
+
+    // Reuse the add-disk PT assignment unchanged. Every PT participates in the
+    // target calculation, and disks that are not in the healthy set have
+    // target 0, so their PTs (including PT_FAULT left on another failed disk)
+    // become donors and are repaired onto the rejoined disk. This keeps any
+    // rejoin order convergent to the same capacity-based distribution.
+    std::map<uint16_t, std::vector<uint16_t>> ptsByDisk;
+    for (const auto &ptEntry : ptView) {
+        ptsByDisk[ptEntry.second.masterDiskId].push_back(ptEntry.first);
+    }
+
+    std::map<uint16_t, uint32_t> targetPtCount;
+    BResult ret = ComputePtTargetDistribution(normalDisks, currentDiskCaps, static_cast<uint32_t>(ptView.size()),
+        targetPtCount);
+    if (ret != BIO_OK) {
+        return ret;
+    }
+
+    // Only NORMAL PTs already on this disk count as usable; PT_FAULT entries
+    // whose masterDiskId still points at it are failed copies and must be
+    // re-assigned below like any other PT.
+    uint32_t currentPtCount = 0;
+    for (uint16_t ptId : ptsByDisk[diskId]) {
+        if (ptView[ptId].state == CM_PT_NORMAL) {
+            ++currentPtCount;
+        }
+    }
+    uint32_t needMove = targetPtCount[diskId] > currentPtCount ? targetPtCount[diskId] - currentPtCount : 0;
+    std::vector<uint16_t> changedPtIds;
+    for (const auto &diskPts : ptsByDisk) {
+        if (changedPtIds.size() >= needMove) {
+            break;
+        }
+        if (diskPts.first == diskId) {
+            // Writable PTs on this disk stay; its failed PTs go through the
+            // same reassignment path as donors on other disks.
+            for (uint16_t ptId : diskPts.second) {
+                if (changedPtIds.size() >= needMove) {
+                    break;
+                }
+                if (ptView[ptId].state == CM_PT_NORMAL) {
+                    continue;
+                }
+                if (ptView[ptId].version == std::numeric_limits<uint64_t>::max()) {
+                    LOG_ERROR("Standalone pt version overflow, ptId:" << ptId << ".");
+                    return BIO_ERR;
+                }
+                changedPtIds.push_back(ptId);
+            }
+            continue;
+        }
+        uint32_t target = targetPtCount.count(diskPts.first) == 0 ? 0 : targetPtCount[diskPts.first];
+        uint32_t surplus = diskPts.second.size() > target ? diskPts.second.size() - target : 0;
+        for (uint16_t ptId : diskPts.second) {
+            if (surplus == 0 || changedPtIds.size() >= needMove) {
+                break;
+            }
+            if (ptView[ptId].version == std::numeric_limits<uint64_t>::max()) {
+                LOG_ERROR("Standalone pt version overflow, ptId:" << ptId << ".");
+                return BIO_ERR;
+            }
+            changedPtIds.push_back(ptId);
+            --surplus;
+        }
+    }
+    if (changedPtIds.size() != needMove) {
+        LOG_ERROR("Standalone rejoin disk cannot reach target, diskId:" << diskId << ", target:" << needMove <<
+            ", changed:" << changedPtIds.size() << ".");
+        return BIO_ERR;
+    }
+
+    LOG_INFO("Standalone pt view before rejoin disk rebuild, diskId:" << diskId << ", ptView:" <<
+        FormatPtView(ptView) << ".");
+    for (uint16_t ptId : changedPtIds) {
+        CmPtInfo &pt = ptView[ptId];
+        changedPts.push_back(pt);
+        ++pt.version;
+        pt.state = CM_PT_NORMAL;
+        pt.masterNodeId = localNid.VNodeId();
+        pt.masterDiskId = diskId;
+        pt.copys.clear();
+        pt.copys.push_back({ localNid.VNodeId(), diskId, CM_COPY_RUNNING });
+    }
+    LOG_INFO("Standalone pt view after rejoin disk rebuild, diskId:" << diskId << ", ptView:" <<
+        FormatPtView(ptView) << ".");
+    LOG_INFO("Rebuild standalone view for rejoin disk, diskId:" << diskId << ", changedPtCount:" <<
+        changedPtIds.size() << ", currentPtCount:" << currentPtCount << ", targetPtCount:" << needMove << ".");
     return BIO_OK;
 }
 }

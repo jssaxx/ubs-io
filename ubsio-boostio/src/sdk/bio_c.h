@@ -137,6 +137,8 @@ typedef struct {
     uint32_t size;
 } CacheAddress;
 
+// Describes space returned by the two-phase copy-free APIs. The standalone KVC path uses BioPut directly and does
+// not call BioAllocCacheSpace or BioPutWithCopyFree.
 typedef struct {
     uint8_t allocLoc;
     uint16_t addressNum;
@@ -524,6 +526,7 @@ CResult BioCheckUpgradeReady(uint64_t tenantId);
  * @param[in]: length : alloc space length
  * @param[out]: space: cache space describe
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ * @note: The standalone KVC path does not call this copy-free API.
  */
 CResult BioAllocCacheSpace(uint64_t tenantId, uint64_t objectId, uint64_t length, CacheSpaceDesc *space);
 
@@ -534,6 +537,7 @@ CResult BioAllocCacheSpace(uint64_t tenantId, uint64_t objectId, uint64_t length
  * @param[in]: key: write key
  * @param[in]: space : cache space describe
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ * @note: The standalone KVC path does not call this copy-free API.
  */
 CResult BioPutWithCopyFree(uint64_t tenantId, const char *key, CacheSpaceDesc *space);
 

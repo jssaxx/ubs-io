@@ -11,6 +11,7 @@
  */
 
 #include "bio_tracepoint_helper.h"
+#include "cache_flow.h"
 #include "wcache_index.h"
 
 #include <new>
@@ -212,6 +213,30 @@ void WCacheIndex::ExpiredClear(uint16_t ptId)
         }
     }
     return;
+}
+
+void WCacheIndex::EraseFlowEntries(uint16_t ptId, const std::unordered_set<uint64_t> &flowIds,
+    std::vector<std::string> &removedKeys)
+{
+    if (flowIds.empty()) {
+        return;
+    }
+    WCacheIndexTable *table = GetIndexTable(ptId);
+    ChkTrueExNot(table != nullptr);
+
+    for (uint32_t bucket = 0; bucket < HASH_BUCKET_NUM; ++bucket) {
+        WriteLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
+        for (auto iter = table->sliceIndex[bucket].begin(); iter != table->sliceIndex[bucket].end();) {
+            auto slice = iter->second->GetSlice();
+            if (slice != nullptr &&
+                flowIds.count(CacheFlowIdManager::GenOutFlowId(slice->GetFlowId())) != 0) {
+                removedKeys.push_back(iter->first);
+                iter = table->sliceIndex[bucket].erase(iter);
+            } else {
+                ++iter;
+            }
+        }
+    }
 }
 
 void WCacheIndex::Exit()

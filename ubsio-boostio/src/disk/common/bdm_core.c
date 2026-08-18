@@ -12,6 +12,7 @@
 
 #include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include "bdm_common.h"
@@ -726,10 +727,40 @@ int32_t BdmStartVirtual(DiskDevices *diskList, uint64_t chunkSize, uint32_t devi
     return ret;
 }
 
-int32_t BdmUpdate(char *diskPath, uint64_t chunkSize, uint64_t diskCap)
+int32_t BdmAttachDisk(char *diskPath, uint64_t chunkSize, uint64_t diskCap, uint32_t *newDiskId,
+    uint64_t *virtualCapacity)
 {
+    // Attaching the same path again returns the existing disk instead of
+    // consuming a new monotonic id, so a retry after a partial add-disk
+    // failure cannot wedge the contiguous-id assumption.
+    for (uint32_t existingId = 0; existingId < g_bdmDiskMaxId; ++existingId) {
+        char existingPath[BDM_NAME_LEN] = { 0 };
+        if (BdmGetDiskPath(existingId, existingPath, sizeof(existingPath)) != BDM_CODE_OK) {
+            continue;
+        }
+        if (strcmp(existingPath, diskPath) != 0) {
+            continue;
+        }
+        uint64_t totalCapacity = 0;
+        uint64_t usedCapacity = 0;
+        int32_t capRet = BdmGetCapacity(existingId, &totalCapacity, &usedCapacity);
+        if (UNLIKELY(capRet != BDM_CODE_OK)) {
+            BDM_LOGERROR(0, "Get existing disk capacity failed, diskId(%u), ret(%d).", existingId, capRet);
+            return capRet;
+        }
+        if (newDiskId != NULL) {
+            *newDiskId = existingId;
+        }
+        if (virtualCapacity != NULL) {
+            *virtualCapacity = totalCapacity;
+        }
+        BDM_LOGINFO(0, "Bdm disk already attached, diskId(%u), device(%s), capacity(%llu).", existingId,
+            diskPath, (unsigned long long)totalCapacity);
+        return BDM_CODE_OK;
+    }
+
     if (UNLIKELY(g_bdmDiskMaxId >= DISK_DEV_NUM)) {
-        BDM_LOGERROR(0, "Bdm update failed, disk num reaches limit(%u).", (uint32_t)DISK_DEV_NUM);
+        BDM_LOGERROR(0, "Bdm attach failed, disk num reaches limit(%u).", (uint32_t)DISK_DEV_NUM);
         return BDM_CODE_INVALID_PARAM;
     }
     uint32_t diskId = g_bdmDiskMaxId;
@@ -750,7 +781,18 @@ int32_t BdmUpdate(char *diskPath, uint64_t chunkSize, uint64_t diskCap)
     }
     __sync_fetch_and_add(&g_bdmDiskCount, 1);
     __sync_fetch_and_add(&g_bdmDiskMaxId, 1);
+    if (newDiskId != NULL) {
+        *newDiskId = diskId;
+    }
+    if (virtualCapacity != NULL) {
+        *virtualCapacity = regionLength;
+    }
     return BDM_CODE_OK;
+}
+
+int32_t BdmUpdate(char *diskPath, uint64_t chunkSize, uint64_t diskCap)
+{
+    return BdmAttachDisk(diskPath, chunkSize, diskCap, NULL, NULL);
 }
 
 uint32_t BdmGetDiskCount()

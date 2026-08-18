@@ -43,6 +43,8 @@ constexpr const char *MNT_NAMESPACE_PATH = "/proc/self/ns/mnt";
 constexpr const char *IPC_NAMESPACE_PATH = "/proc/self/ns/ipc";
 constexpr const char *SHM_NAME_PREFIX = "/ubsio_device_id_gather_";
 
+bool UnlinkSharedMemory(const std::string &shmName);
+
 enum class GatherState : uint32_t {
     COLLECTING = 1,
     READY = 2,
@@ -82,10 +84,7 @@ public:
     ~GatherMapping()
     {
         if (mLocked) {
-            (void)flock(mFd, LOCK_UN);
-        }
-        if (mHeader != nullptr) {
-            (void)munmap(mHeader, sizeof(GatherHeader));
+            (void)Unlock();
         }
         if (mFd >= 0) {
             (void)close(mFd);
@@ -123,6 +122,27 @@ public:
             return BIO_INNER_ERR;
         }
 
+        int pathFd = shm_open(name.c_str(), O_RDONLY, 0);
+        if (pathFd < 0) {
+            LOG_ERROR("Open standalone device ID shared memory path for inode check failed, name:" << name <<
+                ", errno:" << errno << ", error:" << strerror(errno) << ".");
+            return BIO_INNER_ERR;
+        }
+        struct stat pathStat = {};
+        if (fstat(pathFd, &pathStat) != 0) {
+            LOG_ERROR("Stat standalone device ID shared memory path failed, name:" << name <<
+                ", errno:" << errno << ", error:" << strerror(errno) << ".");
+            (void)close(pathFd);
+            return BIO_INNER_ERR;
+        }
+        (void)close(pathFd);
+        if (shmStat.st_dev != pathStat.st_dev || shmStat.st_ino != pathStat.st_ino) {
+            LOG_ERROR("Standalone device ID shared memory path was replaced, name:" << name <<
+                ", fdDev:" << shmStat.st_dev << ", fdIno:" << shmStat.st_ino <<
+                ", pathDev:" << pathStat.st_dev << ", pathIno:" << pathStat.st_ino << ".");
+            return BIO_INNER_ERR;
+        }
+
         if (shmStat.st_size == 0) {
             if (ftruncate(mFd, sizeof(GatherHeader)) != 0) {
                 LOG_ERROR("Resize standalone device ID shared memory failed, errno:" << errno <<
@@ -133,16 +153,14 @@ public:
         } else if (shmStat.st_size != static_cast<off_t>(sizeof(GatherHeader))) {
             LOG_ERROR("Unexpected standalone device ID shared memory size, actual:" << shmStat.st_size <<
                 ", expected:" << sizeof(GatherHeader) << ".");
+            (void)UnlinkSharedMemory(name);
             return BIO_INNER_ERR;
         }
 
-        void *address = mmap(nullptr, sizeof(GatherHeader), PROT_READ | PROT_WRITE, MAP_SHARED, mFd, 0);
-        if (address == MAP_FAILED) {
-            LOG_ERROR("Map standalone device ID shared memory failed, errno:" << errno <<
-                ", error:" << strerror(errno) << ".");
-            return BIO_INNER_ERR;
+        ret = ReadHeader();
+        if (ret != BIO_OK) {
+            return ret;
         }
-        mHeader = static_cast<GatherHeader *>(address);
         return BIO_OK;
     }
 
@@ -164,21 +182,65 @@ public:
         return BIO_OK;
     }
 
-    void Unlock()
+    BResult Unlock()
     {
         if (!mLocked) {
-            return;
+            return BIO_OK;
+        }
+        BResult ret = BIO_OK;
+        if (mHeaderValid) {
+            ret = WriteHeader();
         }
         if (flock(mFd, LOCK_UN) != 0) {
             LOG_WARN("Unlock standalone device ID shared memory failed, errno:" << errno <<
                 ", error:" << strerror(errno) << ".");
+            if (ret == BIO_OK) {
+                ret = BIO_INNER_ERR;
+            }
         }
         mLocked = false;
+        return ret;
     }
 
-    GatherHeader *Header() const
+    BResult ReadHeader()
     {
-        return mHeader;
+        if (mFd < 0) {
+            return BIO_INNER_ERR;
+        }
+        ssize_t bytes;
+        do {
+            bytes = pread(mFd, &mHeader, sizeof(mHeader), 0);
+        } while (bytes < 0 && errno == EINTR);
+        if (bytes != static_cast<ssize_t>(sizeof(mHeader))) {
+            LOG_ERROR("Read standalone device ID shared memory header failed, bytes:" << bytes <<
+                ", errno:" << errno << ", error:" << strerror(errno) << ".");
+            mHeaderValid = false;
+            return BIO_INNER_ERR;
+        }
+        mHeaderValid = true;
+        return BIO_OK;
+    }
+
+    BResult WriteHeader()
+    {
+        if (mFd < 0) {
+            return BIO_INNER_ERR;
+        }
+        ssize_t bytes;
+        do {
+            bytes = pwrite(mFd, &mHeader, sizeof(mHeader), 0);
+        } while (bytes < 0 && errno == EINTR);
+        if (bytes != static_cast<ssize_t>(sizeof(mHeader))) {
+            LOG_ERROR("Write standalone device ID shared memory header failed, bytes:" << bytes <<
+                ", errno:" << errno << ", error:" << strerror(errno) << ".");
+            return BIO_INNER_ERR;
+        }
+        return BIO_OK;
+    }
+
+    GatherHeader *Header()
+    {
+        return &mHeader;
     }
 
     bool StorageCreated() const
@@ -188,9 +250,10 @@ public:
 
 private:
     int32_t mFd { -1 };
-    GatherHeader *mHeader { nullptr };
+    GatherHeader mHeader {};
     bool mLocked { false };
     bool mStorageCreated { false };
+    bool mHeaderValid { false };
 };
 
 uint64_t MonotonicTimeNs()
@@ -481,6 +544,9 @@ BResult StandaloneDeviceIdGather::Gather(uint32_t logicDeviceId, uint32_t device
         GatherMapping mapping;
         ret = mapping.Open(shmName);
         if (ret != BIO_OK) {
+            if (openAttempt == 0) {
+                continue;
+            }
             return ret;
         }
         LOG_INFO("Gather SHM opened, openAttempt:" << openAttempt <<
@@ -496,7 +562,10 @@ BResult StandaloneDeviceIdGather::Gather(uint32_t logicDeviceId, uint32_t device
             InitializeRound(*header, deviceCount, generation, nowNs, timeoutMs);
         } else if (header->state == static_cast<uint32_t>(GatherState::READY)) {
             (void)UnlinkSharedMemory(shmName);
-            mapping.Unlock();
+            ret = mapping.Unlock();
+            if (ret != BIO_OK) {
+                return ret;
+            }
             continue;
         } else {
             uint32_t liveCount = RemoveDeadSlots(*header);
@@ -536,16 +605,26 @@ BResult StandaloneDeviceIdGather::Gather(uint32_t logicDeviceId, uint32_t device
             header->state = static_cast<uint32_t>(GatherState::READY);
             ret = CopyLogicDeviceIds(*header, logicDeviceIds);
             (void)UnlinkSharedMemory(shmName);
-            mapping.Unlock();
+            BResult unlockRet = mapping.Unlock();
+            if (unlockRet != BIO_OK) {
+                return unlockRet;
+            }
             return ret == BIO_OK ? CalculateVirtualDeviceIndex(logicDeviceIds, logicDeviceId, virtualDeviceIndex) : ret;
         }
-        mapping.Unlock();
+        ret = mapping.Unlock();
+        if (ret != BIO_OK) {
+            return ret;
+        }
         LOG_INFO("Gather waiting for peers, generation:" << myGeneration <<
             ", participantCount:" << header->participantCount << ", deviceCount:" << header->deviceCount << ".");
 
         while (true) {
             (void)usleep(GATHER_POLL_INTERVAL_US);
             ret = mapping.Lock();
+            if (ret != BIO_OK) {
+                return ret;
+            }
+            ret = mapping.ReadHeader();
             if (ret != BIO_OK) {
                 return ret;
             }
@@ -558,7 +637,10 @@ BResult StandaloneDeviceIdGather::Gather(uint32_t logicDeviceId, uint32_t device
             if (header->state == static_cast<uint32_t>(GatherState::READY)) {
                 ret = CopyLogicDeviceIds(*header, logicDeviceIds);
                 (void)UnlinkSharedMemory(shmName);
-                mapping.Unlock();
+                BResult unlockRet = mapping.Unlock();
+                if (unlockRet != BIO_OK) {
+                    return unlockRet;
+                }
                 return ret == BIO_OK ?
                     CalculateVirtualDeviceIndex(logicDeviceIds, logicDeviceId, virtualDeviceIndex) : ret;
             }
@@ -583,7 +665,10 @@ BResult StandaloneDeviceIdGather::Gather(uint32_t logicDeviceId, uint32_t device
                 }
                 return BIO_NOT_READY;
             }
-            mapping.Unlock();
+            ret = mapping.Unlock();
+            if (ret != BIO_OK) {
+                return ret;
+            }
         }
     }
 

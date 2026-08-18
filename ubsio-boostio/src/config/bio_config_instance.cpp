@@ -13,9 +13,12 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <fcntl.h>
 #include <set>
 #include <sstream>
+#include <sys/file.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include "bio_log.h"
 #include "bio_ip_util.h"
 #include "bio_file_util.h"
@@ -353,6 +356,7 @@ BResult BioConfig::AutoConfigDaemonDisk(const ConfigurationPtr &conf)
     if (!mDaemonConfig.hasDiskCache) {
         mDaemonConfig.diskList.clear();
         mDaemonConfig.diskCaps.clear();
+        mDaemonConfig.diskPhysicalCaps.clear();
         LOG_INFO("Disk cache is disabled, skip disk config.");
         return BIO_OK;
     }
@@ -412,6 +416,7 @@ BResult BioConfig::AutoConfigDaemonDisk(const ConfigurationPtr &conf)
             return BIO_ERR;
         }
         mDaemonConfig.diskCaps.emplace_back(diskCapacity);
+        mDaemonConfig.diskPhysicalCaps.emplace_back(diskCapacity);
     }
 
     if (mDaemonConfig.diskCaps.size() == 0) {
@@ -422,6 +427,12 @@ BResult BioConfig::AutoConfigDaemonDisk(const ConfigurationPtr &conf)
 
     if (mDaemonConfig.diskCaps.size() > DISK_PATH_CONFIG_MAX_NUM) {
         LOG_ERROR("Disk path num limit:" << DISK_PATH_CONFIG_MAX_NUM << ", input:" << mDaemonConfig.diskCaps.size());
+        return BIO_ERR;
+    }
+
+    if (mDaemonConfig.diskPhysicalCaps.size() != mDaemonConfig.diskList.size()) {
+        LOG_ERROR("Standalone physical disk capacity config is inconsistent, disk path num:" <<
+            mDaemonConfig.diskList.size() << ", physical cap num:" << mDaemonConfig.diskPhysicalCaps.size() << ".");
         return BIO_ERR;
     }
 
@@ -501,6 +512,12 @@ void BioConfig::BakFileProcess(const std::string &configPath)
 
 BResult BioConfig::Initialize(const std::string &configPath)
 {
+    auto dirEndPos = configPath.find_last_of('/');
+    std::string homePath = (dirEndPos == std::string::npos) ? "./" : configPath.substr(0, dirEndPos + 1);
+    mConfigPath = configPath;
+    mConfigBakPath = homePath + CONF_BAK_SUFFIX;
+    mConfigBakInitPath = homePath + CONF_INIT_BAK_SUFFIX;
+    mConfigLockPath = configPath + ".lock";
     BakFileProcess(configPath);
     std::string configurePath = configPath;
     LOG_INFO("Start to read config file.");
@@ -584,6 +601,11 @@ BResult BioConfig::SelectStandaloneDiskByDeviceInfo()
             ", disk cap num:" << mDaemonConfig.diskCaps.size() << ".");
         return BIO_ERR;
     }
+    if (mDaemonConfig.diskPhysicalCaps.size() != mDaemonConfig.diskList.size()) {
+        LOG_ERROR("Standalone physical disk config is inconsistent, disk path num:" << mDaemonConfig.diskList.size() <<
+            ", physical cap num:" << mDaemonConfig.diskPhysicalCaps.size() << ".");
+        return BIO_ERR;
+    }
 
     if (mDaemonConfig.standaloneDeviceCount != 0) {
         return SelectStandaloneVirtualDisks(diskNum);
@@ -608,8 +630,10 @@ BResult BioConfig::SelectStandaloneDiskLegacy(uint16_t diskNum)
 
     std::string selectedPath = mDaemonConfig.diskList[diskIndex];
     int64_t selectedCapacity = mDaemonConfig.diskCaps[diskIndex];
+    int64_t selectedPhysicalCapacity = mDaemonConfig.diskPhysicalCaps[diskIndex];
     mDaemonConfig.diskList.assign(1, selectedPath);
     mDaemonConfig.diskCaps.assign(1, selectedCapacity);
+    mDaemonConfig.diskPhysicalCaps.assign(1, selectedPhysicalCapacity);
     mStandaloneDiskIndex = diskIndex;
     LOG_INFO("Standalone selects cache disk by device info, deviceId:" << diskIndex <<
         ", configuredDiskNum:" << diskNum << ", selectedPath:" << selectedPath << ".");
@@ -639,31 +663,120 @@ BResult BioConfig::SelectStandaloneVirtualDisks(uint16_t diskNum)
     return BIO_OK;
 }
 
+BResult BioConfig::LockDiskConfig()
+{
+    if (mDiskConfigLockFd >= 0) {
+        return BIO_OK;
+    }
+    if (mConfigLockPath.empty()) {
+        LOG_ERROR("Lock disk config failed, lock path is empty.");
+        return BIO_INNER_ERR;
+    }
+
+    int32_t fd = open(mConfigLockPath.c_str(), O_CREAT | O_RDWR | O_CLOEXEC, S_IRUSR | S_IWUSR);
+    if (fd < 0) {
+        LOG_ERROR("Open disk config lock failed, path:" << mConfigLockPath << ", errno:" << errno <<
+            ", reason:" << strerror(errno) << ".");
+        return BIO_INNER_ERR;
+    }
+    int32_t ret;
+    do {
+        ret = flock(fd, LOCK_EX);
+    } while (ret != 0 && errno == EINTR);
+    if (ret != 0) {
+        LOG_ERROR("Lock disk config failed, path:" << mConfigLockPath << ", errno:" << errno <<
+            ", reason:" << strerror(errno) << ".");
+        close(fd);
+        return BIO_INNER_ERR;
+    }
+    mDiskConfigLockFd = fd;
+    return BIO_OK;
+}
+
+void BioConfig::UnlockDiskConfig()
+{
+    if (mDiskConfigLockFd < 0) {
+        return;
+    }
+    if (flock(mDiskConfigLockFd, LOCK_UN) != 0) {
+        LOG_WARN("Unlock disk config failed, path:" << mConfigLockPath << ", errno:" << errno <<
+            ", reason:" << strerror(errno) << ".");
+    }
+    close(mDiskConfigLockFd);
+    mDiskConfigLockFd = -1;
+}
+
+bool BioConfig::FindDiskInConfig(const std::string &configPath, const std::string &diskPath)
+{
+    std::vector<std::string> lines;
+    if (!FileUtil::ReadFile(configPath, lines)) {
+        return false;
+    }
+    int32_t lineIndex = FileUtil::FindTargetLine(lines, "ubsio.disk.path");
+    if (lineIndex < 0) {
+        return false;
+    }
+    size_t equalPos = lines[lineIndex].find('=');
+    if (equalPos == std::string::npos) {
+        return false;
+    }
+
+    std::vector<std::string> diskPaths;
+    StrUtil::Split(lines[lineIndex].substr(equalPos + 1), ":", diskPaths);
+    for (const auto &configuredPath : diskPaths) {
+        size_t begin = configuredPath.find_first_not_of(" \t");
+        if (begin == std::string::npos) {
+            continue;
+        }
+        size_t end = configuredPath.find_last_not_of(" \t");
+        if (configuredPath.substr(begin, end - begin + 1) == diskPath) {
+            return true;
+        }
+    }
+    return false;
+}
+
 BResult BioConfig::CreateDiskConfBak(const std::string &diskPath)
 {
+    if (FindDiskInConfig(mConfigPath, diskPath)) {
+        LOG_INFO("Disk path already exists in config file, skip config update, diskPath:" << diskPath << ".");
+        return BIO_EXISTS;
+    }
+
     LOG_DEBUG("Start to backup disk config.");
-    auto ret = FileUtil::BackUpFile(CONFIG_PATH, CONFIG_PATH_BAK_INIT);
+    auto ret = FileUtil::BackUpFile(mConfigPath, mConfigBakInitPath);
     if (UNLIKELY(!ret)) {
         LOG_ERROR("Backup config file failed.");
         return BIO_INNER_ERR;
     }
 
-    BResult res = AddDiskPath(diskPath, CONFIG_PATH_BAK_INIT);
+    BResult res = AddDiskPath(diskPath, mConfigBakInitPath);
     if (UNLIKELY(res != BIO_OK)) {
         LOG_ERROR("Add disk path to config file failed.");
-        FileUtil::RemoveFile(CONFIG_PATH_BAK_INIT);
+        FileUtil::RemoveFile(mConfigBakInitPath);
         return BIO_INNER_ERR;
     }
 
-    ret = FileUtil::RenameFile(CONFIG_PATH_BAK_INIT, CONFIG_PATH_BAK);
+    ret = FileUtil::RenameFile(mConfigBakInitPath, mConfigBakPath);
     if (UNLIKELY(!ret)) {
         LOG_ERROR("Rename backup config file failed.");
-        FileUtil::RemoveFile(CONFIG_PATH_BAK_INIT);
+        FileUtil::RemoveFile(mConfigBakInitPath);
         return BIO_INNER_ERR;
     }
 
     LOG_DEBUG("Finish to backup disk config.");
     return BIO_OK;
+}
+
+BResult BioConfig::CommitDiskConfBak()
+{
+    return ReplaceFile(mConfigPath, mConfigBakPath);
+}
+
+void BioConfig::DiscardDiskConfBak()
+{
+    FileUtil::RemoveFile(mConfigBakInitPath);
+    FileUtil::RemoveFile(mConfigBakPath);
 }
 
 BResult BioConfig::AddDiskPath(const std::string &diskPath, const std::string &configPath)
@@ -726,8 +839,17 @@ bool BioConfig::CheckDiskIsExist(std::string &newDiskPath, uint32_t &diskId)
 
 void BioConfig::ResizeDaemonConfigDisks(std::string &newDiskPath)
 {
+    int64_t physicalCapacity = FileUtil::GetDiskCapacity(newDiskPath);
     mDaemonConfig.diskList.emplace_back(newDiskPath);
-    mDaemonConfig.diskCaps.emplace_back(FileUtil::GetDiskCapacity(newDiskPath));
+    mDaemonConfig.diskCaps.emplace_back(physicalCapacity);
+    mDaemonConfig.diskPhysicalCaps.emplace_back(physicalCapacity);
+}
+
+void BioConfig::AppendDaemonDisk(const std::string &diskPath, int64_t diskCapacity, int64_t physicalCapacity)
+{
+    mDaemonConfig.diskList.emplace_back(diskPath);
+    mDaemonConfig.diskCaps.emplace_back(diskCapacity);
+    mDaemonConfig.diskPhysicalCaps.emplace_back(physicalCapacity);
 }
 
 void BioConfig::DumpToLog()

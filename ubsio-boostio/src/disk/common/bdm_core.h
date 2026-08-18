@@ -86,6 +86,7 @@ typedef enum {
 #define BDM_IO_CTX_RES_LEN (256UL)
 
 typedef void (*BdmIoCb)(void *ctx, int32_t ret);
+typedef int32_t (*BdmDiskFaultHandler)(uint16_t diskId, void *context);
 
 typedef struct {
     BdmIoCb cb;
@@ -168,6 +169,9 @@ int32_t BdmCalculateVirtualRegion(uint64_t capacity, uint64_t chunkSize, uint32_
 
 int32_t BdmUpdate(char *diskPath, uint64_t chunkSize, uint64_t diskCap);
 
+int32_t BdmAttachDisk(char *diskPath, uint64_t chunkSize, uint64_t diskCap, uint32_t *diskId,
+    uint64_t *virtualCapacity);
+
 uint32_t BdmGetDiskCount(void);
 
 int32_t BdmResetDisk(uint16_t diskId);
@@ -175,6 +179,8 @@ int32_t BdmResetDisk(uint16_t diskId);
 BdmDiskState BdmGetDiskStatus(uint32_t bdmId);
 
 void BdmSetDiskUsedStatus(uint32_t bdmId, uint32_t status);
+
+void BdmRegisterDiskFaultHandler(BdmDiskFaultHandler handler, void *context);
 
 #ifdef __cplusplus
 }

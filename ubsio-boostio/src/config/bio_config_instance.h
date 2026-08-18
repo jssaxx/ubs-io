@@ -168,6 +168,10 @@ public:
         long diskWriteRatio = 5;
         std::vector<std::string> diskList;
         std::vector<int64_t> diskCaps;
+        // Startup-time physical capacity snapshot. diskCaps is overwritten with
+        // BDM data-region capacity in virtual-region mode, so a rejoin needs
+        // this untouched value to detect a replaced disk with different size.
+        std::vector<int64_t> diskPhysicalCaps;
         std::string bdmIoEngine = "sync";
         std::string bdmIoUringSqpollMode = "auto";
         uint32_t bdmSyncWorkerNum = 16;
@@ -276,6 +280,13 @@ public:
 
     BResult CreateDiskConfBak(const std::string &diskPath);
 
+    BResult LockDiskConfig();
+    void UnlockDiskConfig();
+
+    BResult CommitDiskConfBak();
+
+    void DiscardDiskConfBak();
+
     BResult AddDiskPath(const std::string &diskPath, const std::string &configPath);
 
     BResult ReplaceFile(const std::string &oldFile, const std::string &newFile);
@@ -283,6 +294,8 @@ public:
     bool CheckDiskIsExist(std::string &newDiskPath, uint32_t &diskId);
 
     void ResizeDaemonConfigDisks(std::string &newDiskPath);
+
+    void AppendDaemonDisk(const std::string &diskPath, int64_t diskCapacity, int64_t physicalCapacity);
 
 private:
     void DumpToLog();
@@ -309,6 +322,8 @@ private:
 
     BResult SelectStandaloneVirtualDisks(uint16_t diskNum);
 
+    bool FindDiskInConfig(const std::string &configPath, const std::string &diskPath);
+
 private:
     struct StandaloneDeviceInfo {
         bool configured{ false };
@@ -323,6 +338,11 @@ private:
     bool mInited{ false };
     uint32_t mStandaloneDiskIndex{ 0 };
     StandaloneDeviceInfo mStandaloneDeviceInfo;
+    std::string mConfigPath;
+    std::string mConfigBakPath;
+    std::string mConfigBakInitPath;
+    std::string mConfigLockPath;
+    int32_t mDiskConfigLockFd{ -1 };
 };
 }
 }

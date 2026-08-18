@@ -533,10 +533,10 @@ BResult BioClientAgent::GetClusterNodeView(uint64_t &curNodeTimes,
 BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtInfo> &ptView)
 {
     BResult ret = BIO_OK;
-    int32_t flag = 0;
     uint32_t progressBar = 0;
     static uint32_t maxRetryCnt = NO_1024;
     uint32_t retryCnt = 0;
+    bool hasMore = true;
     do {
         QueryPtViewRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() }, progressBar };
         QueryPtViewResponse rsp;
@@ -550,10 +550,6 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
             ptView.clear();
             return ret;
         }
-        if (rsp.flag == 0) { // 此处没有获取到视图表示已经完成, 直接退出循环
-            break;
-        }
-
         if (rsp.num > PT_SIZE || rsp.copyNum > PT_COPY_MAX_SIZE) {
             ptView.clear();
             return BIO_INNER_RETRY;
@@ -567,13 +563,14 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
             ptView.insert(std::make_pair(rsp.desc[i].ptId, CmPtInfo(rsp.desc[i].version, rsp.desc[i].ptId,
                 static_cast<CmPtState>(rsp.desc[i].state), rsp.desc[i].masterNodeId, rsp.desc[i].masterDiskId, copys)));
         }
-        flag = rsp.flag;
         progressBar += rsp.num;
         curPtTimes = rsp.curPtTimes;
-        if ((retryCnt++) > maxRetryCnt) { // 限制最大1024次分段获取视图, 因为在1024次内必定可以获取完整的分区视图.
-            break;
+        hasMore = rsp.flag != 0;
+        if (hasMore && (retryCnt++) > maxRetryCnt) { // 限制最大1024次分段获取视图, 防止服务端游标异常时无限循环.
+            ptView.clear();
+            return BIO_INNER_RETRY;
         }
-    } while (flag == 1);
+    } while (hasMore);
 
     return BIO_OK;
 }

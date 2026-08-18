@@ -100,6 +100,8 @@ public:
 
     void Destroy();
 
+    BResult ReleaseFaultedResources();
+
     BResult Evict(const WCacheSlicePtr &slice);
 
     bool IsEmptyEvictSliceQueue();

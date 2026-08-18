@@ -458,24 +458,9 @@ private:
         return BIO_NOT_EXISTS;
     }
 
-    inline void Delete(uint16_t ptId, uint64_t flowId)
-    {
-        sleep(BIO_IO_DELAY_TIME);
-        mLock.LockWrite();
-        auto it = mFlowMap.find(ptId);
-        if (UNLIKELY(it == mFlowMap.end())) {
-            mLock.UnLock();
-            return;
-        }
-        if (it->second->FlowId() != flowId) {
-            mLock.UnLock();
-            return;
-        }
-        mFlowMap.erase(it);
-        mLock.UnLock();
+    void DeleteStandalone(uint16_t ptId, uint64_t flowId);
 
-        DestroyFlow(ptId, flowId);
-    }
+    void Delete(uint16_t ptId, uint64_t flowId, bool needDelay = true);
 
 private:
     std::unordered_map<uint16_t, FlowInstancePtr> mFlowMap;

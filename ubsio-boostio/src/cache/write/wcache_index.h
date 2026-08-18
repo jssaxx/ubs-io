@@ -13,6 +13,9 @@
 #ifndef BOOSTIO_WCACHE_INDEX_H
 #define BOOSTIO_WCACHE_INDEX_H
 
+#include <string>
+#include <unordered_set>
+#include <vector>
 #include "cache_def.h"
 #include "cache_slice.h"
 
@@ -44,6 +47,9 @@ public:
     BResult Delete(uint16_t ptId, const Key &key, WCacheSliceRefPtr sliceRef);
 
     void ExpiredClear(uint16_t ptId);
+
+    void EraseFlowEntries(uint16_t ptId, const std::unordered_set<uint64_t> &flowIds,
+        std::vector<std::string> &removedKeys);
 
     void Exit();
 

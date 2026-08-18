@@ -25,6 +25,7 @@
 #include "message.h"
 #include "securec.h"
 #include "bio_server.h"
+#include "bdm_core.h"
 #include "cache_flow.h"
 
 namespace ock {
@@ -247,12 +248,60 @@ BResult WCacheManager::CreateWCache(uint64_t procId, uint64_t flowId, uint16_t p
 
 BResult WCacheManager::DestroyWCache(uint64_t procId, uint64_t flowId, uint16_t ptId, uint64_t ptv)
 {
+    auto wcache = GetWCacheForCleanup(flowId);
+    if (wcache != nullptr && !wcache->IsWritable()) {
+        if (wcache->IsIoFinish() && wcache->IsEmptyEvict(WCACHE_MEMORY) &&
+            wcache->IsEmptyEvict(WCACHE_DISK)) {
+            uint64_t evictTime = Monotonic::TimeSec();
+            {
+                WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
+                mDestroyManager.emplace(flowId, evictTime);
+            }
+            bool isSucceed = mDestroyEvictService->Execute([this]() { DestroyEvictThread(); });
+            LOG_INFO("Schedule read-only wcache destroy, flowId:" << flowId << ", ptId:" << ptId <<
+                ", ptv:" << ptv << ", execute:" << isSucceed << ".");
+            return isSucceed ? BIO_OK : BIO_ERR;
+        }
+        LOG_INFO("Keep read-only wcache, flowId:" << flowId << ", ptId:" << ptId << ", ptv:" << ptv << ".");
+        return BIO_OK;
+    }
     LOG_INFO("Handle cache broken:" << procId << ", flowId:" << flowId);
     bool isSucceed = true;
     BIO_TP_START(DESTROY_WCACHE_FAIL, &isSucceed, false);
     isSucceed = mGcEvictService->Execute([this, procId, flowId]() { HandleCacheBrokenHdl(procId, flowId); });
     BIO_TP_END;
     return (isSucceed) ? BIO_OK : BIO_ERR;
+}
+
+uint32_t WCacheManager::MarkPtFlowsReadOnly(uint16_t ptId, uint64_t ptv, uint16_t diskId)
+{
+    std::vector<uint64_t> flowIds;
+    {
+        WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
+        for (const auto &flowEntry : mWCacheManager) {
+            const WCachePtr &wcache = flowEntry.second;
+            if (wcache->GetPtId() != ptId || wcache->GetPtv() != ptv || wcache->GetDiskId() != diskId ||
+                !wcache->IsWritable()) {
+                continue;
+            }
+            wcache->MarkReadOnly();
+            mDestroyManager.erase(flowEntry.first);
+            flowIds.push_back(flowEntry.first);
+        }
+    }
+    if (!flowIds.empty()) {
+        WriteLocker<ReadWriteLock> lock(&mReuseFlowsLock);
+        auto reuseIter = mReuseFlows.find(ptId);
+        if (reuseIter != mReuseFlows.end()) {
+            for (uint64_t flowId : flowIds) {
+                reuseIter->second.erase(flowId);
+            }
+            if (reuseIter->second.empty()) {
+                mReuseFlows.erase(reuseIter);
+            }
+        }
+    }
+    return static_cast<uint32_t>(flowIds.size());
 }
 
 BResult WCacheManager::DeleteWCache(uint64_t flowId)
@@ -265,6 +314,25 @@ BResult WCacheManager::DeleteWCache(uint64_t flowId)
     }
 
     WCachePtr wcache = iter->second;
+    if (!wcache->IsWritable()) {
+        // A read-only flow is retained until every admitted write and every
+        // queued eviction has finished. GetRef() == 2 means only the manager
+        // map and this local reference remain, so no deferred SetSlice callback
+        // or in-flight eviction is still using the flow.
+        if (wcache->IsIoFinish() && wcache->IsEmptyEvict(WCACHE_MEMORY) &&
+            wcache->IsEmptyEvict(WCACHE_DISK) && wcache->GetRef() == 2) {
+            LOG_INFO("Delete drained read-only wcache, flowId:" << flowId << ", ptId:" <<
+                wcache->GetPtId() << ", ptv:" << wcache->GetPtv() << ".");
+        } else {
+            mWCacheManagerLock.UnLock();
+            return BIO_OK;
+        }
+    }
+    if (wcache->IsStandaloneFault() || (mHasDiskCache && BioServer::Instance()->IsStandaloneMode() &&
+        BdmGetDiskStatus(wcache->GetDiskId()) != BDM_DISK_STATE_NORMAL)) {
+        mWCacheManagerLock.UnLock();
+        return BIO_INNER_RETRY;
+    }
     wcache->Destroy();
     mWCacheManager.erase(iter);
     mWCacheManagerLock.UnLock();
@@ -347,7 +415,7 @@ void WCacheManager::ScanUpgradeCache(std::list<WCachePtr> &list)
 {
     WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
     for (const auto &flowIt : mWCacheManager) {
-        if (flowIt.second->GetDegradeState()) {
+        if (flowIt.second->GetDegradeState() || !flowIt.second->IsWritable()) {
             continue;
         }
         flowIt.second->SetState(false);
@@ -373,7 +441,7 @@ BResult WCacheManager::ClearUpgradeCache()
     {
         WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
         for (const auto &flowIt : mWCacheManager) {
-            if (flowIt.second->GetDegradeState()) {
+            if (flowIt.second->GetDegradeState() || !flowIt.second->IsWritable()) {
                 continue;
             }
             uint16_t flowPtId = CacheFlowIdManager::GetPtId(flowIt.first);
@@ -396,6 +464,9 @@ BResult WCacheManager::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &
     auto wcache = GetWCache(sliceKey.flowId);
     if (UNLIKELY(wcache == nullptr)) {
         LOG_ERROR("failed to get flow by id:" << sliceKey.flowId);
+        return BIO_INNER_RETRY;
+    }
+    if (UNLIKELY(!wcache->IsWritable())) {
         return BIO_INNER_RETRY;
     }
 
@@ -428,7 +499,7 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
     ChkTrue(sliceReader != nullptr, BIO_INVALID_PARAM, "Slice reader is nullptr.");
     // 1. Get write cache flow instance.
     BIO_TRACE_START(WCACHE_TRACE_PUT_GET_WCACHE);
-    auto wcache = GetWCache(slice->GetFlowId());
+    auto wcache = AcquireWCacheForPut(slice->GetFlowId());
     BIO_TRACE_END(WCACHE_TRACE_PUT_GET_WCACHE, (wcache == nullptr) ? BIO_INNER_RETRY : BIO_OK);
     if (UNLIKELY(wcache == nullptr)) {
         LOG_ERROR("Failed to get write cache flow, flowId:" << slice->GetFlowId() << ", key:" << key << ".");
@@ -440,6 +511,7 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
     if (UNLIKELY(wcacheDegarde != isDegrade)) {
         LOG_WARN("Check degrade fail, flowId:" << slice->GetFlowId() << ", inner:" << wcacheDegarde << ", outer:" <<
             isDegrade << ", key:" << key << ".");
+        wcache->DecFlyIo();
         return BIO_INNER_RETRY;
     }
 
@@ -453,10 +525,12 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
     BIO_TP_END;
     BIO_TRACE_END(WCACHE_TRACE_PUT_WRITE_FLOW, ret);
     if (UNLIKELY(ret != BIO_OK)) {
+        wcache->DecFlyIo();
         LOG_ERROR("Put slice to write cache failed, ret:" << ret << ", key:" << key << ".");
         return ret;
     }
     if (UNLIKELY(wcacheDegarde)) {
+        wcache->DecFlyIo();
         return BIO_OK;
     }
 
@@ -468,6 +542,7 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Insert slice reference to write cache index manager failed, ret:" << ret << ", key:" << key << ".");
     }
+    wcache->DecFlyIo();
     return ret;
 }
 
@@ -698,6 +773,7 @@ void WCacheManager::RegCheckLocRole(CheckLocRole localRole)
 void WCacheManager::RegUbsIoMetaEventCallback(UbsIoMetaEventCallback callback)
 {
     LOG_INFO("Register UBS IO meta event callback");
+    std::lock_guard<std::mutex> lock(mMetaCallbackLock);
     mMetaEventCallback = std::move(callback);
 }
 
@@ -731,6 +807,19 @@ void WCacheManager::AppendMetaEvents(std::vector<UbsIoMetaEvent> &&events)
             std::make_move_iterator(events.end()));
     }
     ScheduleFlushMetaEvents();
+}
+
+void WCacheManager::ReportMetaEventsSync(std::vector<UbsIoMetaEvent> &&events)
+{
+    if (events.empty()) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(mMetaCallbackLock);
+    if (mMetaEventCallback != nullptr) {
+        mMetaEventCallback(events);
+    } else {
+        LOG_DEBUG("Skip UBS IO meta event report, callback is not registered, event count:" << events.size());
+    }
 }
 
 void WCacheManager::FlushMetaEventBatch(const UbsIoMetaEventBatchPtr &batch)
@@ -839,6 +928,135 @@ BResult WCacheManager::ExpiredClear(uint16_t ptId, uint64_t ptv)
     return ret;
 }
 
+void WCacheManager::CollectFaultedFlows(uint16_t ptId, uint64_t ptv, uint16_t failedDiskId,
+    std::list<WCachePtr> &faultedFlows, std::unordered_set<uint64_t> &flowIds)
+{
+    WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
+    for (const auto &flowEntry : mWCacheManager) {
+        const WCachePtr &wcache = flowEntry.second;
+        if (wcache->GetPtId() != ptId || wcache->GetPtv() >= ptv || wcache->GetDiskId() != failedDiskId) {
+            continue;
+        }
+        wcache->SetStandaloneFault();
+        wcache->SetState(false);
+        faultedFlows.push_back(wcache);
+        flowIds.insert(wcache->GetFlowId());
+    }
+}
+
+BResult WCacheManager::WaitFaultedFlowsIdle(uint16_t ptId, const std::list<WCachePtr> &faultedFlows)
+{
+    for (const auto &wcache : faultedFlows) {
+        uint64_t startTime = Monotonic::TimeUs();
+        while (!wcache->IsIoFinish()) {
+            if (Monotonic::TimeUs() - startTime >= FLUSH_RETRY_MAX_TIME) {
+                LOG_WARN("Wait faulted flow idle failed, ptId:" << ptId << ", flowId:" << wcache->GetFlowId() << ".");
+                return BIO_INNER_RETRY;
+            }
+            usleep(FLUSH_INTERAL_TIME);
+        }
+    }
+    return BIO_OK;
+}
+
+void WCacheManager::ReportRemovedKeys(std::vector<std::string> &&removedKeys)
+{
+    if (removedKeys.empty()) {
+        return;
+    }
+    std::vector<UbsIoMetaEvent> events;
+    events.reserve(removedKeys.size());
+    for (auto &key : removedKeys) {
+        events.push_back({ UBSIO_META_DELETE, std::move(key) });
+    }
+    ReportMetaEventsSync(std::move(events));
+}
+
+BResult WCacheManager::CleanupFaultedDiskFlows(uint16_t ptId, uint64_t ptv, uint16_t failedDiskId)
+{
+    LOG_INFO("Cleanup faulted disk flows, ptId:" << ptId << ", ptv:" << ptv << ", failedDiskId:" <<
+        failedDiskId << ".");
+    std::list<WCachePtr> faultedFlows;
+    std::unordered_set<uint64_t> flowIds;
+    CollectFaultedFlows(ptId, ptv, failedDiskId, faultedFlows, flowIds);
+
+    BResult ret = WaitFaultedFlowsIdle(ptId, faultedFlows);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+
+    // Erase index entries and report keys before clearing the memory tier.
+    // WCacheIndex is the only place that keeps key->slice for both memory and
+    // disk resident slices, and ForceClearMemoryTier below nulls the slice of
+    // every memory resident entry, after which EraseFlowEntries would skip it.
+    std::vector<std::string> removedKeys;
+    mCacheIndex->EraseFlowEntries(ptId, flowIds, removedKeys);
+    size_t removedKeyCount = removedKeys.size();
+    ReportRemovedKeys(std::move(removedKeys));
+
+    for (const auto &wcache : faultedFlows) {
+        uint64_t startTime = Monotonic::TimeUs();
+        BResult clearRet = BIO_INNER_RETRY;
+        bool needRetry = false;
+        do {
+            if (wcache->IsIoFinish()) {
+                clearRet = wcache->ForceClearMemoryTier();
+            }
+            needRetry = clearRet != BIO_OK && Monotonic::TimeUs() - startTime < FLUSH_RETRY_MAX_TIME;
+            if (needRetry) {
+                usleep(FLUSH_INTERAL_TIME);
+            }
+        } while (needRetry);
+        if (UNLIKELY(clearRet != BIO_OK)) {
+            LOG_WARN("Force clear faulted flow memory tier failed, ptId:" << ptId << ", flowId:" <<
+                wcache->GetFlowId() << ", ret:" << clearRet << ".");
+            return clearRet;
+        }
+    }
+
+    ret = UnregisterFaultedFlows(ptId, faultedFlows);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+    LOG_INFO("Cleanup faulted disk flows success, ptId:" << ptId << ", ptv:" << ptv << ", wcacheCount:" <<
+        faultedFlows.size() << ", keyCount:" << removedKeyCount << ".");
+    return BIO_OK;
+}
+
+BResult WCacheManager::UnregisterFaultedFlows(uint16_t ptId, const std::list<WCachePtr> &faultedFlows)
+{
+    std::vector<uint64_t> unregisteredFlowIds;
+    {
+        WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
+        for (const auto &wcache : faultedFlows) {
+            uint64_t flowId = wcache->GetFlowId();
+            auto iter = mWCacheManager.find(flowId);
+            if (iter == mWCacheManager.end() || iter->second != wcache) {
+                continue;
+            }
+            unregisteredFlowIds.push_back(flowId);
+            mDestroyManager.erase(flowId);
+            for (auto &retryFlows : mRetryManager) {
+                retryFlows.erase(std::remove(retryFlows.begin(), retryFlows.end(), flowId), retryFlows.end());
+            }
+            mWCacheManager.erase(iter);
+        }
+    }
+    {
+        WriteLocker<ReadWriteLock> lock(&mReuseFlowsLock);
+        auto iter = mReuseFlows.find(ptId);
+        if (iter != mReuseFlows.end()) {
+            for (uint64_t flowId : unregisteredFlowIds) {
+                iter->second.erase(flowId);
+            }
+            if (iter->second.empty()) {
+                mReuseFlows.erase(iter);
+            }
+        }
+    }
+    return BIO_OK;
+}
+
 BResult WCacheManager::ExpiredClearImpl(uint16_t ptId, uint64_t ptv)
 {
     std::list<WCachePtr> expiredList;
@@ -856,6 +1074,9 @@ void WCacheManager::ScanOldCache(uint16_t ptId, uint64_t ptv, std::list<WCachePt
 {
     WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
     for (const auto &flowIt : mWCacheManager) {
+        if (!flowIt.second->IsWritable()) {
+            continue;
+        }
         uint16_t flowPtId = CacheFlowIdManager::GetPtId(flowIt.first);
         if (ptId != flowPtId) {
             continue;
@@ -884,6 +1105,9 @@ BResult WCacheManager::ClearOldCache(uint16_t ptId, uint64_t ptv)
     {
         WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
         for (const auto &flowIt : mWCacheManager) {
+            if (!flowIt.second->IsWritable()) {
+                continue;
+            }
             uint16_t flowPtId = CacheFlowIdManager::GetPtId(flowIt.first);
             if (ptId != flowPtId) {
                 continue;
@@ -911,6 +1135,9 @@ BResult WCacheManager::HandleCacheBrokenHdl(uint64_t procId, uint64_t flowId)
     if (UNLIKELY(wcache == nullptr)) {
         LOG_WARN("Failed to get wcache flow by id:" << flowId << ".");
         return BIO_NOT_EXISTS;
+    }
+    if (!wcache->IsWritable()) {
+        return BIO_OK;
     }
     wcache->SetState(false);
 
@@ -940,6 +1167,10 @@ BResult WCacheManager::HandleCacheBrokenHdl(uint64_t procId, uint64_t flowId)
 
 BResult WCacheManager::HandleCacheBrokenImpl(WCachePtr wcache)
 {
+    if (wcache->IsStandaloneFault() || (mHasDiskCache && BioServer::Instance()->IsStandaloneMode() &&
+        BdmGetDiskStatus(wcache->GetDiskId()) != BDM_DISK_STATE_NORMAL)) {
+        return BIO_OK;
+    }
     BIO_TP_START(NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT, 0);
     if (wcache->IsEmptyEvict(WCACHE_MEMORY) &&
         wcache->IsEmptyEvict(WCACHE_DISK)) {
@@ -1193,7 +1424,8 @@ void WCacheManager::ScanProcCache(uint64_t procId, std::list<WCache*> &list)
     bool isMaster = false;
     for (const auto &flowIt : mWCacheManager) {
         uint16_t flowPtId = CacheFlowIdManager::GetPtId(flowIt.first);
-        if (procId != flowIt.second->GetProcId() || !flowIt.second->GetState()) {
+        if (procId != flowIt.second->GetProcId() || !flowIt.second->GetState() ||
+            !flowIt.second->IsWritable()) {
             continue;
         }
         isMaster = false;
@@ -1223,10 +1455,10 @@ BResult WCacheManager::ClearProcCache(uint32_t procId)
     {
         WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
         for (const auto &flowIt : mWCacheManager) {
-            uint16_t flowPtId = CacheFlowIdManager::GetPtId(flowIt.first);
-            if (procId != flowIt.second->GetProcId()) {
+            if (procId != flowIt.second->GetProcId() || !flowIt.second->IsWritable()) {
                 continue;
             }
+            uint16_t flowPtId = CacheFlowIdManager::GetPtId(flowIt.first);
             LOG_INFO("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() << ", flowId:" << flowIt.first <<
                 ", procId:" << procId << ", Vir Mem:" << flowIt.second->GetVirCapacity(WCACHE_MEMORY) <<
                 ", Vir Disk:" << flowIt.second->GetVirCapacity(WCACHE_DISK));
@@ -1260,6 +1492,36 @@ inline WCachePtr WCacheManager::GetWCache(uint64_t flowId)
         return nullptr;
     }
 
+    return wcache;
+}
+
+WCachePtr WCacheManager::GetWCacheForCleanup(uint64_t flowId)
+{
+    ReadLocker<ReadWriteLock> lock(&mWCacheManagerLock);
+    auto iter = mWCacheManager.find(flowId);
+    return iter == mWCacheManager.end() ? nullptr : iter->second;
+}
+
+WCachePtr WCacheManager::AcquireWCacheForPut(uint64_t flowId)
+{
+    ReadLocker<ReadWriteLock> lock(&mWCacheManagerLock);
+    auto iter = mWCacheManager.find(flowId);
+    if (iter == mWCacheManager.end()) {
+        return nullptr;
+    }
+
+    WCachePtr wcache = iter->second;
+    bool isNormal = true;
+    BIO_TP_START(WCACHE_STATE_NORMAL, &isNormal, true);
+    BIO_TP_START(WCACHE_STATE_NOT_NORMAL, &isNormal, false);
+    isNormal = wcache->GetState();
+    BIO_TP_END;
+    BIO_TP_END;
+
+    if (!isNormal || !wcache->IsWritable()) {
+        return nullptr;
+    }
+    wcache->IncFlyIo();
     return wcache;
 }
 
@@ -1386,11 +1648,7 @@ void WCacheManager::FlushMetaEvents()
         events.swap(mPendingMetaEvents);
     }
 
-    if (!events.empty() && mMetaEventCallback != nullptr) {
-        mMetaEventCallback(events);
-    } else if (!events.empty()) {
-        LOG_DEBUG("Skip UBS IO meta event report, callback is not registered, event count:" << events.size());
-    }
+    ReportMetaEventsSync(std::move(events));
 
     mMetaReportScheduled.store(false);
     {

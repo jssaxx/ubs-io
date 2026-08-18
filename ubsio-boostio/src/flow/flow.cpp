@@ -143,6 +143,12 @@ BResult Flow::TruncateOffset(uint64_t offset)
     return BIO_OK;
 }
 
+uint64_t Flow::GetAllocatedLen()
+{
+    ReadLocker<ReadWriteLock> lock(&mLock);
+    return static_cast<uint64_t>(mChunkList.size()) * mChunkSize;
+}
+
 BResult Flow::Seal()
 {
     BResult ret = BIO_OK;

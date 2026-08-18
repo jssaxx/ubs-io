@@ -220,9 +220,6 @@ class WCacheSliceCmp {
 public:
     bool operator () (const WCacheSlicePtr &first, const WCacheSlicePtr &second)
     {
-        if (first->GetIndexInFlow() == second->GetIndexInFlow()) {
-            return true;
-        }
         return first->GetIndexInFlow() < second->GetIndexInFlow();
     }
 };

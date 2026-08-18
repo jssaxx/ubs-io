@@ -10,8 +10,10 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include <algorithm>
 #include <dlfcn.h>
 #include <cstdlib>
+#include <limits>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <mutex>
@@ -143,7 +145,7 @@ std::vector<ModuleDesc> BioServer::BuildStandaloneModules()
     modules.emplace_back("Flow", std::bind(&BioServer::BioFlowInit, this), nullptr, nullptr,
         std::bind(&BioServer::BioFlowExit, this));
     modules.emplace_back("StandaloneView", std::bind(&BioServer::BioStandaloneViewInit, this), nullptr, nullptr,
-        nullptr);
+        std::bind(&BioServer::BioStandaloneViewExit, this));
     modules.emplace_back("Cache", std::bind(&BioServer::BioCacheInit, this), nullptr, nullptr,
         std::bind(&BioServer::BioCacheExit, this));
     modules.emplace_back("MirrorServer", std::bind(&BioServer::BioMirrorServerInit, this), nullptr, nullptr,
@@ -494,7 +496,14 @@ BResult BioServer::BioBdmInit()
     return BIO_OK;
 }
 
-BResult BioServer::BioBdmUpdate(std::string diskPath)
+BResult BioServer::BioAttachDisk(std::string diskPath)
+{
+    uint32_t diskId = DISK_ID_INVALID;
+    uint64_t diskCapacity = 0;
+    return BioAttachDisk(std::move(diskPath), diskId, diskCapacity);
+}
+
+BResult BioServer::BioAttachDisk(std::string diskPath, uint32_t &diskId, uint64_t &diskCapacity)
 {
     auto &daemonConfig = mConfig->GetDaemonConfig();
     if (!daemonConfig.hasDiskCache) {
@@ -502,12 +511,24 @@ BResult BioServer::BioBdmUpdate(std::string diskPath)
         return BIO_INVALID_PARAM;
     }
 
-    auto diskCap = static_cast<uint64_t>(FileUtil::GetDiskCapacity(diskPath));
+    int64_t physicalCapacity = FileUtil::GetDiskCapacity(diskPath);
+    if (physicalCapacity <= 0) {
+        LOG_ERROR("Get added disk capacity failed, diskPath:" << diskPath << ".");
+        return BIO_INVALID_PARAM;
+    }
 
-    auto ret = BdmUpdate(const_cast<char *>(diskPath.c_str()), daemonConfig.segment, diskCap);
+    uint64_t virtualRegionCapacity = 0;
+    auto ret = BdmAttachDisk(const_cast<char *>(diskPath.c_str()), daemonConfig.segment,
+        static_cast<uint64_t>(physicalCapacity), &diskId, &virtualRegionCapacity);
     if (UNLIKELY(ret != BDM_CODE_OK)) {
-        LOG_ERROR("Bdm Update fail, diskPath: " << diskPath << ".");
+        LOG_ERROR("Bdm attach failed, diskPath: " << diskPath << ".");
         return BIO_ERR;
+    }
+    uint64_t usedCapacity = 0;
+    ret = BdmGetCapacity(diskId, &diskCapacity, &usedCapacity);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        diskCapacity = virtualRegionCapacity;
+        LOG_WARN("Get added BDM capacity failed, use virtual region capacity, diskId:" << diskId << ".");
     }
     return BIO_OK;
 }
@@ -725,6 +746,305 @@ BResult BioServer::BioStandaloneViewInit()
         mCurPtTimes = Monotonic::TimeUs();
     }
     LOG_INFO("Standalone view init success, localNid:" << mLocalNid.VNodeId() << ", ptNum:" << mPtView.size() <<
+        ".");
+
+    const auto &daemonConfig = mConfig->GetDaemonConfig();
+    if (!daemonConfig.hasDiskCache) {
+        return BIO_OK;
+    }
+    ret = mStandaloneView.Start(static_cast<uint32_t>(daemonConfig.diskList.size()),
+        std::bind(&BioServer::HandleStandaloneDiskFault, this, std::placeholders::_1));
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Start standalone disk fault handler failed, ret:" << ret << ".");
+        return ret;
+    }
+    return BIO_OK;
+}
+
+void BioServer::BioStandaloneViewExit()
+{
+    mStandaloneView.Stop();
+}
+
+BResult BioServer::HandleStandaloneDiskFault(uint16_t diskId)
+{
+    std::lock_guard<std::mutex> updateLock(mStandaloneViewUpdateMutex);
+    std::unique_lock<std::mutex> nodeLock(mNodeViewMutex, std::defer_lock);
+    std::unique_lock<std::mutex> ptLock(mPtViewMutex, std::defer_lock);
+    std::lock(nodeLock, ptLock);
+
+    StandaloneView::NodeView nextNodeView = mNodeView;
+    StandaloneView::PtView nextPtView = mPtView;
+    std::vector<std::pair<uint16_t, uint64_t>> faultPtCleanups;
+    BResult ret = mStandaloneView.FailoverDisk(diskId, mLocalNid, nextNodeView, nextPtView, faultPtCleanups);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+
+    uint64_t viewTime = Monotonic::TimeUs();
+    uint64_t lastViewTime = std::max(mCurNodeTimes, mCurPtTimes);
+    if (viewTime <= lastViewTime) {
+        viewTime = lastViewTime + 1;
+    }
+    mNodeView.swap(nextNodeView);
+    mPtView.swap(nextPtView);
+    mCurNodeTimes = viewTime;
+    mCurPtTimes = viewTime;
+
+    nodeLock.unlock();
+    ptLock.unlock();
+    LOG_INFO("Publish standalone disk fault view, diskId:" << diskId << ", viewTime:" << viewTime <<
+        ", faultPtCount:" << faultPtCleanups.size() << ".");
+
+    if (!mCacheInited) {
+        // StandaloneView starts before Cache, so an early startup disk fault has
+        // no WCache flows or index entries to clean up.
+        return BIO_OK;
+    }
+
+    BResult cleanupRet = BIO_OK;
+    for (const auto &pt : faultPtCleanups) {
+        BResult ret = WCacheManager::Instance()->CleanupFaultedDiskFlows(pt.first, pt.second, diskId);
+        if (UNLIKELY(ret != BIO_OK)) {
+            cleanupRet = ret;
+            LOG_ERROR("Standalone fault pt cleanup failed, ptId:" << pt.first << ", ptv:" << pt.second <<
+                ", diskId:" << diskId << ", ret:" << ret << ".");
+        }
+    }
+    return cleanupRet;
+}
+
+BResult BioServer::AddStandaloneDisk(std::string &diskPath)
+{
+    std::lock_guard<std::mutex> updateLock(mStandaloneViewUpdateMutex);
+    const auto &daemonConfig = mConfig->GetDaemonConfig();
+
+    // Keep the startup-time physical capacity snapshot in sync so a later
+    // rejoin can detect a replaced disk with a different size.
+    int64_t physicalCapacity = FileUtil::GetDiskCapacity(diskPath);
+    if (UNLIKELY(physicalCapacity <= 0)) {
+        LOG_ERROR("Get added disk capacity failed, diskPath: " << diskPath << ".");
+        return BIO_INVALID_PARAM;
+    }
+
+    BResult ret = mConfig->LockDiskConfig();
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+    bool configChanged = true;
+    ret = mConfig->CreateDiskConfBak(diskPath);
+    if (ret == BIO_EXISTS) {
+        configChanged = false;
+        ret = BIO_OK;
+    }
+    if (UNLIKELY(ret != BIO_OK)) {
+        mConfig->UnlockDiskConfig();
+        return ret;
+    }
+
+    uint32_t diskId = DISK_ID_INVALID;
+    uint64_t diskCapacity = 0;
+    ret = BioAttachDisk(diskPath, diskId, diskCapacity);
+    if (UNLIKELY(ret != BIO_OK || diskCapacity > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))) {
+        if (configChanged) {
+            mConfig->DiscardDiskConfBak();
+        }
+        mConfig->UnlockDiskConfig();
+        return ret == BIO_OK ? BIO_ERR : ret;
+    }
+
+    // Track the new disk before any view work so a fault reported by BDM
+    // immediately after attach cannot be dropped for being out of range.
+    ret = mStandaloneView.TrackDisk(static_cast<uint16_t>(diskId));
+    if (UNLIKELY(ret != BIO_OK)) {
+        if (configChanged) {
+            mConfig->DiscardDiskConfBak();
+        }
+        mConfig->UnlockDiskConfig();
+        return ret;
+    }
+    if (BdmGetDiskStatus(diskId) != BDM_DISK_STATE_NORMAL) {
+        LOG_ERROR("New standalone disk is not normal, diskId:" << diskId << ", diskPath:" << diskPath << ".");
+        mStandaloneView.UntrackDisk(static_cast<uint16_t>(diskId));
+        if (configChanged) {
+            mConfig->DiscardDiskConfBak();
+        }
+        mConfig->UnlockDiskConfig();
+        return BIO_ERR;
+    }
+
+    StandaloneView::NodeView currentNodeView;
+    StandaloneView::PtView currentPtView;
+    {
+        std::unique_lock<std::mutex> nodeLock(mNodeViewMutex, std::defer_lock);
+        std::unique_lock<std::mutex> ptLock(mPtViewMutex, std::defer_lock);
+        std::lock(nodeLock, ptLock);
+        currentNodeView = mNodeView;
+        currentPtView = mPtView;
+    }
+    StandaloneView::NodeView nextNodeView = currentNodeView;
+    StandaloneView::PtView nextPtView = currentPtView;
+    std::vector<CmPtInfo> changedPts;
+    ret = mStandaloneView.AddDisk(static_cast<uint16_t>(diskId), static_cast<int64_t>(diskCapacity),
+        daemonConfig.diskCaps, mLocalNid, nextNodeView, nextPtView, changedPts);
+    if (UNLIKELY(ret != BIO_OK)) {
+        mStandaloneView.UntrackDisk(static_cast<uint16_t>(diskId));
+        if (configChanged) {
+            mConfig->DiscardDiskConfBak();
+        }
+        mConfig->UnlockDiskConfig();
+        return ret;
+    }
+
+    if (configChanged) {
+        ret = mConfig->CommitDiskConfBak();
+        if (UNLIKELY(ret != BIO_OK)) {
+            mConfig->UnlockDiskConfig();
+            return ret;
+        }
+    }
+    mConfig->UnlockDiskConfig();
+    mConfig->AppendDaemonDisk(diskPath, static_cast<int64_t>(diskCapacity), physicalCapacity);
+
+    auto markReadOnly = [&changedPts]() {
+        uint32_t markedWCacheCount = 0;
+        for (const auto &pt : changedPts) {
+            markedWCacheCount += WCacheManager::Instance()->MarkPtFlowsReadOnly(pt.ptId, pt.version,
+                pt.masterDiskId);
+        }
+        return markedWCacheCount;
+    };
+    uint32_t markedWCacheCount = markReadOnly();
+    uint64_t viewTime = Monotonic::TimeUs();
+    {
+        std::unique_lock<std::mutex> nodeLock(mNodeViewMutex, std::defer_lock);
+        std::unique_lock<std::mutex> ptLock(mPtViewMutex, std::defer_lock);
+        std::lock(nodeLock, ptLock);
+        uint64_t lastViewTime = std::max(mCurNodeTimes, mCurPtTimes);
+        if (viewTime <= lastViewTime) {
+            viewTime = lastViewTime + 1;
+        }
+        mNodeView.swap(nextNodeView);
+        mPtView.swap(nextPtView);
+        mCurNodeTimes = viewTime;
+        mCurPtTimes = viewTime;
+    }
+    markedWCacheCount += markReadOnly();
+    LOG_INFO("Publish standalone add disk view, diskId:" << diskId << ", capacity:" << diskCapacity <<
+        ", markedWCacheCount:" << markedWCacheCount << ", viewTime:" << viewTime << ".");
+    return BIO_OK;
+}
+
+BResult BioServer::AddStandaloneOldDisk(const std::string &diskPath, uint16_t diskId)
+{
+    std::lock_guard<std::mutex> updateLock(mStandaloneViewUpdateMutex);
+    const auto &daemonConfig = mConfig->GetDaemonConfig();
+    if (diskId >= daemonConfig.diskList.size() || diskId >= daemonConfig.diskPhysicalCaps.size()) {
+        LOG_ERROR("Invalid standalone rejoin disk, diskId:" << diskId << ", diskNum:" << daemonConfig.diskList.size() <<
+            ", physicalCapNum:" << daemonConfig.diskPhysicalCaps.size() << ".");
+        return BIO_INVALID_PARAM;
+    }
+
+    // A disk whose fault worker is still pending must finish failover first;
+    // otherwise a stale fault task could re-fault the recovered disk.
+    BResult ret = mStandaloneView.CheckDiskRecoverable(diskId);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+
+    StandaloneView::NodeView currentNodeView;
+    StandaloneView::PtView currentPtView;
+    {
+        std::unique_lock<std::mutex> nodeLock(mNodeViewMutex, std::defer_lock);
+        std::unique_lock<std::mutex> ptLock(mPtViewMutex, std::defer_lock);
+        std::lock(nodeLock, ptLock);
+        currentNodeView = mNodeView;
+        currentPtView = mPtView;
+    }
+
+    bool viewDiskNormal = false;
+    auto nodeIter = currentNodeView.find(mLocalNid);
+    if (nodeIter != currentNodeView.end()) {
+        for (const auto &disk : nodeIter->second.disks) {
+            if (disk.diskId == diskId) {
+                viewDiskNormal = disk.diskStatus == CM_DISK_NORMAL;
+                break;
+            }
+        }
+    }
+    if (viewDiskNormal) {
+        // Keep the original no-op behavior for an already-normal disk. If BDM
+        // disagrees with the view the state is inconsistent, so do not report
+        // success.
+        return BdmGetDiskStatus(diskId) == BDM_DISK_STATE_NORMAL ? BIO_OK : BIO_ERR;
+    }
+
+    // Reject a replaced disk whose physical capacity differs from the startup
+    // snapshot. BDM's cached region is sized by the startup capacity, so a
+    // different size cannot be adopted online.
+    std::string capacityProbePath = diskPath;
+    int64_t physicalCapacity = FileUtil::GetDiskCapacity(capacityProbePath);
+    if (UNLIKELY(physicalCapacity <= 0)) {
+        LOG_ERROR("Get rejoin disk capacity failed, diskPath:" << diskPath << ".");
+        return BIO_INVALID_PARAM;
+    }
+    if (physicalCapacity != daemonConfig.diskPhysicalCaps[diskId]) {
+        LOG_ERROR("Standalone rejoin disk capacity mismatch, diskId:" << diskId << ", diskPath:" << diskPath <<
+            ", expectedCapacity:" << daemonConfig.diskPhysicalCaps[diskId] << ", actualCapacity:" <<
+            physicalCapacity << ". Replace it with a disk of the same capacity or restart to adopt a new layout.");
+        return BIO_ERR;
+    }
+
+    StandaloneView::NodeView nextNodeView = currentNodeView;
+    StandaloneView::PtView nextPtView = currentPtView;
+    std::vector<CmPtInfo> changedPts;
+    ret = mStandaloneView.RejoinDisk(diskId, daemonConfig.diskCaps, mLocalNid, nextNodeView, nextPtView, changedPts);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+
+    if (BdmGetDiskStatus(diskId) != BDM_DISK_STATE_NORMAL) {
+        ret = BioDiskReset(diskId);
+        if (UNLIKELY(ret != BIO_OK)) {
+            // BioDiskReset marks the slot used before rebuilding the
+            // allocator; restore the fault state so a failed reset does not
+            // look like a healthy empty disk on retry.
+            BdmSetDiskUsedStatus(diskId, false);
+            return ret;
+        }
+    }
+
+    ret = mStandaloneView.MarkDiskRecovered(diskId);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+
+    auto markReadOnly = [&changedPts]() {
+        uint32_t markedWCacheCount = 0;
+        for (const auto &pt : changedPts) {
+            markedWCacheCount += WCacheManager::Instance()->MarkPtFlowsReadOnly(pt.ptId, pt.version,
+                pt.masterDiskId);
+        }
+        return markedWCacheCount;
+    };
+    uint32_t markedWCacheCount = markReadOnly();
+    uint64_t viewTime = Monotonic::TimeUs();
+    {
+        std::unique_lock<std::mutex> nodeLock(mNodeViewMutex, std::defer_lock);
+        std::unique_lock<std::mutex> ptLock(mPtViewMutex, std::defer_lock);
+        std::lock(nodeLock, ptLock);
+        uint64_t lastViewTime = std::max(mCurNodeTimes, mCurPtTimes);
+        if (viewTime <= lastViewTime) {
+            viewTime = lastViewTime + 1;
+        }
+        mNodeView.swap(nextNodeView);
+        mPtView.swap(nextPtView);
+        mCurNodeTimes = viewTime;
+        mCurPtTimes = viewTime;
+    }
+    markedWCacheCount += markReadOnly();
+    LOG_INFO("Publish standalone rejoin disk view, diskId:" << diskId << ", capacity:" <<
+        daemonConfig.diskCaps[diskId] << ", markedWCacheCount:" << markedWCacheCount << ", viewTime:" << viewTime <<
         ".");
     return BIO_OK;
 }

@@ -12,8 +12,10 @@
 
 #include "wcache.h"
 
+#include <atomic>
 #include <utility>
 #include "unistd.h"
+#include "bio_monotonic.h"
 #include "cache_slice_operator.h"
 #include "securec.h"
 #include "flow_manager.h"
@@ -29,6 +31,29 @@ namespace bio {
 constexpr uint32_t EVICT_MEM_HLEVEL = 90;
 constexpr uint32_t EVICT_DISK_HLEVEL = 98;
 constexpr uint32_t MAX_EVICT_CONSULT_SIZE = 50;
+constexpr uint64_t TOMBSTONE_FAIL_LOG_INTERVAL_SEC = 1;
+
+void LogTombstoneFailure(const char *action, BResult ret, uint64_t flowId, uint64_t index)
+{
+    static std::atomic<uint64_t> lastLogSec(0);
+    uint64_t now = Monotonic::TimeSec();
+    uint64_t last = lastLogSec.load();
+    if (now >= last + TOMBSTONE_FAIL_LOG_INTERVAL_SEC &&
+        lastLogSec.compare_exchange_strong(last, now)) {
+        LOG_WARN(action << ", ret:" << ret << ", flowId:" << flowId << ", index:" << index <<
+            ". Further tombstone failures are rate-limited.");
+    }
+}
+
+WCache::~WCache()
+{
+    if (mStandaloneFault.load()) {
+        BResult ret = ReleaseFaultedResources();
+        if (UNLIKELY(ret != BIO_OK)) {
+            LOG_ERROR("Release faulted resources failed, ret:" << ret << ", flowId:" << mFlowId << ".");
+        }
+    }
+}
 
 BResult WCache::Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], const RCacheManagerPtr rCacheManager,
     bool isRecover)
@@ -60,6 +85,9 @@ BResult WCache::Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], con
     mUnderFs = UfsHelper::Instance();
     if (isRecover) {
         mIsMaster = false; // 用于识别Put流程特殊处理
+        if (BioServer::Instance()->IsStandaloneMode()) {
+            MarkReadOnly();
+        }
         return BIO_OK;
     }
 
@@ -104,6 +132,12 @@ void WCache::GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &dis
         return;
     }
     for (uint32_t diskId = 0; diskId < config.diskCaps.size(); diskId++) {
+        // Faulted standalone disks no longer serve any PT, so their capacity
+        // must not dilute the disk watermark used by overload control and the
+        // WCACHE capacity reported through show resources.
+        if (BioServer::Instance()->IsStandaloneDiskFault(static_cast<uint16_t>(diskId))) {
+            continue;
+        }
         diskCap += static_cast<uint64_t>(config.diskCaps[diskId]);
         diskUsed += FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_DISK, diskId);
     }
@@ -112,6 +146,9 @@ void WCache::GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &dis
 
 BResult WCache::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
 {
+    if (UNLIKELY(!IsWritable())) {
+        return BIO_INNER_RETRY;
+    }
     auto &memCache = mCacheTiers[WCACHE_MEMORY];
     return memCache->GetDataSlice(sliceKey, slice);
 }
@@ -119,9 +156,12 @@ BResult WCache::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
 BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
     WCacheSliceRefPtr &destSliceRef, CacheAttr &attr)
 {
-    IncFlyIo();
+    if (UNLIKELY(!IsWritable())) {
+        return BIO_INNER_RETRY;
+    }
+    // The in-flight reference is held by WCacheManager::Put from AcquireWCacheForPut
+    // until WCacheIndex::Insert completes, so no additional reference is needed here.
     auto ret = PutImpl(key, srcSlice, sliceReader, destSliceRef, attr);
-    DecFlyIo();
     if (ret == BIO_OK) {
         uint64_t newoffset = srcSlice->GetOffsetInFlow() + srcSlice->GetLength();
         uint64_t newIndex = srcSlice->GetIndexInFlow() + 1;
@@ -156,6 +196,11 @@ BResult WCache::PutImpl(const Key &key, const WCacheSlicePtr &srcSlice, const Sl
     BIO_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Memory cache write failed.");
+        BResult tombRet = CreateMemoryTombstone(srcSlice);
+        if (UNLIKELY(tombRet != BIO_OK)) {
+            LogTombstoneFailure("Create memory tombstone failed", tombRet, mFlowId,
+                srcSlice->GetIndexInFlow());
+        }
         return ret;
     }
 
@@ -165,6 +210,45 @@ BResult WCache::PutImpl(const Key &key, const WCacheSlicePtr &srcSlice, const Sl
         LOG_ERROR("Start evict slice failed, ret:" << ret << ", key:" << key << ".");
     }
     return ret;
+}
+
+BResult WCache::CreateMemoryTombstone(const WCacheSlicePtr &srcSlice)
+{
+    if (srcSlice == nullptr) {
+        LogTombstoneFailure("Create memory tombstone with null slice", BIO_INVALID_PARAM, mFlowId, 0);
+        return BIO_INVALID_PARAM;
+    }
+    auto &memCache = mCacheTiers[WCACHE_MEMORY];
+    if (memCache == nullptr) {
+        LogTombstoneFailure("Create memory tombstone with null tier", BIO_ERR, mFlowId, 0);
+        return BIO_ERR;
+    }
+
+    uint64_t index = srcSlice->GetIndexInFlow();
+    if (index != 0 && UINT64_MAX / index < sizeof(WFlowSliceMeta)) {
+        LogTombstoneFailure("Memory tombstone index overflow", BIO_INNER_RETRY, mFlowId, index);
+        return BIO_INNER_RETRY;
+    }
+    uint64_t offset = srcSlice->GetOffsetInFlow();
+    uint64_t length = srcSlice->GetLength();
+    WFlowMetaDataSlice metaDataSlice;
+    auto ret = memCache->GetMetaDataSlice(index, offset, length, metaDataSlice);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LogTombstoneFailure("Allocate memory tombstone slice failed", ret, mFlowId, index);
+        return ret;
+    }
+
+    WCacheSliceRefPtr tombstoneRef = MakeRef<WCacheSliceRef>(metaDataSlice.dataSlice);
+    if (UNLIKELY(tombstoneRef == nullptr)) {
+        LogTombstoneFailure("Make memory tombstone ref failed", BIO_ALLOC_FAIL, mFlowId, index);
+        return BIO_ALLOC_FAIL;
+    }
+    tombstoneRef->SetState(SLICE_INVALID);
+    memCache->AddEvictQueue(tombstoneRef);
+    StartEvictTask(WCACHE_MEMORY);
+    LOG_DEBUG("Create memory tombstone success, flowId:" << mFlowId << ", index:" << index << ", offset:" <<
+        offset << ", length:" << length << ".");
+    return BIO_OK;
 }
 
 BResult WCache::StartEvictSlice(const Key &key, WCacheSliceRefPtr &destSliceRef, CacheAttr &attr)
@@ -377,13 +461,16 @@ void WCache::Destroy()
 
 void WCache::StartEvictTask(WCacheTierType type)
 {
+    if (mStandaloneFault.load()) {
+        mEvictRef[type].store(false);
+        return;
+    }
     if (type == WCACHE_DISK && !mHasDiskCache) {
         mEvictRef[type].store(false);
         return;
     }
 
-    bool isNormal = false;
-    mGetLocDiskStatus(mPtId, mDiskId, isNormal);
+    bool isNormal = IsOwnDiskNormal();
     if (!isNormal) {
         mEvictRef[type].store(false); // break task
         return;
@@ -417,6 +504,10 @@ void WCache::StartEvictTask(WCacheTierType type)
 
 void WCache::RetryEvictTask(WCacheTierType type)
 {
+    if (mStandaloneFault.load()) {
+        mEvictRef[type].store(false);
+        return;
+    }
     if (type == WCACHE_DISK && !mHasDiskCache) {
         mEvictRef[type].store(false);
         return;
@@ -427,8 +518,7 @@ void WCache::RetryEvictTask(WCacheTierType type)
         return;
     }
 
-    bool isNormal = false;
-    mGetLocDiskStatus(mPtId, mDiskId, isNormal);
+    bool isNormal = IsOwnDiskNormal();
     if (!isNormal) {
         mEvictRef[type].store(false); // break task
         return;
@@ -453,6 +543,20 @@ void WCache::RetryEvictTask(WCacheTierType type)
         DecreaseRef();
     }
     return;
+}
+
+bool WCache::IsOwnDiskNormal()
+{
+    bool isNormal = false;
+    if (IsWritable() || !BioServer::Instance()->IsStandaloneMode()) {
+        mGetLocDiskStatus(mPtId, mDiskId, isNormal);
+        return isNormal;
+    }
+
+    CmDiskStatus diskStatus = CM_DISK_FAULT;
+    return !BioServer::Instance()->IsStandaloneDiskFault(mDiskId) &&
+        BioServer::Instance()->GetDiskStatusFromNodeView(mDiskId, diskStatus) == BIO_OK &&
+        diskStatus == CM_DISK_NORMAL;
 }
 
 uint64_t WCache::GetCapacity(WCacheTierType type)
@@ -542,6 +646,9 @@ BResult WCache::Recover(RecoverCallback recoverCallback)
 void WCache::Flush(const WCachePtr &self)
 {
     BIO_TP_START(NO_PROCESS_WCACHE_FLUSH, 0);
+    if (mStandaloneFault.load()) {
+        return;
+    }
     mIsForced = true;
     bool expectval = false;
     bool isSucceed = false;
@@ -569,6 +676,9 @@ void WCache::Flush(const WCachePtr &self)
 void WCache::ExpiredClear(const WCachePtr &self)
 {
     BIO_TP_START(NO_PROCESS_WCACHE_EXPIRED_CLEAR, 0);
+    if (mStandaloneFault.load()) {
+        return;
+    }
     mIsForced = true;
     bool expectval = false;
     bool isSucceed = false;
@@ -590,6 +700,29 @@ void WCache::ExpiredClear(const WCachePtr &self)
         }
     }
     BIO_TP_END;
+}
+
+BResult WCache::ForceClearMemoryTier()
+{
+    bool expected = false;
+    if (!mEvictRef[WCACHE_MEMORY].compare_exchange_strong(expected, true)) {
+        return BIO_INNER_RETRY;
+    }
+    mIsForced = true;
+    return ExpiredClearMem();
+}
+
+BResult WCache::ReleaseFaultedResources()
+{
+    BResult ret = mCacheTiers[WCACHE_MEMORY] == nullptr ? BIO_OK :
+        mCacheTiers[WCACHE_MEMORY]->ReleaseFaultedResources();
+    if (mCacheTiers[WCACHE_DISK] != nullptr) {
+        BResult diskRet = mCacheTiers[WCACHE_DISK]->ReleaseFaultedResources();
+        if (ret == BIO_OK) {
+            ret = diskRet;
+        }
+    }
+    return ret;
 }
 
 void WCache::ProcAndCacheBrokenExpiredClear()
@@ -688,12 +821,18 @@ BResult WCache::EvictFromMemToDiskImpl(WCacheSliceRefPtr sliceRef, bool isFront)
     // when update slice finished, then release resource of flow.
     IncreaseRef();
     WCacheSliceRef::SetSliceCallback callback = [this, sliceRef](const WCacheSlicePtr &oldSlice) {
+        if (oldSlice == nullptr) {
+            DecreaseRef();
+            return;
+        }
         auto &memCache = mCacheTiers[WCACHE_MEMORY];
         BIO_TRACE_START(WCACHE_TRACE_ED_EVICTSLICE);
         auto ret = memCache->Evict(oldSlice);
-        auto &diskCache = mCacheTiers[WCACHE_DISK];
-        diskCache->AddEvictQueue(sliceRef);
-        StartEvictTask(WCACHE_DISK);
+        if (!mStandaloneFault.load()) {
+            auto &diskCache = mCacheTiers[WCACHE_DISK];
+            diskCache->AddEvictQueue(sliceRef);
+            StartEvictTask(WCACHE_DISK);
+        }
         BIO_TRACE_END(WCACHE_TRACE_ED_EVICTSLICE, BIO_OK);
         DecreaseRef();
         ChkTrueExNot(ret == BIO_OK);
@@ -837,6 +976,15 @@ BResult WCache::EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMa
     // 4. 释放WCache的FLOW资源.
     IncreaseRef();
     WCacheSliceRef::SetSliceCallback callback = [this, sliceRef, sliceMeta, batch](const WCacheSlicePtr &oldSlice) {
+        if (mStandaloneFault.load()) {
+            sliceRef->SetState(SLICE_INVALID);
+            DecreaseRef();
+            return;
+        }
+        if (oldSlice == nullptr) {
+            DecreaseRef();
+            return;
+        }
         auto &diskCache = mCacheTiers[WCACHE_DISK];
         auto ret = diskCache->Evict(oldSlice);
         if (UNLIKELY(ret != BIO_OK)) {
@@ -996,6 +1144,78 @@ bool WCache::EvictDiskSatisfiedCond()
     }
 }
 
+BResult WCache::EvictMemoryTombstone(WCacheSliceRefPtr &sliceRef)
+{
+    auto slice = sliceRef->GetSlice();
+    if (slice == nullptr) {
+        return BIO_INNER_ERR;
+    }
+
+    if (mHasDiskCache) {
+        auto ret = CreateDiskTombstone(slice);
+        if (UNLIKELY(ret != BIO_OK)) {
+            LogTombstoneFailure("Create disk tombstone failed", ret, mFlowId, slice->GetIndexInFlow());
+            return ret;
+        }
+    }
+
+    // The tombstone occupies real flow space, so the normal evict path can advance
+    // the cursor and truncate the memory flow without any special handling.
+    return mCacheTiers[WCACHE_MEMORY]->Evict(slice);
+}
+
+BResult WCache::CreateDiskTombstone(const WCacheSlicePtr &slice)
+{
+    if (slice == nullptr) {
+        LogTombstoneFailure("Create disk tombstone with null slice", BIO_INVALID_PARAM, mFlowId, 0);
+        return BIO_INVALID_PARAM;
+    }
+    auto &diskCache = mCacheTiers[WCACHE_DISK];
+    if (diskCache == nullptr) {
+        LogTombstoneFailure("Create disk tombstone with null tier", BIO_ERR, mFlowId, 0);
+        return BIO_ERR;
+    }
+
+    uint64_t index = slice->GetIndexInFlow();
+    if (index != 0 && UINT64_MAX / index < sizeof(WFlowSliceMeta)) {
+        LogTombstoneFailure("Disk tombstone index overflow", BIO_INNER_RETRY, mFlowId, index);
+        return BIO_INNER_RETRY;
+    }
+    uint64_t offset = slice->GetOffsetInFlow();
+    uint64_t length = slice->GetLength();
+    WFlowMetaDataSlice metaDataSlice;
+    auto ret = diskCache->GetMetaDataSlice(index, offset, length, metaDataSlice);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LogTombstoneFailure("Allocate disk tombstone slice failed", ret, mFlowId, index);
+        return ret;
+    }
+
+    // Persist an already-evicted marker so recovery rebuilds the same INVALID
+    // slice at the same index instead of seeing a gap in the disk flow.
+    WFlowSliceMeta tombMeta{};
+    tombMeta.magic = mFlowId;
+    tombMeta.offset = offset;
+    tombMeta.length = length;
+    tombMeta.hasEvict = 1;
+    ret = mSliceOperator.Copy(reinterpret_cast<const char *>(&tombMeta), metaDataSlice.metaSlice.Get());
+    if (UNLIKELY(ret != BIO_OK)) {
+        LogTombstoneFailure("Write disk tombstone meta failed", ret, mFlowId, index);
+        return ret;
+    }
+
+    WCacheSliceRefPtr tombstoneRef = MakeRef<WCacheSliceRef>(metaDataSlice.dataSlice);
+    if (UNLIKELY(tombstoneRef == nullptr)) {
+        LogTombstoneFailure("Make disk tombstone ref failed", BIO_ALLOC_FAIL, mFlowId, index);
+        return BIO_ALLOC_FAIL;
+    }
+    tombstoneRef->SetState(SLICE_INVALID);
+    diskCache->AddEvictQueue(tombstoneRef);
+    StartEvictTask(WCACHE_DISK);
+    LOG_DEBUG("Create disk tombstone success, flowId:" << mFlowId << ", index:" << index << ", offset:" << offset <<
+        ", length:" << length << ".");
+    return BIO_OK;
+}
+
 BResult WCache::EvictAllMemSliceToDisk()
 {
     if (!mHasDiskCache) {
@@ -1009,7 +1229,8 @@ BResult WCache::EvictAllMemSliceToDisk()
             break;
         }
         CacheOverloadCtrl::Instance().AddBandwidth(BW_STAT_EVICT_TO_DISK, sliceRef->GetSlice()->GetLength());
-        auto ret = EvictFromMemToDisk(sliceRef);
+        auto ret = (sliceRef->GetState() == SLICE_INVALID) ? EvictMemoryTombstone(sliceRef) :
+            EvictFromMemToDisk(sliceRef);
         if (ret != BIO_OK) {
             mCacheTiers[WCACHE_MEMORY]->RetryEvictQueue(sliceRef);
             LOG_WARN("Evict all mem slice memory, need delayed internal retry, flowId:" <<
@@ -1036,6 +1257,19 @@ BResult WCache::EvictAllMemSliceToDiscard()
         }
         auto slice = sliceRef->GetSlice();
         if (slice == nullptr) {
+            continue;
+        }
+        if (sliceRef->GetState() == SLICE_INVALID) {
+            auto tombRet = mCacheTiers[WCACHE_MEMORY]->Evict(slice);
+            if (tombRet != BIO_OK) {
+                mCacheTiers[WCACHE_MEMORY]->RetryEvictQueue(sliceRef);
+                mRetryCallback(mFlowId, WCACHE_MEMORY);
+                if (mFlushMetaEventCallback != nullptr) {
+                    mFlushMetaEventCallback(metaEventBatch);
+                }
+                return tombRet;
+            }
+            isSatisfied = EvictMemSatisfiedCond();
             continue;
         }
         auto ret = EvictFromMemToDisk(sliceRef, false, metaEventBatch);
@@ -1103,6 +1337,21 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
         if (slice == nullptr) {
             break;
         }
+        if (sliceRef->GetState() == SLICE_INVALID) {
+            // Tombstone: skip disk read and UFS write, but keep the index
+            // contiguous so the disk flow truncation can advance normally.
+            ret = mCacheTiers[WCACHE_DISK]->Evict(slice);
+            if (ret != BIO_OK) {
+                mCacheTiers[WCACHE_DISK]->RetryEvictQueue(sliceRef);
+                mRetryCallback(mFlowId, WCACHE_DISK);
+                if (mFlushMetaEventCallback != nullptr) {
+                    mFlushMetaEventCallback(metaEventBatch);
+                }
+                return ret;
+            }
+            isSatisfied = EvictDiskSatisfiedCond();
+            continue;
+        }
         uint64_t sliceEvictOffset = slice->GetOffsetInFlow() + slice->GetLength();
         if (globEvictOffset < sliceEvictOffset) {
             mCacheTiers[WCACHE_DISK]->RetryEvictQueue(sliceRef);
@@ -1141,7 +1390,8 @@ BResult WCache::FlushMem()
     while (sliceRef != nullptr) {
         LOG_DEBUG("Expired clear memory, flowId:" << sliceRef->GetSlice()->GetFlowId() << ", IndexInFlow:" <<
             sliceRef->GetSlice()->GetIndexInFlow());
-        auto ret = EvictFromMemToDisk(sliceRef, false, metaEventBatch);
+        auto ret = (sliceRef->GetState() == SLICE_INVALID) ? EvictMemoryTombstone(sliceRef) :
+            EvictFromMemToDisk(sliceRef, false, metaEventBatch);
         if (ret != BIO_OK) {
             mCacheTiers[WCACHE_MEMORY]->RetryEvictQueue(sliceRef);
             LOG_DEBUG("Flush memory fail, flowId:" << sliceRef->GetSlice()->GetFlowId() <<
@@ -1174,7 +1424,8 @@ BResult WCache::FlushDisk()
     ChkTrueNot(metaEventBatch != nullptr, BIO_ALLOC_FAIL);
     WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_DISK]->GetEvictSlice();
     while (sliceRef != nullptr) {
-        auto ret = EvictFromDiskToUnderFs(sliceRef, true, false, metaEventBatch);
+        auto ret = (sliceRef->GetState() == SLICE_INVALID) ? mCacheTiers[WCACHE_DISK]->Evict(sliceRef->GetSlice()) :
+            EvictFromDiskToUnderFs(sliceRef, true, false, metaEventBatch);
         if (ret != BIO_OK) {
             mCacheTiers[WCACHE_DISK]->RetryEvictQueue(sliceRef);
             mEvictRef[WCACHE_DISK] = false;
@@ -1199,6 +1450,7 @@ BResult WCache::ExpiredClearMemImpl(WCacheSliceRefPtr sliceRef)
     WCacheSliceRef::SetSliceCallback callback = [this, sliceRef](const WCacheSlicePtr &oldSlice) {
         if (oldSlice == nullptr) {
             LOG_ERROR("old slice is null.");
+            DecreaseRef();
             return;
         }
         auto &memCache = mCacheTiers[WCACHE_MEMORY];
@@ -1246,8 +1498,14 @@ BResult WCache::ExpiredClearDiskImpl(WCacheSliceRefPtr sliceRef)
 
     IncreaseRef();
     WCacheSliceRef::SetSliceCallback callback = [this, sliceRef](const WCacheSlicePtr &oldSlice) {
+        if (mStandaloneFault.load()) {
+            sliceRef->SetState(SLICE_INVALID);
+            DecreaseRef();
+            return;
+        }
         if (oldSlice == nullptr) {
             LOG_ERROR("old slice is null.");
+            DecreaseRef();
             return;
         }
         auto &diskCache = mCacheTiers[WCACHE_DISK];

@@ -69,6 +69,8 @@ public:
 
     BResult DestroyWCache(uint64_t procId, uint64_t flowId, uint16_t ptId, uint64_t ptv);
 
+    uint32_t MarkPtFlowsReadOnly(uint16_t ptId, uint64_t ptv, uint16_t diskId);
+
     BResult DeleteWCache(uint64_t flowId);
 
     BResult RecoverCache(FlowPtr metaFlow);
@@ -126,6 +128,10 @@ public:
 
     BResult ExpiredClear(uint16_t ptId, uint64_t ptv);
 
+    BResult CleanupFaultedDiskFlows(uint16_t ptId, uint64_t ptv, uint16_t failedDiskId);
+
+    BResult UnregisterFaultedFlows(uint16_t ptId, const std::list<WCachePtr> &faultedFlows);
+
     BResult HandleProcBroken(uint64_t procId);
 
     BResult HandleProcBrokenHdl(uint64_t procId);
@@ -137,6 +143,8 @@ public:
     BResult ProcBrokenSyncOldFlow(uint64_t flowId, uint64_t index, uint64_t offset, bool &needDestroy);
 
     WCachePtr GetWCache(uint64_t flowId);
+
+    WCachePtr GetWCacheForCleanup(uint64_t flowId);
 
     void HandleProcBrokenDestroyFlow(WCachePtr flow, uint32_t localNid, bool *slaveResult);
 
@@ -154,8 +162,14 @@ private:
     BResult ExpiredClearImpl(uint16_t ptId, uint64_t ptv);
     BResult HandleCacheBrokenHdl(uint64_t procId, uint64_t flowId);
     BResult HandleCacheBrokenImpl(WCachePtr wcache);
+    WCachePtr AcquireWCacheForPut(uint64_t flowId);
     BResult MasterProcBrokenSyncFlow(WCachePtr flow, CmPtInfo ptEntry, uint32_t localNid);
     void InitCallbackCtx(ProcBrokenCallbackCtx &cbCtx, uint32_t quota);
+
+    void CollectFaultedFlows(uint16_t ptId, uint64_t ptv, uint16_t failedDiskId,
+        std::list<WCachePtr> &faultedFlows, std::unordered_set<uint64_t> &flowIds);
+    BResult WaitFaultedFlowsIdle(uint16_t ptId, const std::list<WCachePtr> &faultedFlows);
+    void ReportRemovedKeys(std::vector<std::string> &&removedKeys);
 
     void ScanUpgradeCache(std::list<WCachePtr> &list);
     BResult ClearUpgradeCache();
@@ -169,6 +183,7 @@ private:
     void DestroyEvictThread();
     void ScheduleFlushMetaEvents();
     void FlushMetaEvents();
+    void ReportMetaEventsSync(std::vector<UbsIoMetaEvent> &&events);
 
 private:
     ReadWriteLock mWCacheManagerLock;
@@ -190,6 +205,7 @@ private:
     ExecutorServicePtr mMemoryEvictConsultService{ nullptr };
 
     std::mutex mMetaReportLock;
+    std::mutex mMetaCallbackLock;
     std::vector<UbsIoMetaEvent> mPendingMetaEvents;
     std::atomic<bool> mMetaReportScheduled{ false };
     UbsIoMetaEventCallback mMetaEventCallback{ nullptr };
