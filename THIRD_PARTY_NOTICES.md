@@ -4,6 +4,21 @@
 
 本清单与 `ubsio-boostio/3rdparty` 下的 CMake 配置及 `prepare_sources.sh` 保持一致。
 
+## 许可证速查
+
+> 下表为已知许可证类型速查，便于合规检查，**最终以各上游项目随源码发布的 LICENSE 为准**。
+
+| 组件 | 许可证（速查） | 核实来源 |
+| --- | --- | --- |
+| libboundscheck | Mulan PSL v2 | [LICENSE](https://gitcode.com/openeuler/libboundscheck/blob/master/LICENSE) |
+| liburing | LGPL-2.1 | [COPYING](https://gitcode.com/gh_mirrors/li/liburing/blob/liburing-2.6/COPYING) |
+| spdlog | MIT | [LICENSE](https://gitcode.com/GitHub_Trending/sp/spdlog/blob/v1.15.3/LICENSE) |
+| ubs-comm | Mulan PSL v2 | [LICENSE](https://gitcode.com/openeuler/ubs-comm/blob/master/LICENSE) |
+| umdk | MIT（核心库）；GPL-2.0（内核模块） | [LICENSES/README](https://atomgit.com/openeuler/umdk/blob/br_openEuler_24.03_LTS_SP3/LICENSES/README) |
+| Apache ZooKeeper C client headers | Apache License 2.0 | [LICENSE](https://gitcode.com/gh_mirrors/zo/zookeeper/blob/release-3.9.3/LICENSE.txt) |
+| Apache Hadoop HDFS header | Apache License 2.0 | [LICENSE](https://github.com/apache/hadoop/blob/rel/release-3.4.0/LICENSE.txt) |
+| prometheus-cpp | MIT | [LICENSE](https://gitcode.com/gh_mirrors/pr/prometheus-cpp/blob/v1.2.4/LICENSE) |
+
 ## 默认构建与离线源码
 
 | 组件 | 用途 | 来源/版本 | 许可证说明 |

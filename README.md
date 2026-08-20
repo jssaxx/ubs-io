@@ -104,6 +104,13 @@ UBS IO 的性能收益来自 KV Cache 层级容量扩展和本地访问路径收
 - [CONTRIBUTING.md](CONTRIBUTING.md)：贡献类型、分支模型、PR 要求、RFC 门槛和评审 SLA。
 - [SECURITY.md](SECURITY.md)：安全漏洞报告和披露流程。
 
+## 🌐社区与沟通
+
+- **行为准则**：见 [CONTRIBUTING.md](CONTRIBUTING.md) 行为准则章节（遵循 openEuler 社区行为守则）
+- **贡献指南**：见 [CONTRIBUTING.md](CONTRIBUTING.md)（含 CLA 签署、社区角色、SIG 归属、沟通渠道）
+- **维护者**：见 [OWNERS](OWNERS)
+- **沟通渠道**：openEuler 社区 [邮件列表](https://gitcode.com/openeuler/community/blob/master/zh/communication/Mails.md) / [IRC](https://gitcode.com/openeuler/community/blob/master/zh/communication/IRCs.md)
+
 ## 📝相关信息
 
 - [三方依赖声明](THIRD_PARTY_NOTICES.md)
