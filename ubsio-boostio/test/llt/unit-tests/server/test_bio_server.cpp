@@ -1025,7 +1025,8 @@ TEST_F(TestBioServer, test_bio_server_writer_copy_slice_fail)
     LOG_INFO("test_bio_server_writer_copy_slice_fail");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     std::vector<FlowAddr> addr;
-    addr.emplace_back(FlowAddr(1, 0, NO_128));
+    constexpr uint64_t invalidChunkId = static_cast<uint64_t>(BDM_INVALID_ID) << 48UL;
+    addr.emplace_back(FlowAddr(invalidChunkId, 0, NO_128));
     WCacheSlicePtr from = MakeRef<WCacheSlice>(1, 1, 1, NO_128, addr, FLOW_DISK);
     WCacheSlicePtr to = MakeRef<WCacheSlice>(1, 1, 1, NO_128, addr);
     std::vector<NetMrInfo> rMrVec;
