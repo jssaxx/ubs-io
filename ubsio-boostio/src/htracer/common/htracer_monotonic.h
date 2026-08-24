@@ -32,7 +32,7 @@ public:
      */
     template <int32_t FAILURE_RET> static int32_t InitTickUs()
     {
-        /* get frequ */
+        /* get frequency */
         uint64_t tmpFreq = 0;
         __asm__ volatile("mrs %0, cntfrq_el0" : "=r"(tmpFreq));
         auto freq = static_cast<uint32_t>(tmpFreq);

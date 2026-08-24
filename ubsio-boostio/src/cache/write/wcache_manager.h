@@ -120,7 +120,7 @@ public:
 
     void AppendMetaEvents(std::vector<UbsIoMetaEvent> &&events);
 
-    void FlushMetaEventBatch(const UbsIoMetaEventBatchPtr &batch);
+    void SubmitMetaEventBatch(const UbsIoMetaEventBatchPtr &batch);
 
     BResult GetEvictOffset(uint64_t flowId, uint64_t &flowOffset);
 

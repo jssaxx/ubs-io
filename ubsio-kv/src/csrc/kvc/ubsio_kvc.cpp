@@ -141,11 +141,11 @@ UBSIO_API void UbsioKvCacheExit(void)
 UBSIO_API int32_t UbsioKvCachePut(const char *key, void *buf, size_t length, uint32_t flags)
 {
     if (UNLIKELY(key == nullptr || buf == nullptr || length == 0)) {
-        LOG_ERROR("Invalid parma, length:" << length);
+        LOG_ERROR("Invalid parameter, length:" << length);
         return UBSIO_KVC_INVALID_PARAM;
     }
     if (UNLIKELY(strlen(key) > MAX_KEY_LENGTH || strlen(key) < 1)) {
-        LOG_ERROR("Invalid parma");
+        LOG_ERROR("Invalid parameter");
         return UBSIO_KVC_INVALID_PARAM;
     }
     return KvcPutData(key, buf, length, flags);
@@ -228,7 +228,7 @@ UBSIO_API bool UbsioKvCacheExist(const char *key, uint32_t flags)
 UBSIO_API int32_t UbsioKvCacheDelete(const char *key, uint32_t flags) 
 { 
     if (key == nullptr || strlen(key) > MAX_KEY_LENGTH || strlen(key) < 1) { 
-        LOG_ERROR("Invalid parma"); 
+        LOG_ERROR("Invalid parameter");
         return UBSIO_KVC_INVALID_PARAM; 
     } 
     return KvcDeleteKey(key, flags); 
@@ -237,11 +237,11 @@ UBSIO_API int32_t UbsioKvCacheDelete(const char *key, uint32_t flags)
 UBSIO_API int32_t UbsioKvCacheBatchDelete(const char **keys, uint32_t keysCount, int32_t *results, uint32_t flags) 
 { 
     if (keys == nullptr || results == nullptr) { 
-        LOG_ERROR("Invalid parma"); 
+        LOG_ERROR("Invalid parameter");
         return UBSIO_KVC_INVALID_PARAM; 
     } 
     if (keysCount > MAX_BATCH_OP_COUNT || keysCount < 1) { 
-        LOG_ERROR("Invalid parma"); 
+        LOG_ERROR("Invalid parameter");
         return UBSIO_KVC_INVALID_PARAM; 
     } 
     std::vector<std::string> key_vector; 

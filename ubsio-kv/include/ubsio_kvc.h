@@ -248,7 +248,7 @@ int32_t UbsioKvCacheDelete(const char *key, uint32_t flags);
 /**
  * @brief Delete multiple keys from the UBS-IO KV Cache
  *
- * @param keys             [in] List of keys to be deteled from the UBS-IO KV Cache
+ * @param keys             [in] List of keys to be deleted from the UBS-IO KV Cache
  * @param keysCount        [in] Count of keys
  * @param results          [out] Results of each delete operation
  * @param flags            [in] Flags for the operation
@@ -269,7 +269,7 @@ int32_t UbsioKvCacheGetLength(const char *key, size_t *length, uint32_t flags);
 /**
  * @brief Get multiple keys length from the UBS-IO KV Cache
  *
- * @param keys             [in] List of keys to be deteled from the UBS-IO KV Cache
+ * @param keys             [in] List of keys whose lengths are queried from the UBS-IO KV Cache
  * @param keysCount        [in] Count of keys
  * @param lengths          [out] length of each get key
  * @param results          [out] Results of each get length operation

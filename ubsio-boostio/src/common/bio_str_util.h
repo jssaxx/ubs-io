@@ -59,15 +59,15 @@ inline bool StrUtil::StrToLong(const std::string &src, long &value)
 
 inline bool StrUtil::StrToFloat(const std::string &src, float &value)
 {
-    constexpr float EPSINON = 0.000001;
+    constexpr float EPSILON = 0.000001;
 
     char *remain = nullptr;
     errno = 0;
     value = std::strtof(src.c_str(), &remain);
     if (remain == nullptr || strlen(remain) > 0 ||
-        ((value - HUGE_VALF) >= -EPSINON && (value - HUGE_VALF) <= EPSINON && errno == ERANGE)) {
+        ((value - HUGE_VALF) >= -EPSILON && (value - HUGE_VALF) <= EPSILON && errno == ERANGE)) {
         return false;
-    } else if ((value >= -EPSINON && value <= EPSINON) && (src != "0.0")) {
+    } else if ((value >= -EPSILON && value <= EPSILON) && (src != "0.0")) {
         return false;
     }
     return true;

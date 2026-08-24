@@ -1211,7 +1211,7 @@ BResult BioServer::BioCacheInit()
         };
         ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
         if (ret != BIO_OK) {
-            LOG_ERROR("Net engine regist channel broken handler failed,, ret " << ret);
+            LOG_ERROR("Net engine register channel broken handler failed, ret " << ret);
             return ret;
         }
     }

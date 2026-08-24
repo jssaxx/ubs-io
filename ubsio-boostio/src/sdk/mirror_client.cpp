@@ -1817,7 +1817,7 @@ BResult MirrorClient::DispathBatchExist(const char *key[], ObjLocation location[
         };
 
         if (!mBatchExistExecutor->Execute(func)) {
-            LOG_ERROR("Execute disapth batch get failed, batch num: " << count << " i:" << i);
+            LOG_ERROR("Execute dispatch batch get failed, batch num: " << count << " i:" << i);
             taskResults[resultIndex] = BIO_INNER_ERR;
             ret = BIO_INNER_ERR;
             if (__sync_sub_and_fetch(&taskNum, 1) == 0) {

@@ -217,15 +217,16 @@ BResult WCacheManager::CreateWCache(uint64_t procId, uint64_t flowId, uint16_t p
     BIO_TP_END;
     ChkTrue(wcache != nullptr, BIO_ALLOC_FAIL, "Make wcache instance failed.");
 
-    WCache::EvictCallback evictCallback = [this](uint16_t ptId, const Key &key, WCacheSliceRefPtr sliceRef,
-        const UbsIoMetaEventBatchPtr &batch) -> BResult {
+    WCache::RecordMetaDeleteEventCallback recordMetaDeleteEventCallback = [this](uint16_t ptId, const Key &key,
+        WCacheSliceRefPtr sliceRef, const UbsIoMetaEventBatchPtr &batch) -> BResult {
         mCacheIndex->Delete(ptId, key, sliceRef);
         AppendMetaEvent(UBSIO_META_DELETE, key, batch);
         return BIO_OK;
     };
 
-    WCache::FlushMetaEventCallback flushMetaEventCallback = [this](const UbsIoMetaEventBatchPtr &batch) -> void {
-        FlushMetaEventBatch(batch);
+    WCache::SubmitMetaEventBatchCallback submitMetaEventBatchCallback = [this](
+        const UbsIoMetaEventBatchPtr &batch) -> void {
+        SubmitMetaEventBatch(batch);
     };
 
     WCache::RetryCallback retryCallback = [this](uint64_t flowId, WCacheTierType cacheTier) -> void {
@@ -233,7 +234,8 @@ BResult WCacheManager::CreateWCache(uint64_t procId, uint64_t flowId, uint16_t p
         mRetryManager[cacheTier].push_back(flowId);
     };
 
-    wcache->RegOp(mGetLocDiskStatus, mLocRole, mEvictOffset, evictCallback, retryCallback, flushMetaEventCallback);
+    wcache->RegOp(mGetLocDiskStatus, mLocRole, mEvictOffset, recordMetaDeleteEventCallback, retryCallback,
+        submitMetaEventBatchCallback);
     auto ret = wcache->Init(mEvictService, mRCacheManager, isRecover);
     ChkTrue(ret == BIO_OK, ret, "Failed to init WCache, flowId:" << flowId);
 
@@ -386,7 +388,7 @@ BResult WCacheManager::RecoverCache(FlowPtr metaFlow)
         LOG_ERROR("Recover fail:" << ret << ", flowId:" << flowId);
         return ret;
     }
-    FlushMetaEventBatch(metaEventBatch);
+    SubmitMetaEventBatch(metaEventBatch);
     FlushMetaEvents();
 
     return BIO_OK;
@@ -709,7 +711,7 @@ BResult WCacheManager::Delete(uint16_t ptId, const Key &key)
 
     WCacheSliceRefPtr sliceRef = mCacheIndex->Aquire(ptId, key);
     if (UNLIKELY(sliceRef == nullptr)) {
-        LOG_WARN("Write cache aquire slice failed, key:" << key << ", ptId:" << ptId << ".");
+        LOG_WARN("Write cache acquire slice failed, key:" << key << ", ptId:" << ptId << ".");
         return BIO_NOT_EXISTS;
     }
     if (!sliceRef->OpLock()) {
@@ -823,7 +825,7 @@ void WCacheManager::ReportMetaEventsSync(std::vector<UbsIoMetaEvent> &&events)
     }
 }
 
-void WCacheManager::FlushMetaEventBatch(const UbsIoMetaEventBatchPtr &batch)
+void WCacheManager::SubmitMetaEventBatch(const UbsIoMetaEventBatchPtr &batch)
 {
     if (batch == nullptr) {
         return;

@@ -45,7 +45,7 @@ void BdmThreadBindCPUs(const char *name, int32_t cpuid)
 
     for (int i = 0; i < cpus; i++) {
         if (CPU_ISSET(i, &get)) {
-            BDM_LOGINFO(0, "Thread:%s, index:%d, tid:%ld, is binded to CPU %d.", name, i, pSelf, cpuid);
+            BDM_LOGINFO(0, "Thread:%s, index:%d, tid:%ld, is bound to CPU %d.", name, i, pSelf, cpuid);
         }
     }
 
@@ -108,7 +108,7 @@ BDM_THREAD_POOL_S *BdmThreadPoolCreate(uint32_t threadNum, uint32_t queueSize, B
         if (ret != 0) {
             ret = BdmThreadPoolDestroy(threadPool, 0);
             if (ret != 0) {
-                BDM_LOGERROR(0, "ThreadPool destory fail, ret(%d).", ret);
+                BDM_LOGERROR(0, "ThreadPool destroy failed, ret(%d).", ret);
             }
             return NULL;
         }

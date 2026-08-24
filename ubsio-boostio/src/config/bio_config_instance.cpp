@@ -363,7 +363,7 @@ BResult BioConfig::AutoConfigDaemonDisk(const ConfigurationPtr &conf)
 
     StrUtil::Split(diskMask, ":", mDaemonConfig.diskList);
     if (mDaemonConfig.diskList.size() > DISK_PATH_CONFIG_MAX_NUM) {
-        LOG_ERROR("Failed to spilt disk path, number of paths cannot exceed " << DISK_PATH_CONFIG_MAX_NUM << ". " <<
+        LOG_ERROR("Failed to split disk path, number of paths cannot exceed " << DISK_PATH_CONFIG_MAX_NUM << ". " <<
             diskMask);
         return BIO_ERR;
     }

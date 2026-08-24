@@ -42,17 +42,19 @@ public:
     {}
     ~WCache();
 
-    using EvictCallback = std::function<BResult(uint16_t ptId, const Key &key, WCacheSliceRefPtr sliceRef,
+    using RecordMetaDeleteEventCallback = std::function<BResult(uint16_t ptId, const Key &key,
+        WCacheSliceRefPtr sliceRef,
         const UbsIoMetaEventBatchPtr &batch)>;
     using RetryCallback = std::function<void(uint64_t flowId, WCacheTierType cacheTier)>;
-    using FlushMetaEventCallback = std::function<void(const UbsIoMetaEventBatchPtr &batch)>;
+    using SubmitMetaEventBatchCallback = std::function<void(const UbsIoMetaEventBatchPtr &batch)>;
 
     BResult Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], const RCacheManagerPtr rCacheManager,
         bool isRecover);
     void Exit();
 
     void RegOp(GetLocDiskStatus getLocDiskStatus, CheckLocRole locRole, const GetGlobEvictOffset evictOffset,
-        EvictCallback evictCallback, const RetryCallback retryCallback, FlushMetaEventCallback flushMetaEventCallback);
+        RecordMetaDeleteEventCallback recordMetaDeleteEventCallback, const RetryCallback retryCallback,
+        SubmitMetaEventBatchCallback submitMetaEventBatchCallback);
 
     static void GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &diskCap, uint64_t &diskUsed);
 
@@ -255,9 +257,9 @@ private:
     bool mUfsEnable{ false };
     bool mHasDiskCache{ true };
 
-    EvictCallback mEvictCallback;
+    RecordMetaDeleteEventCallback mRecordMetaDeleteEventCallback;
     RetryCallback mRetryCallback;
-    FlushMetaEventCallback mFlushMetaEventCallback;
+    SubmitMetaEventBatchCallback mSubmitMetaEventBatchCallback;
 
     WCacheTierPtr mCacheTiers[MAX_WCACHE_TIER];
 

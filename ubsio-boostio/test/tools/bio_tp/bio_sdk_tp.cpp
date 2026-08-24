@@ -48,11 +48,11 @@ void tp::SdkTp::Register() noexcept
     BIO_TP_REG(SDK_MIRROR_CLIENT_SET_RETRY_TIME, "sdk mirror client set retry time zero", CommonTp::IntValueCallback);
     BIO_TP_REG(SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL, "prepare put with space fail", CommonTp::NoProcessCallback);
     BIO_TP_REG(SDK_MIRROR_CLIENT_PREPARE_FAIL, "prepare fail", CommonTp::NoProcessCallback);
-    BIO_TP_REG(SDK_MIRROR_CLIENT_NOT_EXIST_LOCAL_COPY, "not exsit local copy", CommonTp::NoProcessCallback);
-    BIO_TP_REG(SDK_MIRROR_CLIENT_QUERY_FAIL, "mirror client query fail, retuen nullptr", CommonTp::NoProcessCallback);
+    BIO_TP_REG(SDK_MIRROR_CLIENT_NOT_EXIST_LOCAL_COPY, "local copy does not exist", CommonTp::NoProcessCallback);
+    BIO_TP_REG(SDK_MIRROR_CLIENT_QUERY_FAIL, "mirror client query fail, return nullptr", CommonTp::NoProcessCallback);
     BIO_TP_REG(SDK_MIRROR_CLIENT_GET_RETRY, "sdk mirror client get return retry", CommonTp::IntValueCallback);
     BIO_TP_REG(SDK_CLIENT_GET_CEPH_STAT_OK, "sdk mirror client get ceph stat ok", CommonTp::IntValueCallback);
-    BIO_TP_REG(SDK_CLIENT_GET_CEPH_STAT_SIZE, "sdk mirror client get ceph stat size unequit zero", CommonTp::IntValueCallback);
+    BIO_TP_REG(SDK_CLIENT_GET_CEPH_STAT_SIZE, "sdk mirror client get ceph stat size is not zero", CommonTp::IntValueCallback);
     BIO_TP_REG(SDK_MIRROR_CLIENT_ADDRNUM_INVALID, "sdk mirror client alloc space fail", CommonTp::IntValueCallback);
     BIO_TP_REG(SDK_MIRROR_RSP_NUM_ERROR, "set mirror rsp num error", CommonTp::IntValueCallback);
     BIO_TP_REG(SDK_CLIENT_GET_UNDERFS_CONFIG_PASS_SYNC_CALL, "get underfs config pass sync call", CommonTp::NoProcessCallback);

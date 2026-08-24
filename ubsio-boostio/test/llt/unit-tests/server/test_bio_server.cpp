@@ -1687,3 +1687,13 @@ TEST_F(TestBioServer, test_start_server_add_disk)
     auto ret = mirror->HandleAddDisk(ctx);
     EXPECT_EQ(ret, BIO_OK);
 }
+
+TEST_F(TestBioServer, test_add_disk_rejects_invalid_magic)
+{
+    LOG_INFO("test_add_disk_rejects_invalid_magic");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    AddDiskRequest req{};
+    req.comm.magic = MESSAGE_MAGIC + 1;
+
+    EXPECT_EQ(mirror->AddDisk(req), BIO_INVALID_PARAM);
+}
