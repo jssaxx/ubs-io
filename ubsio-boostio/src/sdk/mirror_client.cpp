@@ -287,10 +287,6 @@ BResult MirrorClient::DestroyFlow(uint16_t ptId, uint64_t flowId)
         return ret;
     }
 
-    if (mMode == STANDALONE) {
-        return DestroyFlowImpl(ptEntry.masterNodeId, ptEntry, ptId, flowId);
-    }
-
     for (uint32_t idx = 0; idx < ptEntry.copys.size(); idx++) {
         if (ptEntry.copys[idx].state != CM_COPY_RUNNING && ptEntry.copys[idx].state != CM_COPY_RECOVERY) {
             continue;
@@ -306,42 +302,9 @@ BResult MirrorClient::DestroyFlow(uint16_t ptId, uint64_t flowId)
     return BIO_OK;
 }
 
-void MirrorClient::DeleteStandalone(uint16_t ptId, uint64_t flowId)
+void MirrorClient::Delete(uint16_t ptId, uint64_t flowId)
 {
-    mLock.LockWrite();
-    auto it = mFlowMap.find(ptId);
-    if (it == mFlowMap.end() || it->second->FlowId() != flowId) {
-        mLock.UnLock();
-        return;
-    }
-    it->second->Invalidate();
-    mLock.UnLock();
-
-    // Standalone view changes fence old writes on the server: fault cleanup drains admitted writes, while
-    // add-disk flows remain read-only. No client-side grace period is required before sending DestroyFlow.
-    BResult ret = DestroyFlow(ptId, flowId);
-    if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Destroy standalone flow failed, ret:" << ret << ", ptId:" << ptId << ", flowId:" <<
-            flowId << ".");
-        return;
-    }
-
-    mLock.LockWrite();
-    it = mFlowMap.find(ptId);
-    if (it != mFlowMap.end() && it->second->FlowId() == flowId) {
-        mFlowMap.erase(it);
-    }
-    mLock.UnLock();
-}
-
-void MirrorClient::Delete(uint16_t ptId, uint64_t flowId, bool needDelay)
-{
-    if (mMode == STANDALONE) {
-        DeleteStandalone(ptId, flowId);
-        return;
-    }
-
-    if (needDelay) {
+    if (mMode != STANDALONE) {
         sleep(BIO_IO_DELAY_TIME);
     }
     mLock.LockWrite();
@@ -928,6 +891,9 @@ BResult MirrorClient::Put(MirrorPut &param)
         isRetry = false;
         // 1. Get pt view entry.
         if (UNLIKELY((ret = GetPtEntry(ptId, ptEntry)) != BIO_OK)) {
+            if (mMode == STANDALONE && ret == BIO_CHECK_PT_FAIL) {
+                mUpdateView();
+            }
             break;
         }
 
@@ -3304,32 +3270,11 @@ BResult MirrorClient::RebuildPtView()
         return ret;
     }
 
-    std::vector<std::pair<uint16_t, uint64_t>> invalidFlows;
     if (!ptView.empty()) {
         mLock.LockWrite();
-        if (mMode == STANDALONE) {
-            for (const auto &ptEntry : ptView) {
-                auto flowIter = mFlowMap.find(ptEntry.first);
-                if (flowIter == mFlowMap.end()) {
-                    continue;
-                }
-                auto oldPtIter = mPtView.find(ptEntry.first);
-                bool ptChanged = oldPtIter != mPtView.end() &&
-                    (oldPtIter->second.version != ptEntry.second.version ||
-                     oldPtIter->second.masterDiskId != ptEntry.second.masterDiskId);
-                if (!ptChanged && flowIter->second->Version() == ptEntry.second.version) {
-                    continue;
-                }
-                flowIter->second->Invalidate();
-                invalidFlows.emplace_back(ptEntry.first, flowIter->second->FlowId());
-            }
-        }
         mPtView.clear();
         mPtView.swap(ptView);
         mLock.UnLock();
-    }
-    for (const auto &flow : invalidFlows) {
-        Delete(flow.first, flow.second, false);
     }
     CLIENT_LOG_INFO("Cur pt times:" << mCurPtTimes << ", ptview size:" << mPtView.size());
     return BIO_OK;

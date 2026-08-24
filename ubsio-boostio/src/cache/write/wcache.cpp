@@ -977,7 +977,10 @@ BResult WCache::EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMa
     IncreaseRef();
     WCacheSliceRef::SetSliceCallback callback = [this, sliceRef, sliceMeta, batch](const WCacheSlicePtr &oldSlice) {
         if (mStandaloneFault.load()) {
-            sliceRef->SetState(SLICE_INVALID);
+            if (sliceRef->GetState() == SLICE_VALID) {
+                mEvictCallback(mPtId, sliceMeta->key, sliceRef, batch);
+                sliceRef->SetState(SLICE_INVALID);
+            }
             DecreaseRef();
             return;
         }

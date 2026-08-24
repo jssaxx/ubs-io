@@ -458,9 +458,7 @@ private:
         return BIO_NOT_EXISTS;
     }
 
-    void DeleteStandalone(uint16_t ptId, uint64_t flowId);
-
-    void Delete(uint16_t ptId, uint64_t flowId, bool needDelay = true);
+    void Delete(uint16_t ptId, uint64_t flowId);
 
 private:
     std::unordered_map<uint16_t, FlowInstancePtr> mFlowMap;

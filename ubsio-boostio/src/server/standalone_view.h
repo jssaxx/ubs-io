@@ -53,16 +53,28 @@ public:
 
     bool IsDiskFault(uint16_t diskId) const;
 
+    // True only while a reported fault has not been failed over yet. The fault
+    // worker collects pending ids before it takes the server side update lock,
+    // so a failover must confirm the fault is still pending: a rolled back add
+    // disk may have untracked that id, and a retry may have re-added it as a
+    // healthy disk.
+    bool IsDiskFaultPending(uint16_t diskId) const;
+
+    // Rollback helpers for add disk. TrackDisk only accepts the next contiguous
+    // id and UntrackDisk only removes the last one, so a failed add disk must
+    // untrack before it returns, otherwise the tracked disk count stays ahead of
+    // the config disk list and every retry fails on the contiguous id check.
+    BResult TrackDisk(uint16_t diskId);
+    BResult UntrackDisk(uint16_t diskId);
+
     // Rejoin-safe fault-state helpers. Recoverable means NORMAL or
     // FAULT_HANDLED; a disk whose failover worker is still pending must be
     // retried later so a stale fault task cannot re-fault a recovered disk.
     BResult CheckDiskRecoverable(uint16_t diskId) const;
     BResult MarkDiskRecovered(uint16_t diskId);
 
-    BResult TrackDisk(uint16_t diskId);
-    BResult UntrackDisk(uint16_t diskId);
-
-    BResult FailoverDisk(uint16_t failedDiskId, const CmNodeId &localNid, NodeView &nodeView, PtView &ptView,
+    BResult FailoverDisk(uint16_t failedDiskId, const std::vector<int64_t> &currentDiskCaps,
+        const CmNodeId &localNid, NodeView &nodeView, PtView &ptView,
         std::vector<std::pair<uint16_t, uint64_t>> &changedPts);
 
     BResult RejoinDisk(uint16_t diskId, const std::vector<int64_t> &currentDiskCaps, const CmNodeId &localNid,

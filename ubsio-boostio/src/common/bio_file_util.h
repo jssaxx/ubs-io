@@ -28,6 +28,7 @@
 #include <fcntl.h>
 #include <vector>
 #include <bio_log.h>
+#include <bio_str_util.h>
 
 namespace ock {
 namespace bio {
@@ -97,6 +98,8 @@ public:
     static bool AppendConfigToLine(std::vector<std::string>& lines, const std::string& key,
                                    const std::string& newConfig);
 
+    static bool ParseConfigLine(const std::string& line, std::string& key, std::string& value);
+
     static int64_t FindTargetLine(const std::vector<std::string>& lines, const std::string& key);
 
     static bool WriteFile(const std::string& filename, const std::vector<std::string>& lines);
@@ -108,6 +111,16 @@ public:
     static bool RenameFile(const std::string& oldPath, const std::string& newPath);
 
     static bool RemoveFile(const std::string& filePath);
+
+    /*
+     * @brief fsync a regular file to make its content durable
+     */
+    static bool SyncFile(const std::string& filePath);
+
+    /*
+     * @brief fsync a directory to make name operations (create/rename/remove) durable
+     */
+    static bool SyncDir(const std::string& dirPath);
 };
 
 inline bool FileUtil::Exist(const std::string &path)
@@ -435,29 +448,77 @@ inline bool FileUtil::WriteFile(const std::string& filename, const std::vector<s
     for (const auto& line : lines) {
         file << line << std::endl;
     }
+    file.flush();
+    if (!file) {
+        LOG_ERROR("WriteFile: error writing data to '" << filename << "'");
+        return false;
+    }
     file.close();
-    return true;
+    if (!file) {
+        LOG_ERROR("WriteFile: error closing file '" << filename << "'");
+        return false;
+    }
+    return SyncFile(filename);
+}
+
+inline bool FileUtil::ParseConfigLine(const std::string& line, std::string& key, std::string& value)
+{
+    std::string parsedLine = line;
+    StrUtil::StrTrim(parsedLine);
+    if (parsedLine.empty() || parsedLine[0] == '#') {
+        return false;
+    }
+
+    auto equalPos = parsedLine.find('=');
+    if (equalPos == std::string::npos) {
+        return false;
+    }
+
+    key = parsedLine.substr(0, equalPos);
+    value = parsedLine.substr(equalPos + 1);
+    StrUtil::StrTrim(key);
+    StrUtil::StrTrim(value);
+    return !key.empty();
 }
 
 inline int64_t FileUtil::FindTargetLine(const std::vector<std::string>& lines, const std::string& key)
 {
+    int64_t target = -1;
     for (size_t i = 0; i < lines.size(); ++i) {
-        if (lines[i].find(key) != std::string::npos) {
-            return i;
+        std::string parsedKey;
+        std::string parsedValue;
+        if (ParseConfigLine(lines[i], parsedKey, parsedValue) && parsedKey == key) {
+            // KVReader::SetItem overwrites duplicate keys, so startup uses the
+            // last valid definition. Dynamic writeback must update that same line.
+            target = static_cast<int64_t>(i);
         }
     }
-    return -1; // Not found
+    return target;
 }
 
 inline bool FileUtil::AppendConfigToLine(std::vector<std::string>& lines, const std::string& key,
                                          const std::string& newConfig)
 {
     int index = FindTargetLine(lines, key);
-    if (index != -1) {
-        lines[index] += newConfig;
-        return true;
+    if (index == -1) {
+        return false;
     }
-    return false;
+
+    std::string parsedKey;
+    std::string parsedValue;
+    if (!ParseConfigLine(lines[index], parsedKey, parsedValue) || parsedKey != key) {
+        return false;
+    }
+
+    // Preserve the original key and separator formatting, but rebuild the
+    // value from the same trimmed representation used by startup parsing.
+    // Appending to the raw line would leave trailing whitespace between the
+    // existing value and newConfig, for example "/dev/a   :/dev/b".
+    auto equalPos = lines[index].find('=');
+    auto valueBegin = lines[index].find_first_not_of(" \t", equalPos + 1);
+    std::string prefix = valueBegin == std::string::npos ? lines[index] : lines[index].substr(0, valueBegin);
+    lines[index] = prefix + parsedValue + newConfig;
+    return true;
 }
 
 inline bool FileUtil::ReadFile(const std::string& filename, std::vector<std::string>& lines)
@@ -493,12 +554,65 @@ inline bool FileUtil::BackUpFile(const std::string& srcPath, const std::string& 
 
     // 文件赋值
     dest << src.rdbuf();
+    dest.flush();
     if (!dest) {
         LOG_ERROR("BackUpFile: error writing data from '" << srcPath << "' to '" << destPath << "'");
         return false;
     }
+    dest.close();
+    if (!dest) {
+        LOG_ERROR("BackUpFile: error closing destination file: '" << destPath << "'");
+        return false;
+    }
+    return SyncFile(destPath);
+}
 
-    return true;
+inline bool FileUtil::SyncFile(const std::string& filePath)
+{
+    int32_t fd = open(filePath.c_str(), O_RDWR | O_CLOEXEC);
+    if (fd < 0) {
+        LOG_ERROR("SyncFile: failed to open file '" << filePath << "', errno=" << errno << " ("
+                  << std::strerror(errno) << ")");
+        return false;
+    }
+
+    bool ret = fsync(fd) == 0;
+    if (!ret) {
+        LOG_ERROR("SyncFile: fsync failed on '" << filePath << "', errno=" << errno << " ("
+                  << std::strerror(errno) << ")");
+    }
+
+    int32_t closeRet = close(fd);
+    if (closeRet != 0 && ret) {
+        LOG_ERROR("SyncFile: failed to close file '" << filePath << "', errno=" << errno << " ("
+                  << std::strerror(errno) << ")");
+        ret = false;
+    }
+    return ret;
+}
+
+inline bool FileUtil::SyncDir(const std::string& dirPath)
+{
+    int32_t fd = open(dirPath.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (fd < 0) {
+        LOG_ERROR("SyncDir: failed to open directory '" << dirPath << "', errno=" << errno << " ("
+                  << std::strerror(errno) << ")");
+        return false;
+    }
+
+    bool ret = fsync(fd) == 0;
+    if (!ret) {
+        LOG_ERROR("SyncDir: fsync failed on '" << dirPath << "', errno=" << errno << " ("
+                  << std::strerror(errno) << ")");
+    }
+
+    int32_t closeRet = close(fd);
+    if (closeRet != 0 && ret) {
+        LOG_ERROR("SyncDir: failed to close directory '" << dirPath << "', errno=" << errno << " ("
+                  << std::strerror(errno) << ")");
+        ret = false;
+    }
+    return ret;
 }
 
 inline bool FileUtil::RenameFile(const std::string& oldPath, const std::string& newPath)

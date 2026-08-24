@@ -117,8 +117,8 @@ inline void StrUtil::StrTrim(std::string &src)
         return;
     }
 
-    src.erase(0, src.find_first_not_of(' '));
-    src.erase(src.find_last_not_of(' ') + 1);
+    src.erase(0, src.find_first_not_of(" \t"));
+    src.erase(src.find_last_not_of(" \t") + 1);
 }
 
 inline void StrUtil::Replace(std::string &src, const std::string &regex, const std::string &replaced)

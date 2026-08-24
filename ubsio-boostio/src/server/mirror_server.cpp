@@ -349,13 +349,18 @@ BResult MirrorServer::DestroyFlow(uint64_t procId, uint16_t ptId, uint64_t ptv, 
         uint64_t currentPtv = bioServer->GetPtEntry(ptId).version;
         if (wcache != nullptr && wcache->GetPtv() < currentPtv &&
             bioServer->IsStandaloneDiskFault(wcache->GetDiskId())) {
-            BResult ret = WCacheManager::Instance()->CleanupFaultedDiskFlows(ptId, currentPtv,
-                wcache->GetDiskId());
-            if (UNLIKELY(ret != BIO_OK)) {
-                LOG_ERROR("Standalone fault expired clear failed, ret:" << ret << ", ptId:" << ptId <<
-                    ", requestPtv:" << ptv << ", currentPtv:" << currentPtv << ", flowId:" << flowId << ".");
-            }
-            return ret;
+            // BioServer::HandleStandaloneDiskFault is the only owner of
+            // disk-level fault cleanup. The PT view has already moved this
+            // flow to a new disk, so the stale flow belongs to the fault
+            // worker whether or not that worker has marked it yet. Returning
+            // BIO_INNER_RETRY here would leave the SDK's invalidated
+            // FlowInstance pinned in mFlowMap with no later trigger to delete
+            // and recreate it, so DestroyFlow must acknowledge success and
+            // let the SDK finish its local cleanup.
+            LOG_INFO("Standalone fault worker owns stale flow cleanup, ptId:" << ptId << ", requestPtv:" <<
+                ptv << ", currentPtv:" << currentPtv << ", flowId:" << flowId << ", diskId:" <<
+                wcache->GetDiskId() << ", takenOver:" << wcache->IsStandaloneFault() << ".");
+            return BIO_OK;
         }
     }
 
@@ -1066,7 +1071,7 @@ BResult MirrorServer::AddDisk(AddDiskRequest &req)
 {
     if (UNLIKELY(req.comm.magic != MESSAGE_MAGIC)) {
         LOG_ERROR("Check message magic failed.");
-        return false;
+        return BIO_INVALID_PARAM;
     }
 
     BResult ret = AddDiskImpl(req);
@@ -1093,6 +1098,9 @@ BResult MirrorServer::AddDiskImpl(AddDiskRequest &req)
     BIO_TP_START(SERVER_NO_DISK_CHECK, 0);
     ChkTrue(FileUtil::CanonicalPath(diskPath), BIO_ERR, "The device does not exist.");
     BIO_TP_END
+    std::string reason;
+    ChkTrue(FileUtil::ValidateRawDisk(diskPath, reason), BIO_ERR,
+        "Disk path is not available for raw cache, path:" << diskPath << ", reason:" << reason << ".");
     bool isExist;
     BIO_TP_START(SERVER_OLD_DISK_EXIST, &isExist, true);
     BIO_TP_START(SERVER_SET_OLD_DISK_ID, &diskId, 0);

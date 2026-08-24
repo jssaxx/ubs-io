@@ -49,11 +49,6 @@ public:
         return mIsNormal.load();
     }
 
-    inline void Invalidate()
-    {
-        mIsNormal.store(false);
-    }
-
     inline void Update(uint64_t flowId, uint64_t version, bool isDegrade, uint64_t index, uint64_t offset)
     {
         mFlowId = flowId;
