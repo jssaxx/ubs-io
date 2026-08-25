@@ -383,8 +383,13 @@ void BioServer::BioUnderFsExit()
 BResult BioServer::BioStandaloneDeviceIdGatherInit()
 {
     auto &daemonConfig = mConfig->GetDaemonConfig();
-    if (!daemonConfig.hasDiskCache || daemonConfig.standaloneDeviceCount == 0) {
+    if (!daemonConfig.hasDiskCache) {
         return mConfig->SelectStandaloneDiskByDeviceInfo();
+    }
+    if (daemonConfig.standaloneDeviceCount == 0) {
+        LOG_ERROR("Standalone mode with disk cache requires ubsio.standalone.device_count in range [1, " <<
+            DEVICE_SIZE << "]. Legacy device_count=0 disk selection is not supported.");
+        return BIO_INVALID_PARAM;
     }
 
     uint32_t logicDeviceId = mConfig->GetStandaloneDeviceId();
@@ -769,6 +774,15 @@ void BioServer::BioStandaloneViewExit()
 BResult BioServer::HandleStandaloneDiskFault(uint16_t diskId)
 {
     std::lock_guard<std::mutex> updateLock(mStandaloneViewUpdateMutex);
+    // The fault worker collects pending disk ids before it reaches this lock, so
+    // the fault can already be obsolete: a rolled back add disk untracks the id,
+    // and a retry can re-add the same id as a healthy disk. Only a still pending
+    // fault may be failed over.
+    if (!mStandaloneView.IsDiskFaultPending(diskId)) {
+        LOG_INFO("Skip obsolete standalone disk fault, diskId:" << diskId << ".");
+        return BIO_OK;
+    }
+
     std::unique_lock<std::mutex> nodeLock(mNodeViewMutex, std::defer_lock);
     std::unique_lock<std::mutex> ptLock(mPtViewMutex, std::defer_lock);
     std::lock(nodeLock, ptLock);
@@ -776,7 +790,8 @@ BResult BioServer::HandleStandaloneDiskFault(uint16_t diskId)
     StandaloneView::NodeView nextNodeView = mNodeView;
     StandaloneView::PtView nextPtView = mPtView;
     std::vector<std::pair<uint16_t, uint64_t>> faultPtCleanups;
-    BResult ret = mStandaloneView.FailoverDisk(diskId, mLocalNid, nextNodeView, nextPtView, faultPtCleanups);
+    BResult ret = mStandaloneView.FailoverDisk(diskId, mConfig->GetDaemonConfig().diskCaps, mLocalNid,
+        nextNodeView, nextPtView, faultPtCleanups);
     if (UNLIKELY(ret != BIO_OK)) {
         return ret;
     }
@@ -802,14 +817,12 @@ BResult BioServer::HandleStandaloneDiskFault(uint16_t diskId)
         return BIO_OK;
     }
 
-    BResult cleanupRet = BIO_OK;
-    for (const auto &pt : faultPtCleanups) {
-        BResult ret = WCacheManager::Instance()->CleanupFaultedDiskFlows(pt.first, pt.second, diskId);
-        if (UNLIKELY(ret != BIO_OK)) {
-            cleanupRet = ret;
-            LOG_ERROR("Standalone fault pt cleanup failed, ptId:" << pt.first << ", ptv:" << pt.second <<
-                ", diskId:" << diskId << ", ret:" << ret << ".");
-        }
+    // This fault worker is the single owner of disk-level flow cleanup. Other
+    // request paths, such as DestroyFlow, must only acknowledge flows that
+    // have already been taken over here and must not start a cleanup again.
+    BResult cleanupRet = WCacheManager::Instance()->CleanupFaultedDiskFlows(diskId);
+    if (UNLIKELY(cleanupRet != BIO_OK)) {
+        LOG_ERROR("Standalone faulted disk flow cleanup failed, diskId:" << diskId << ", ret:" << cleanupRet << ".");
     }
     return cleanupRet;
 }
@@ -844,12 +857,27 @@ BResult BioServer::AddStandaloneDisk(std::string &diskPath)
 
     uint32_t diskId = DISK_ID_INVALID;
     uint64_t diskCapacity = 0;
-    ret = BioAttachDisk(diskPath, diskId, diskCapacity);
-    if (UNLIKELY(ret != BIO_OK || diskCapacity > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))) {
+    bool diskTracked = false;
+    // Replacing the config file is the commit point of add disk: every step
+    // before it has to be undone as one unit, and no step after it is allowed to
+    // fail. BDM has no detach primitive, so a rolled back attach stays attached
+    // until the process restarts. A still healthy leftover is reused by the next
+    // attach of the same path, but a leftover that BDM has already faulted is
+    // invisible to that lookup, so adding that disk again needs a restart.
+    auto rollbackPrepared = [this, &configChanged, &diskId, &diskTracked]() {
+        if (diskTracked) {
+            mStandaloneView.UntrackDisk(static_cast<uint16_t>(diskId));
+            diskTracked = false;
+        }
         if (configChanged) {
             mConfig->DiscardDiskConfBak();
         }
         mConfig->UnlockDiskConfig();
+    };
+
+    ret = BioAttachDisk(diskPath, diskId, diskCapacity);
+    if (UNLIKELY(ret != BIO_OK || diskCapacity > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))) {
+        rollbackPrepared();
         return ret == BIO_OK ? BIO_ERR : ret;
     }
 
@@ -857,19 +885,13 @@ BResult BioServer::AddStandaloneDisk(std::string &diskPath)
     // immediately after attach cannot be dropped for being out of range.
     ret = mStandaloneView.TrackDisk(static_cast<uint16_t>(diskId));
     if (UNLIKELY(ret != BIO_OK)) {
-        if (configChanged) {
-            mConfig->DiscardDiskConfBak();
-        }
-        mConfig->UnlockDiskConfig();
+        rollbackPrepared();
         return ret;
     }
+    diskTracked = true;
     if (BdmGetDiskStatus(diskId) != BDM_DISK_STATE_NORMAL) {
         LOG_ERROR("New standalone disk is not normal, diskId:" << diskId << ", diskPath:" << diskPath << ".");
-        mStandaloneView.UntrackDisk(static_cast<uint16_t>(diskId));
-        if (configChanged) {
-            mConfig->DiscardDiskConfBak();
-        }
-        mConfig->UnlockDiskConfig();
+        rollbackPrepared();
         return BIO_ERR;
     }
 
@@ -888,22 +910,38 @@ BResult BioServer::AddStandaloneDisk(std::string &diskPath)
     ret = mStandaloneView.AddDisk(static_cast<uint16_t>(diskId), static_cast<int64_t>(diskCapacity),
         daemonConfig.diskCaps, mLocalNid, nextNodeView, nextPtView, changedPts);
     if (UNLIKELY(ret != BIO_OK)) {
-        mStandaloneView.UntrackDisk(static_cast<uint16_t>(diskId));
-        if (configChanged) {
-            mConfig->DiscardDiskConfBak();
-        }
-        mConfig->UnlockDiskConfig();
+        rollbackPrepared();
         return ret;
+    }
+
+    // BDM reports faults asynchronously, and the fault worker serializes behind
+    // mStandaloneViewUpdateMutex, so a fault raised while the next view was
+    // being rebuilt only becomes visible here. Publishing such a disk as
+    // CM_DISK_NORMAL would advertise capacity that BDM already stopped serving.
+    if (UNLIKELY(BdmGetDiskStatus(diskId) != BDM_DISK_STATE_NORMAL ||
+        mStandaloneView.IsDiskFault(static_cast<uint16_t>(diskId)))) {
+        LOG_ERROR("New standalone disk faulted before view publish, diskId:" << diskId << ", diskPath:" <<
+            diskPath << ".");
+        rollbackPrepared();
+        return BIO_ERR;
     }
 
     if (configChanged) {
         ret = mConfig->CommitDiskConfBak();
         if (UNLIKELY(ret != BIO_OK)) {
-            mConfig->UnlockDiskConfig();
+            // The commit point was not reached, so the disk must not stay
+            // tracked. Leaving it in mDiskStates keeps one more entry than the
+            // config disk list, and the next retry then fails forever on the
+            // contiguous id check in TrackDisk.
+            rollbackPrepared();
             return ret;
         }
     }
     mConfig->UnlockDiskConfig();
+    // The config file is committed, so no step below may fail or roll back. The
+    // in-memory disk capacity must be appended before the views are published,
+    // because a later fault of this disk indexes diskCaps by the published disk
+    // id when it rebuilds the pt distribution.
     mConfig->AppendDaemonDisk(diskPath, static_cast<int64_t>(diskCapacity), physicalCapacity);
 
     auto markReadOnly = [&changedPts]() {
@@ -1173,7 +1211,7 @@ BResult BioServer::BioCacheInit()
         };
         ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
         if (ret != BIO_OK) {
-            LOG_ERROR("Net engine regist channel broken handler failed,, ret " << ret);
+            LOG_ERROR("Net engine register channel broken handler failed, ret " << ret);
             return ret;
         }
     }

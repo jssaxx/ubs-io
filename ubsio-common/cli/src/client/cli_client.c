@@ -301,7 +301,7 @@ static void usage(void)
 {
     printf("%s",
         "Usage: cli_client [options]\n"
-        "  --help                : print help informations\n"
+        "  --help                : print help information\n"
         "  --auto                : auto run mode\n"
         "  --script=<filename>   : read command from <filename> instead of stdin\n"
         "  --server-port=<port>  : connect to server port\n"

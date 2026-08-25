@@ -201,7 +201,7 @@ TEST_F(TestWCache, test_meta_event_batch_flush_and_closed_batch)
     ASSERT_NE(batch, nullptr);
     gWCacheManager->AppendMetaEvent(UBSIO_META_RECOVER, "test_meta_event_recover", batch);
     gWCacheManager->AppendMetaEvent(UBSIO_META_DELETE, "test_meta_event_delete", batch);
-    gWCacheManager->FlushMetaEventBatch(batch);
+    gWCacheManager->SubmitMetaEventBatch(batch);
 
     // Delayed SetSlice callbacks may run after the worker-local batch is closed.
     // Those events must bypass the closed batch and still be reported through manager pending queue.

@@ -429,13 +429,13 @@ int32_t BdmResetScanPool(uint32_t bdmId)
     }
 
     if (UNLIKELY(bdm->ops.allocatorReset == NULL)) {
-        BDM_LOGERROR(0, "Invalid ops, not register alloctor reset function.");
+        BDM_LOGERROR(0, "Invalid ops, allocator reset function is not registered.");
         return BDM_CODE_ERR;
     }
 
     int32_t ret = bdm->ops.allocatorReset((uintptr_t)bdm);
     if (UNLIKELY(ret != BDM_CODE_OK)) {
-        BDM_LOGERROR(0, "Reset alloctor failed, bdm id(%u) ret(%d).", bdmId, ret);
+        BDM_LOGERROR(0, "Reset allocator failed, bdm id(%u) ret(%d).", bdmId, ret);
         return ret;
     }
     return BDM_CODE_OK;

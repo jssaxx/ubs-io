@@ -68,8 +68,8 @@ BResult Flow::ValidateAndPreloadRange(uint64_t offset, uint32_t len)
 
     {
         WriteLocker<ReadWriteLock> lock(&mLock);
-        if (mWritenOffset < offset + len) {
-            mWritenOffset = offset + len;
+        if (mWrittenOffset < offset + len) {
+            mWrittenOffset = offset + len;
         }
     }
     return BIO_OK;
@@ -114,8 +114,8 @@ BResult Flow::TruncateOffset(uint64_t offset)
 
     LOG_DEBUG("Flow truncate offset, Flow:" << mFlowId << ", type:" << mType << ", truncate:" << offset);
 
-    if (offset > mPreLoadOffset || offset > mWritenOffset) {
-        LOG_ERROR("Invalid offset:" << offset << ", preLoad:" << mPreLoadOffset << ", writen:" << mWritenOffset);
+    if (offset > mPreLoadOffset || offset > mWrittenOffset) {
+        LOG_ERROR("Invalid offset:" << offset << ", preLoad:" << mPreLoadOffset << ", written:" << mWrittenOffset);
         return BIO_ERR;
     }
 
@@ -161,9 +161,9 @@ BResult Flow::Seal()
     LOG_INFO("Seal flow:" << mFlowId);
 
     BIO_TRACE_START(FLOW_TRACE_SEAL);
-    uint64_t writenOffset = mPreLoadOffset;
-    mWritenOffset = writenOffset;
-    ret = TruncateOffset(mWritenOffset);
+    uint64_t writtenOffset = mPreLoadOffset;
+    mWrittenOffset = writtenOffset;
+    ret = TruncateOffset(mWrittenOffset);
     if (ret != BIO_OK) {
         LOG_ERROR("Truncate offset failed, ret " << ret);
     }
@@ -193,7 +193,7 @@ void Flow::PreLoadHandle()
         mLock.LockWrite();
         mChunkList.push_back(chunkId);
         mPreLoadOffset += mChunkSize;
-        isReady = (mPreLoadOffset >= mWritenOffset + mPreLoadSize);
+        isReady = (mPreLoadOffset >= mWrittenOffset + mPreLoadSize);
         offset = mPreLoadOffset;
         mLock.UnLock();
         HoldClean(offset, BIO_OK, !isReady);
@@ -203,7 +203,7 @@ void Flow::PreLoadHandle()
 void Flow::PreLoadSchedule()
 {
     mLock.LockRead();
-    if (mPreLoadOffset >= mWritenOffset + mPreLoadSize) {
+    if (mPreLoadOffset >= mWrittenOffset + mPreLoadSize) {
         mLock.UnLock();
         return;
     }
@@ -261,8 +261,8 @@ BResult Flow::HoldWait(uint64_t needOffset)
     ioHoldCtx.needOffset = needOffset;
 
     mLock.LockWrite();
-    if (mWritenOffset < needOffset) {
-        mWritenOffset = needOffset;
+    if (mWrittenOffset < needOffset) {
+        mWrittenOffset = needOffset;
     }
     if (mPreLoadOffset >= needOffset) {
         mLock.UnLock();
@@ -284,7 +284,7 @@ BResult Flow::HoldWait(uint64_t needOffset)
 BResult Flow::RecoverChunk(uint64_t offset, uint64_t chunkId)
 {
     if (mRecoverList.find(offset) != mRecoverList.end()) {
-        LOG_ERROR("Repeat confict, flowId:" << mFlowId << ", flowOffset:" << offset << ".");
+        LOG_ERROR("Repeat conflict, flowId:" << mFlowId << ", flowOffset:" << offset << ".");
         return BIO_ERR;
     }
     LOG_TRACE("Recover chunk: flowId:" << mFlowId << ", flowOffset:" << offset << ".");

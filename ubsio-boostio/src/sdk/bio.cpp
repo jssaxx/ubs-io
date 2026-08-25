@@ -1414,6 +1414,6 @@ CResult BioAddDisk(const char *diskPath)
         return ToCResult(ret);
     }
 
-    CLIENT_LOG_INFO("Add disk sucess! disk path: " << diskPath << ".");
+    CLIENT_LOG_INFO("Add disk success! disk path: " << diskPath << ".");
     return RET_CACHE_OK;
 }

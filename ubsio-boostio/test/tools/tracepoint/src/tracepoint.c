@@ -544,7 +544,7 @@ int32_t BioHvsRegTracePoint(uint32_t pid, const char *name, const char *desc, Fu
             strcpy(&hashData->stTP.stParam.tpParamData[0], g_initActiveTPs[loop].param);
             hashData->stTP.stParam.tpParamData[BIO_TRACEP_PARAM_SIZE - 1] = '\0';
 
-            BIO_LOG_INFO(BIO_TP_LOGID, "Tracepoint %s is initially actived.", name);
+            BIO_LOG_INFO(BIO_TP_LOGID, "Tracepoint %s is initially active.", name);
             break;
         }
     }
@@ -676,7 +676,7 @@ int32_t BioHvsDeactiveTracePoint(uint32_t pid, const char *name)
     tracepoint->timeCalled = 0;
     memset(&tracepoint->stParam.tpParamData[0], 0, (size_t)BIO_TRACEP_PARAM_SIZE);
 
-    BIO_LOG_INFO(BIO_TP_LOGID, "Tracepoint(%s) is deactive.", name);
+    BIO_LOG_INFO(BIO_TP_LOGID, "Tracepoint(%s) is inactive.", name);
 
     return RETURN_OK;
 }
@@ -1077,4 +1077,3 @@ int32_t BioTpShowTpAll(BioHtS *pstHashTable, void (*showTp)(BioHashItemS *, void
 
     return RETURN_OK;
 }
-

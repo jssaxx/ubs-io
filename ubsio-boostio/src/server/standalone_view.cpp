@@ -64,7 +64,7 @@ CmDiskStatus ToCmDiskStatus(uint16_t diskId)
     return BdmGetDiskStatus(diskId) == BDM_DISK_STATE_NORMAL ? CM_DISK_NORMAL : CM_DISK_FAULT;
 }
 
-BResult BuildPtDiskMap(const std::vector<int64_t> &diskCaps, uint32_t diskNum, uint32_t ptNum,
+BResult BuildPtDiskMap(const std::vector<int64_t> &diskCaps, const std::vector<CmDiskInfo> &disks, uint32_t ptNum,
     bool hasDiskCache, std::vector<uint16_t> &diskByPt)
 {
     diskByPt.clear();
@@ -74,25 +74,42 @@ BResult BuildPtDiskMap(const std::vector<int64_t> &diskCaps, uint32_t diskNum, u
         return BIO_OK;
     }
 
-    if (diskCaps.size() < diskNum) {
-        LOG_ERROR("Standalone disk capacity config is incomplete, diskNum:" << diskNum <<
+    if (diskCaps.size() < disks.size()) {
+        LOG_ERROR("Standalone disk capacity config is incomplete, diskNum:" << disks.size() <<
             ", diskCapNum:" << diskCaps.size() << ".");
         return BIO_INVALID_PARAM;
     }
 
     long double totalCap = 0;
-    for (uint32_t diskId = 0; diskId < diskNum; ++diskId) {
+    std::vector<uint16_t> normalDiskIds;
+    normalDiskIds.reserve(disks.size());
+    for (const auto &disk : disks) {
+        if (disk.diskStatus != CM_DISK_NORMAL) {
+            continue;
+        }
+        uint16_t diskId = disk.diskId;
+        if (diskId >= diskCaps.size()) {
+            LOG_ERROR("Standalone normal disk id exceeds capacity config, diskId:" << diskId << ", diskCapNum:" <<
+                diskCaps.size() << ".");
+            return BIO_INVALID_PARAM;
+        }
         if (diskCaps[diskId] <= 0) {
             LOG_ERROR("Invalid standalone disk capacity, diskId:" << diskId << ", cap:" << diskCaps[diskId] << ".");
             return BIO_INVALID_PARAM;
         }
+        normalDiskIds.emplace_back(diskId);
         totalCap += static_cast<long double>(diskCaps[diskId]);
+    }
+    if (normalDiskIds.empty()) {
+        LOG_ERROR("Standalone pt disk map requires at least one normal disk.");
+        return BIO_ERR;
     }
 
     uint32_t assignedPtNum = 0;
-    for (uint16_t diskId = 0; diskId < diskNum; ++diskId) {
+    for (size_t index = 0; index < normalDiskIds.size(); ++index) {
+        uint16_t diskId = normalDiskIds[index];
         uint32_t ptCount = ptNum - assignedPtNum;
-        if (diskId + 1 < diskNum) {
+        if (index + 1 < normalDiskIds.size()) {
             ptCount = static_cast<uint32_t>(static_cast<long double>(diskCaps[diskId]) * ptNum / totalCap);
             assignedPtNum += ptCount;
         }
@@ -115,7 +132,7 @@ BResult ComputePtTargetDistribution(const std::vector<uint16_t> &diskIds, const 
     long double totalCapacity = 0;
     for (uint16_t diskId : diskIds) {
         if (diskId >= diskCaps.size() || diskCaps[diskId] <= 0) {
-            LOG_ERROR("Invalid standalone add disk capacity, diskId:" << diskId << ", diskCapNum:" <<
+            LOG_ERROR("Invalid standalone disk capacity, diskId:" << diskId << ", diskCapNum:" <<
                 diskCaps.size() << ".");
             return BIO_INVALID_PARAM;
         }
@@ -191,7 +208,7 @@ BResult StandaloneView::Build(const BioConfigPtr &config, CmNodeId &localNid, No
         return BIO_INVALID_PARAM;
     }
     std::vector<uint16_t> diskByPt;
-    BResult ret = BuildPtDiskMap(daemonConfig.diskCaps, diskNum, ptNum, hasDiskCache, diskByPt);
+    BResult ret = BuildPtDiskMap(daemonConfig.diskCaps, disks, ptNum, hasDiskCache, diskByPt);
     if (ret != BIO_OK) {
         return ret;
     }
@@ -330,6 +347,14 @@ void StandaloneView::FaultWorker()
         for (uint16_t diskId : pendingDisks) {
             BResult ret = handler == nullptr ? BIO_ERR : handler(diskId);
             std::lock_guard<std::mutex> lock(mFaultMutex);
+            if (diskId >= mDiskStates.size() || mDiskStates[diskId] != DiskState::FAULT_PENDING) {
+                // A rolled back add disk untracks the new disk while this worker
+                // runs, and a retry can re-add the same id as a healthy disk, so
+                // an id collected before the rollback must not be written back.
+                LOG_INFO("Standalone fault disk is no longer pending, diskId:" << diskId << ", diskNum:" <<
+                    mDiskStates.size() << ".");
+                continue;
+            }
             if (ret == BIO_OK) {
                 mDiskStates[diskId] = DiskState::FAULT_HANDLED;
                 LOG_INFO("Handle standalone disk fault success, diskId:" << diskId << ".");
@@ -348,6 +373,12 @@ bool StandaloneView::IsDiskFault(uint16_t diskId) const
 {
     std::lock_guard<std::mutex> lock(mFaultMutex);
     return diskId < mDiskStates.size() && mDiskStates[diskId] != DiskState::NORMAL;
+}
+
+bool StandaloneView::IsDiskFaultPending(uint16_t diskId) const
+{
+    std::lock_guard<std::mutex> lock(mFaultMutex);
+    return diskId < mDiskStates.size() && mDiskStates[diskId] == DiskState::FAULT_PENDING;
 }
 
 BResult StandaloneView::CheckDiskRecoverable(uint16_t diskId) const
@@ -406,8 +437,9 @@ BResult StandaloneView::UntrackDisk(uint16_t diskId)
     return BIO_OK;
 }
 
-BResult StandaloneView::FailoverDisk(uint16_t failedDiskId, const CmNodeId &localNid, NodeView &nodeView,
-    PtView &ptView, std::vector<std::pair<uint16_t, uint64_t>> &changedPts)
+BResult StandaloneView::FailoverDisk(uint16_t failedDiskId, const std::vector<int64_t> &currentDiskCaps,
+    const CmNodeId &localNid, NodeView &nodeView, PtView &ptView,
+    std::vector<std::pair<uint16_t, uint64_t>> &changedPts)
 {
     changedPts.clear();
     auto nodeIter = nodeView.find(localNid);
@@ -430,6 +462,14 @@ BResult StandaloneView::FailoverDisk(uint16_t failedDiskId, const CmNodeId &loca
     if (!foundFailedDisk) {
         LOG_ERROR("Standalone fault disk is missing from node view, diskId:" << failedDiskId << ".");
         return BIO_INVALID_PARAM;
+    }
+    std::map<uint16_t, uint32_t> targetPtCount;
+    if (!healthyDisks.empty()) {
+        BResult ret = ComputePtTargetDistribution(healthyDisks, currentDiskCaps,
+            static_cast<uint32_t>(ptView.size()), targetPtCount);
+        if (UNLIKELY(ret != BIO_OK)) {
+            return ret;
+        }
     }
     LOG_INFO("Standalone pt view before disk fault rebuild, diskId:" << failedDiskId << ", ptView:" <<
         FormatPtView(ptView) << ".");
@@ -463,13 +503,20 @@ BResult StandaloneView::FailoverDisk(uint16_t failedDiskId, const CmNodeId &loca
         }
 
         uint16_t targetDiskId = healthyDisks.front();
-        uint32_t minPtCount = std::numeric_limits<uint32_t>::max();
+        uint32_t maxDeficit = 0;
         for (uint16_t diskId : healthyDisks) {
-            uint32_t ptCount = assignedPtCount[diskId];
-            if (ptCount < minPtCount || (ptCount == minPtCount && diskId < targetDiskId)) {
-                minPtCount = ptCount;
+            uint32_t assigned = assignedPtCount[diskId];
+            uint32_t target = targetPtCount[diskId];
+            uint32_t deficit = target > assigned ? target - assigned : 0;
+            if (deficit > maxDeficit || (deficit == maxDeficit && diskId < targetDiskId)) {
+                maxDeficit = deficit;
                 targetDiskId = diskId;
             }
+        }
+        if (UNLIKELY(maxDeficit == 0)) {
+            LOG_ERROR("Standalone disk fault cannot reach capacity target, failedDiskId:" << failedDiskId <<
+                ", ptId:" << pt.ptId << ".");
+            return BIO_ERR;
         }
         ++assignedPtCount[targetDiskId];
         pt.state = CM_PT_NORMAL;

@@ -219,7 +219,7 @@ BResult LocalSystem::List(const char *prefix, std::unordered_map<std::string, Ob
         if (memcmp(ptr->d_name, prefix, prefixLen) == 0) {
             struct stat fileStat;
             if (stat(((keyPath + ptr->d_name).c_str()), &fileStat) != 0) {
-                LOG_ERROR("Fail to stat file " << (keyPath + ptr->d_name) << ", errorno " << errno << ".");
+                LOG_ERROR("Fail to stat file " << (keyPath + ptr->d_name) << ", errno " << errno << ".");
                 continue;
             }
             ObjStat statInfo = { static_cast<uint32_t>(fileStat.st_size), fileStat.st_ctime };

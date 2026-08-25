@@ -127,7 +127,7 @@ static void handle_attach(CliConn *client, CliArgs *args)
 
     if (id != CLI_INVALID_ID && find_agent(id) == NULL) {
         send_client_text(client,
-            "Error attach: beyond domanial argument.\nUsage: attach AppId.\nTry `ls` to find available AppId.\n");
+            "Error attach: AppId is out of range.\nUsage: attach AppId.\nTry `ls` to find available AppId.\n");
         send_done(client);
         return;
     }

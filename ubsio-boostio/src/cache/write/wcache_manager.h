@@ -120,7 +120,7 @@ public:
 
     void AppendMetaEvents(std::vector<UbsIoMetaEvent> &&events);
 
-    void FlushMetaEventBatch(const UbsIoMetaEventBatchPtr &batch);
+    void SubmitMetaEventBatch(const UbsIoMetaEventBatchPtr &batch);
 
     BResult GetEvictOffset(uint64_t flowId, uint64_t &flowOffset);
 
@@ -128,7 +128,7 @@ public:
 
     BResult ExpiredClear(uint16_t ptId, uint64_t ptv);
 
-    BResult CleanupFaultedDiskFlows(uint16_t ptId, uint64_t ptv, uint16_t failedDiskId);
+    BResult CleanupFaultedDiskFlows(uint16_t failedDiskId);
 
     BResult UnregisterFaultedFlows(uint16_t ptId, const std::list<WCachePtr> &faultedFlows);
 
@@ -166,9 +166,10 @@ private:
     BResult MasterProcBrokenSyncFlow(WCachePtr flow, CmPtInfo ptEntry, uint32_t localNid);
     void InitCallbackCtx(ProcBrokenCallbackCtx &cbCtx, uint32_t quota);
 
-    void CollectFaultedFlows(uint16_t ptId, uint64_t ptv, uint16_t failedDiskId,
-        std::list<WCachePtr> &faultedFlows, std::unordered_set<uint64_t> &flowIds);
-    BResult WaitFaultedFlowsIdle(uint16_t ptId, const std::list<WCachePtr> &faultedFlows);
+    void CollectFaultedFlows(uint16_t failedDiskId,
+        std::unordered_map<uint16_t, std::list<WCachePtr>> &faultedFlowsByPt,
+        std::unordered_map<uint16_t, std::unordered_set<uint64_t>> &flowIdsByPt);
+    BResult WaitFaultedFlowsIdle(uint16_t failedDiskId, const std::list<WCachePtr> &faultedFlows);
     void ReportRemovedKeys(std::vector<std::string> &&removedKeys);
 
     void ScanUpgradeCache(std::list<WCachePtr> &list);
@@ -192,7 +193,7 @@ private:
     std::unordered_map<uint64_t, uint64_t> mDestroyManager;
     RCacheManagerPtr mRCacheManager;
 
-    bool mRunning = true;
+    std::atomic<bool> mRunning{ true };
     bool mEnableCrc = false;
     bool mHasDiskCache = true;
 

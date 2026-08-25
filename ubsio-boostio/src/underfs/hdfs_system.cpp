@@ -98,7 +98,7 @@ BResult ParsePath(const char *path, char *parentDir, size_t parentDirSize)
         size_t parentLen = lastSlash - path;
         BResult ret = strncpy_s(parentDir, parentDirSize, path, parentLen);
         if (ret != BIO_OK) {
-            LOG_ERROR("strncpy_s faild, ret:"<< ret << ".");
+            LOG_ERROR("strncpy_s failed, ret:"<< ret << ".");
             return BIO_UFS_IOERR;
         }
         parentDir[parentLen] = '\0';
@@ -261,7 +261,7 @@ void HdfsSystem::DeleteEmptyDirImpl(const std::string &path)
     constexpr int isRecursive = 1;
     auto ret = deleteOp(mHdfsFs, path.c_str(), isRecursive);
     if (ret != BIO_OK) {
-        LOG_WARN("Failed to delete empty directorie: " << path << ".");
+        LOG_WARN("Failed to delete empty directory: " << path << ".");
     }
 }
 

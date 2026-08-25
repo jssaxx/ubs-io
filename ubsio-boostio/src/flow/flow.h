@@ -69,7 +69,7 @@ public:
 
     inline uint64_t GetValidLen()
     {
-        return mWritenOffset - mTruncateOffset;
+        return mWrittenOffset - mTruncateOffset;
     }
 
     inline uint64_t GetTotalLen()
@@ -86,7 +86,7 @@ public:
 
     inline void SetWrittenOffset(uint64_t writtenOffset)
     {
-        mWritenOffset = writtenOffset;
+        mWrittenOffset = writtenOffset;
         return;
     }
 
@@ -120,7 +120,7 @@ private:
     std::atomic<bool> mSealed { false };
 
     std::atomic<uint64_t> mTruncateOffset{ 0 };
-    std::atomic<uint64_t> mWritenOffset{ 0 };
+    std::atomic<uint64_t> mWrittenOffset{ 0 };
     std::atomic<uint64_t> mPreLoadOffset{ 0 };
 
     bool mPreLoadFlag{ false };

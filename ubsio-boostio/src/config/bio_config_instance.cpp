@@ -363,7 +363,7 @@ BResult BioConfig::AutoConfigDaemonDisk(const ConfigurationPtr &conf)
 
     StrUtil::Split(diskMask, ":", mDaemonConfig.diskList);
     if (mDaemonConfig.diskList.size() > DISK_PATH_CONFIG_MAX_NUM) {
-        LOG_ERROR("Failed to spilt disk path, number of paths cannot exceed " << DISK_PATH_CONFIG_MAX_NUM << ". " <<
+        LOG_ERROR("Failed to split disk path, number of paths cannot exceed " << DISK_PATH_CONFIG_MAX_NUM << ". " <<
             diskMask);
         return BIO_ERR;
     }
@@ -485,28 +485,29 @@ void BioConfig::BakFileProcess(const std::string &configPath)
     initConfPath = "./" + CONF_INIT_BAK_SUFFIX;
     bakConfPath = "./" + CONF_BAK_SUFFIX;
     currentConfigPath = "./" + CONF_SUFFIX;
+    homePath = "./";
 #endif
-    // 1、查看是否存在.bak.init文件，存在则将其重命名为.bak文件,不存在不做处理
+    // 1、.bak.init 表示加盘事务尚未完成（PREPARED），启动时只能丢弃，不能提升为 .bak。
     if (FileUtil::Exist(initConfPath)) {
-        if (std::rename(initConfPath.c_str(), bakConfPath.c_str()) != 0) {
-            LOG_WARN("Replace bak init path to bak path failed!");
+        LOG_INFO("Discard prepared disk config backup, path:" << initConfPath << ".");
+        if (!FileUtil::RemoveFile(initConfPath)) {
+            LOG_WARN("Discard prepared disk config backup failed, path:" << initConfPath << ".");
         }
     }
 
-    // 2、判断是否存在.bak文件，不存在不做处理，
+    // 2、只有事务成功后才生成 .bak（COMMITTED），此时才允许 roll-forward。
     if (!FileUtil::Exist(bakConfPath)) {
         return;
     }
 
-    // 3、存在则删除老conf文件（存在，不存在则忽略），并将.bak重命名问ubsio.conf
-    if (FileUtil::Exist(currentConfigPath)) {
-        if (std::remove(currentConfigPath.c_str()) != 0) {
-            LOG_ERROR("Remove configPath error.");
-            return;
-        }
+    // 3、同目录 rename 原子替换旧配置；目标不存在时同样成立。
+    if (!FileUtil::RenameFile(bakConfPath, currentConfigPath)) {
+        LOG_ERROR("Replace config with committed backup failed, bak:" << bakConfPath <<
+            ", config:" << currentConfigPath << ".");
+        return;
     }
-    if (std::rename(bakConfPath.c_str(), currentConfigPath.c_str()) != 0) {
-        LOG_ERROR("Replace bak path to conf path failed!");
+    if (!FileUtil::SyncDir(homePath)) {
+        LOG_ERROR("Sync config directory after roll-forward failed, path:" << homePath << ".");
     }
 }
 
@@ -716,13 +717,14 @@ bool BioConfig::FindDiskInConfig(const std::string &configPath, const std::strin
     if (lineIndex < 0) {
         return false;
     }
-    size_t equalPos = lines[lineIndex].find('=');
-    if (equalPos == std::string::npos) {
+    std::string configKey;
+    std::string configValue;
+    if (!FileUtil::ParseConfigLine(lines[lineIndex], configKey, configValue) || configKey != "ubsio.disk.path") {
         return false;
     }
 
     std::vector<std::string> diskPaths;
-    StrUtil::Split(lines[lineIndex].substr(equalPos + 1), ":", diskPaths);
+    StrUtil::Split(configValue, ":", diskPaths);
     for (const auto &configuredPath : diskPaths) {
         size_t begin = configuredPath.find_first_not_of(" \t");
         if (begin == std::string::npos) {
@@ -757,19 +759,29 @@ BResult BioConfig::CreateDiskConfBak(const std::string &diskPath)
         return BIO_INNER_ERR;
     }
 
-    ret = FileUtil::RenameFile(mConfigBakInitPath, mConfigBakPath);
-    if (UNLIKELY(!ret)) {
-        LOG_ERROR("Rename backup config file failed.");
-        FileUtil::RemoveFile(mConfigBakInitPath);
-        return BIO_INNER_ERR;
-    }
-
-    LOG_DEBUG("Finish to backup disk config.");
+    // .bak.init 只表示 PREPARED，等到加盘所有可失败步骤都成功后，
+    // 由 CommitDiskConfBak 才把它提升为 .bak（COMMITTED）。
+    LOG_DEBUG("Finish to prepare disk config backup.");
     return BIO_OK;
 }
 
 BResult BioConfig::CommitDiskConfBak()
 {
+    LOG_DEBUG("Start to commit disk config backup.");
+    auto ret = FileUtil::RenameFile(mConfigBakInitPath, mConfigBakPath);
+    if (UNLIKELY(!ret)) {
+        LOG_ERROR("Promote prepared disk config backup failed, init:" << mConfigBakInitPath <<
+            ", bak:" << mConfigBakPath << ".");
+        return BIO_INNER_ERR;
+    }
+
+    auto dirEndPos = mConfigPath.find_last_of('/');
+    std::string homePath = (dirEndPos == std::string::npos) ? "./" : mConfigPath.substr(0, dirEndPos + 1);
+    if (!FileUtil::SyncDir(homePath)) {
+        LOG_ERROR("Sync config directory after backup promotion failed, path:" << homePath << ".");
+        return BIO_INNER_ERR;
+    }
+
     return ReplaceFile(mConfigPath, mConfigBakPath);
 }
 
@@ -810,13 +822,16 @@ BResult BioConfig::AddDiskPath(const std::string &diskPath, const std::string &c
 BResult BioConfig::ReplaceFile(const std::string &oldFile, const std::string &newFile)
 {
     LOG_DEBUG("Start to replace file.");
-    if (std::remove(oldFile.c_str()) != 0) {
-        LOG_ERROR("Old file is not exist, oldFile: " << oldFile << ".");
+    // 同目录 rename 原子覆盖已存在的目标文件，避免先 remove 再 rename 留下的空窗。
+    if (!FileUtil::RenameFile(newFile, oldFile)) {
+        LOG_ERROR("Replace file failed, oldFile: " << oldFile << " , newFile: " << newFile << ".");
         return BIO_INNER_ERR;
     }
 
-    if (std::rename(newFile.c_str(), oldFile.c_str()) != 0) {
-        LOG_ERROR("Rename file failed, oldFile: " << oldFile << " , newFile: " << newFile << ".");
+    auto dirEndPos = oldFile.find_last_of('/');
+    std::string dirPath = (dirEndPos == std::string::npos) ? "./" : oldFile.substr(0, dirEndPos + 1);
+    if (!FileUtil::SyncDir(dirPath)) {
+        LOG_ERROR("Sync config directory after replace failed, path:" << dirPath << ".");
         return BIO_INNER_ERR;
     }
 

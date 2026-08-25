@@ -356,7 +356,7 @@ BResult BioClientNet::SetChannelBrokenHandler()
     };
     BResult ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
     if (ret != BIO_OK) {
-        LOG_ERROR("Client regist channel broken handler failed, ret " << ret);
+        LOG_ERROR("Client register channel broken handler failed, ret " << ret);
     }
     return ret;
 }

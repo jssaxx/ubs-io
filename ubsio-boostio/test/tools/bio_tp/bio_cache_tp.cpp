@@ -77,7 +77,7 @@ void tp::CacheTp::Register() noexcept
     BIO_TP_REG(UNDERFS_DELETE_ERR, "underfs delete err", CommonTp::IntValueCallback);
     BIO_TP_REG(NO_PROCESS_WCACHE_EXPIRED_CLEAR, "no process wcache expired clear", CommonTp::NoProcessCallback);
     BIO_TP_REG(RECOVER_CACHE_FLOWID_FAIL, "recover cache flowid err", CommonTp::IntValueCallback);
-    BIO_TP_REG(NO_PROCESS_UPGRADE_FLUSH, "no procesee upgrate flush", CommonTp::NoProcessCallback);
+    BIO_TP_REG(NO_PROCESS_UPGRADE_FLUSH, "no process upgrade flush", CommonTp::NoProcessCallback);
     BIO_TP_REG(WCACHE_STATE_NOT_NORMAL, "wcache state not normal", CommonTp::BoolValueCallback);
     BIO_TP_REG(RCACHE_EVICT_PARAM_FAIL, "rcache gc evict err", CommonTp::NoProcessCallback);
     BIO_TP_REG(RCACHE_GC_PARAM_FAIL, "rcache gc param err", CommonTp::NoProcessCallback);

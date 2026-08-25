@@ -133,3 +133,31 @@ TEST(TestFileUtil, unreadable_mount_state_is_rejected)
     EXPECT_FALSE(FileUtil::CheckNotMounted(state.mountInfo, "8:0", reason));
     EXPECT_EQ(reason, "failed to parse mounted devices");
 }
+
+TEST(TestFileUtil, config_line_lookup_matches_startup_parser_semantics)
+{
+    std::vector<std::string> lines = {
+        "# ubsio.disk.path = /dev/commented",
+        "ubsio.disk.path.backup = /dev/similar",
+        " ubsio.disk.path = /dev/first ",
+        "ubsio.disk.path = /dev/effective",
+    };
+
+    EXPECT_EQ(FileUtil::FindTargetLine(lines, "ubsio.disk.path"), 3);
+}
+
+TEST(TestFileUtil, append_config_updates_last_valid_duplicate)
+{
+    std::vector<std::string> lines = {
+        "ubsio.disk.path = /dev/first",
+        "# ubsio.disk.path = /dev/commented",
+        "ubsio.disk.path.backup = /dev/similar",
+        "  ubsio.disk.path  =   /dev/effective  \t",
+    };
+
+    ASSERT_TRUE(FileUtil::AppendConfigToLine(lines, "ubsio.disk.path", ":/dev/new"));
+    EXPECT_EQ(lines[0], "ubsio.disk.path = /dev/first");
+    EXPECT_EQ(lines[1], "# ubsio.disk.path = /dev/commented");
+    EXPECT_EQ(lines[2], "ubsio.disk.path.backup = /dev/similar");
+    EXPECT_EQ(lines[3], "  ubsio.disk.path  =   /dev/effective:/dev/new");
+}
