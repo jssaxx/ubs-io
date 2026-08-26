@@ -66,6 +66,23 @@ TEST(TestLogConfig, empty_log_path_is_rejected)
     EXPECT_NE(logPathError, errors.end());
 }
 
+TEST(TestLogConfig, startup_semantic_error_is_written_to_stderr)
+{
+    auto conf = MakeLogConfiguration();
+    auto *config = static_cast<BioConfig *>(conf.Get());
+    const std::string underFsType = "ceph";
+    const std::string invalidCephConfigPath = "/path/that/does/not/exist/ceph.conf";
+    conf->Set(UNDERFS_FILE_SYSTEM_TYPE.first, underFsType);
+    conf->Set(UNDERFS_CEPH_CFG_PATH.first, invalidCephConfigPath);
+
+    testing::internal::CaptureStderr();
+    auto result = config->AutoConfigUnderFs(conf);
+    const std::string output = testing::internal::GetCapturedStderr();
+
+    EXPECT_EQ(result, BIO_ERR);
+    EXPECT_NE(output.find("Ceph config path not exist"), std::string::npos) << output;
+}
+
 TEST(TestLogConfig, log_directories_are_prepared_by_config)
 {
     char directoryTemplate[] = "/tmp/ubsio-log-config-XXXXXX";
