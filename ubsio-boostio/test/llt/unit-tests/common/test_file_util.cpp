@@ -72,6 +72,46 @@ public:
 };
 }
 
+TEST(TestFileUtil, path_helpers_validate_and_join_paths)
+{
+    TempDiskState state("path_helpers");
+    ASSERT_TRUE(state.CreateFile(state.partition));
+
+    std::string absoluteFilePath = state.partition;
+    ASSERT_TRUE(FileUtil::CanonicalPath(absoluteFilePath));
+    EXPECT_TRUE(FileUtil::IsAbsoluteRegularFile(absoluteFilePath));
+    EXPECT_FALSE(FileUtil::IsAbsoluteRegularFile(state.partition));
+
+    std::string absoluteDirectoryPath = state.root;
+    ASSERT_TRUE(FileUtil::CanonicalPath(absoluteDirectoryPath));
+    EXPECT_FALSE(FileUtil::IsAbsoluteRegularFile(absoluteDirectoryPath));
+
+    EXPECT_EQ(FileUtil::JoinPath("/var/log/ubsio", "trace"), "/var/log/ubsio/trace");
+    EXPECT_EQ(FileUtil::JoinPath("/var/log/ubsio/", "trace"), "/var/log/ubsio/trace");
+}
+
+TEST(TestFileUtil, prepare_directory_creates_and_canonicalizes_path)
+{
+    const std::string root = "./bio_ut_prepare_directory_" + std::to_string(getpid());
+    if (FileUtil::Exist(root)) {
+        ASSERT_TRUE(FileUtil::RemoveDirRecursive(root));
+    }
+
+    std::string directory = root + "/parent/child";
+    auto prepared = FileUtil::PrepareDirectory(directory, 0700);
+    EXPECT_TRUE(prepared);
+    if (prepared) {
+        EXPECT_EQ(directory.front(), '/');
+        struct stat pathStat {};
+        EXPECT_EQ(stat(directory.c_str(), &pathStat), 0);
+        EXPECT_TRUE(S_ISDIR(pathStat.st_mode));
+    }
+
+    if (FileUtil::Exist(root)) {
+        EXPECT_TRUE(FileUtil::RemoveDirRecursive(root));
+    }
+}
+
 TEST(TestFileUtil, disk_without_partitions_passes_partition_check)
 {
     TempDiskState state("empty");
