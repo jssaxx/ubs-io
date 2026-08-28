@@ -141,7 +141,7 @@
 echo 2 >/proc/sys/kernel/randomize_va_space
 ```
 
->[!TIP]须知
+>![](public_sys-resources/icon-note.gif) **说明：**
 >
 >该命令需要root权限才能执行，且该修改方式是临时的，系统重启后会失效。
 
@@ -199,7 +199,7 @@ echo 2 >/proc/sys/kernel/randomize_va_space
 
 ## 账户一览表
 
->[!TIP]须知
+>![](public_sys-resources/icon-note.gif) **说明：**
 >用户创建的安装用户需定期修改密码。
 
 <table style="undefined;table-layout: fixed; width: 901px"><colgroup>

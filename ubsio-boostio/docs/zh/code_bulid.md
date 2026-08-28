@@ -27,7 +27,8 @@
 |--|--|
 |openEuler|22.03 LTS SP4|
 
->[!NOTICE] 说明
+>![](public_sys-resources/icon-note.gif) **说明：**
+>
 >openEuler不是华为对外发布的操作系统。其具体安装过程请参考《[openEuler系统安装指南](https://docs.openeuler.org/zh/docs/22.03_LTS_SP1/docs/Installation/installation.html)》。
 
 **构建工具**
@@ -89,7 +90,7 @@
     - mpfr-4.1.0.tar.gz
     - mpc-1.2.1.tar.gz
 
-2. 将获取到的文件放置于“/opt/buildtools/”目录下；
+2. 将获取到的文件放置于“/opt/buildtools/”目录下。
 3. 执行以下命令进行安装。
 
     ```cmd
@@ -170,7 +171,8 @@
 
 ### 安装依赖软件<a id="安装依赖软件"></a>
 
-> [!NOTICE] 说明
+>![](public_sys-resources/icon-note.gif) **说明：**
+>
 >用户需要保证构建环境上依赖的开源软件版本和应用程序运行环境上的开源软件版本一致。
 
 当前UBS IO构建过程依赖多个开源软件，因此在构建前需要首先安装依赖的开源软件包，相应软件的推荐版本以及开源仓库地址如[表1](#开源软件信息)所示。
@@ -188,11 +190,7 @@
 
 ### 构建源码<a id="构建源码"></a>
 
-本章节中操作步骤以非root用户登录至构建环境后切换至root用户进行构建源码为例。
-
-- **[构建准备](#构建准备)**  
-
-- **[构建执行](#构建执行)**  
+本章节中操作步骤以非root用户登录至构建环境后切换至root用户进行构建源码为例。 
 
 #### 构建准备<a name="构建准备"></a>
 
@@ -210,14 +208,14 @@
 
     **表 1**  开源软件路径布局<a id="开源软件路径布局"></a>
 
-|开源软件名称|路径布局|
-|--|--|
-|ZooKeeper|/usr1/workspace/boost-io/3rdparty/zookeeper/zookeeper-3.8.1|
-|spdlog|/usr1/workspace/boost-io/3rdparty/spdlog/spdlog-1.12.0|
-|Hadoop|/usr1/workspace/boost-io/3rdparty/hadoop/hadoop-3.3.1|
-|Ceph|/usr1/workspace/boost-io/3rdparty/ceph/ceph-12.2.8|
+    |开源软件名称|路径布局|
+    |--|--|
+    |ZooKeeper|/usr1/workspace/boost-io/3rdparty/zookeeper/zookeeper-3.8.1|
+    |spdlog|/usr1/workspace/boost-io/3rdparty/spdlog/spdlog-1.12.0|
+    |Hadoop|/usr1/workspace/boost-io/3rdparty/hadoop/hadoop-3.3.1|
+    |Ceph|/usr1/workspace/boost-io/3rdparty/ceph/ceph-12.2.8|
 
-1. 将UBS IO软件的闭源动态链接库复制到编译机路径布局指定的位置。
+3. 将UBS IO软件的闭源动态链接库复制到编译机路径布局指定的位置。
 
     ```cmd
     cp -r code-download-path/huawei_secure_c  /usr1/workspace/boost-io/output/3rdparty
@@ -230,12 +228,12 @@
 
     **表 2**  平台软件路径布局<a id="平台软件路径布局"></a>
 
-|平台软件名称|路径布局|
-|--|--|
-|huawei_secure_c|/usr1/workspace/boost-io/output/3rdparty|
-|hseceasy|/usr1/workspace/boost-io/output/3rdparty|
-|hcom|/usr1/workspace/boost-io/output/3rdparty|
-|bdm|/usr1/workspace/boost-io/output/3rdparty|
+    |平台软件名称|路径布局|
+    |--|--|
+    |huawei_secure_c|/usr1/workspace/boost-io/output/3rdparty|
+    |hseceasy|/usr1/workspace/boost-io/output/3rdparty|
+    |hcom|/usr1/workspace/boost-io/output/3rdparty|
+    |bdm|/usr1/workspace/boost-io/output/3rdparty|
 
 #### 构建执行<a id="构建执行"></a>
 
@@ -254,7 +252,7 @@
         set -e
         ```
 
-    3. 按“ESC”，输入**:wq!**，按“Enter”保存并退出。
+    3. 按“ESC”，输入:wq!，按“Enter”保存并退出。
 
 3. 编译UBS IO开源代码，包括编译引用开源软件、华为公司平台软件编译对应所需的CMakeLists.txt文件，执行脚本build.sh将自动编译所有开源软件、华为公司平台软件。
 4. 使用者首先编写根目录的CMakeLists.txt和build.sh文档，然后执行构建脚本build.sh。
