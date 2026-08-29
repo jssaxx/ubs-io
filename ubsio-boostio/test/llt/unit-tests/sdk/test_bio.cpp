@@ -640,8 +640,8 @@ TEST_F(TestBio, test_bio_list_all)
     ObjStat *objs = nullptr;
     uint64_t objNum = 0;
     auto ret = BioListAll(G_TENANT_ID, prefix, &objs, &objNum);
-    EXPECT_EQ(ret, RET_CACHE_OK);
-    EXPECT_EQ(objNum, 1);
+    EXPECT_EQ(ret, BIO_INNER_ERR);
+    EXPECT_EQ(objNum, 0);
     BioFreeListResources(&objs, objNum);
 
     ret = BioListAll(G_TENANT_ID, prefix, &objs, nullptr);

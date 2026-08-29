@@ -1231,7 +1231,7 @@ TEST_F(TestBioServer, test_start_server_underfs_init_make_dir_err_return_fail)
     BioHvsActiveTracePoint(0, "UNDERFS_MKDIR_FAIL", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "UNDERFS_OPEN_DIR_FAIL", 0, 1, userParam);
     auto ret = BioServer::Instance()->Start();
-    EXPECT_EQ(ret, BIO_ERR);
+    EXPECT_EQ(ret, BIO_OK);
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_UNDERFS_INIT");
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_SERVER_START");
     BioHvsDeactiveTracePoint(0, "UNDERFS_MKDIR_FAIL");

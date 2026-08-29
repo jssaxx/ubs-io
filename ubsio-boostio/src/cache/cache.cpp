@@ -19,6 +19,7 @@
 #include "bio.h"
 #include "bio_trace.h"
 #include "bio_tracepoint_helper.h"
+#include "bio_server.h"
 #include "cm.h"
 #include "cache_overload_ctrl.h"
 
@@ -294,25 +295,29 @@ BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr
     }
 
     // 1. 获取key的信息, 计算value的总长度和此次读取长度.
-
-    uint64_t totalLen = 0;
+    bool directUnderFsRead = BioServer::Instance()->IsStandaloneMode();
+    uint64_t totalLen = slice->GetLength();
     BResult ret = BIO_ERR;
-    BIO_TP_START(GET_UNDERFS_NO_STAT, &ret, BIO_OK);
-    ret = GetValueLengthFromUnderFS(key, slice->GetLength(), offset, totalLen, realLen);
-    if (ret != BIO_OK) {
-        LOG_ERROR("Get key info from under fs failed, ret:" << ret << ", key:" << key << ".");
-        return ret;
+    if (directUnderFsRead) {
+        realLen = slice->GetLength();
+    } else {
+        BIO_TP_START(GET_UNDERFS_NO_STAT, &ret, BIO_OK);
+        ret = GetValueLengthFromUnderFS(key, slice->GetLength(), offset, totalLen, realLen);
+        if (ret != BIO_OK) {
+            LOG_ERROR("Get key info from under fs failed, ret:" << ret << ", key:" << key << ".");
+            return ret;
+        }
+        BIO_TP_END;
     }
-    BIO_TP_END;
     BIO_TP_START(GET_UNDERFS_MODIFY_REALLENGTH, &realLen, NO_60*NO_100);
     BIO_TP_END;
     BIO_TP_START(GET_UNDERFS_MODIFY_TOTALLENGTH, &totalLen, NO_60*NO_100);
     BIO_TP_END;
 
     // 2. 申请内存资源, 首先尝试从RCache中申请, 若失败则申请临时系统内存.
-    bool isFromRCache = mEnableRCache;
+    bool isFromRCache = mEnableRCache && !directUnderFsRead;
     WCacheSlicePtr wcSlicePtr = nullptr;
-    bool enoughResource = mEnableRCache && mRCacheManager->IsResourceEnough(slice->GetPtId());
+    bool enoughResource = isFromRCache && mRCacheManager->IsResourceEnough(slice->GetPtId());
     BIO_TP_START(GET_UNDERFS_NOT_ENOUGHRESOURCE, &enoughResource, false);
     BIO_TP_END;
     void *memAddr = nullptr;
@@ -351,7 +356,12 @@ BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr
     ret = BIO_INNER_ERR;
     do {
         // 3. 从underFS读取数据.
-        if (isFromRCache) {
+        if (directUnderFsRead) {
+            size_t readLen = 0;
+            ret = UfsHelper::Instance()->GetWithRealLen(key, reinterpret_cast<char *>(memAddr),
+                slice->GetLength(), offset, readLen);
+            realLen = static_cast<uint64_t>(readLen);
+        } else if (isFromRCache) {
             ret = GetFromUnderFS(key, wcSlicePtr, totalLen, 0);
         } else {
             ret = GetFromUnderFS(key, wcSlicePtr, realLen, offset);
@@ -372,6 +382,22 @@ BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr
                 break;
             }
             ret = WriteToDesSlice(sliceWriter, partailSlice, slice.Get(), crcFlag, key);
+        } else if (directUnderFsRead && realLen != wcSlicePtr->GetLength()) {
+            SlicePtr sourceSlice = nullptr;
+            SlicePtr targetSlice = nullptr;
+            ret = mSliceOperator.GetSliceFromSliceIO(sourceSlice, wcSlicePtr.Get(), 0, realLen);
+            if (ret == BIO_OK) {
+                ret = mSliceOperator.GetSliceFromSliceIO(targetSlice, slice.Get(), 0, realLen);
+            }
+            if (ret != BIO_OK) {
+                LOG_ERROR("Get standalone underfs read slice failed, ret:" << ret << ", key:" << key <<
+                    ", realLength:" << realLen << ".");
+                break;
+            }
+            ret = WriteToDesSlice(sliceWriter, sourceSlice, targetSlice, crcFlag, key);
+            if (ret == BIO_OK && crcFlag) {
+                slice->SetDataCrc(targetSlice->GetDataCrc());
+            }
         } else {
             ret = WriteToDesSlice(sliceWriter, wcSlicePtr.Get(), slice.Get(), crcFlag, key);
         }
@@ -484,6 +510,27 @@ BResult Cache::GetWCacheBatch(const Key &key, uint64_t offset, const RCacheSlice
     return ret;
 }
 
+BResult Cache::GetUnderFsDirect(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, uint64_t &realLen)
+{
+    if (!mUfsEnable) {
+        return BIO_NOT_EXISTS;
+    }
+
+    const std::vector<FlowAddr> &addrVec = slice->GetAddrs();
+    if (UNLIKELY(addrVec.size() != NO_1)) {
+        LOG_ERROR("Invalid direct underfs read address count, count:" << addrVec.size() << ".");
+        return BIO_INNER_ERR;
+    }
+
+    char *value = reinterpret_cast<char *>(addrVec[0].chunkId + addrVec[0].chunkOffset);
+    BResult ret = UfsHelper::Instance()->Get(key, value, slice->GetLength(), offset);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+    realLen = slice->GetLength();
+    return BIO_OK;
+}
+
 bool Cache::CanBatchWCacheRead() const
 {
     return mWCacheManager != nullptr && !mWCacheManager->IsCrcEnabled();
@@ -499,18 +546,29 @@ BResult Cache::Load(uint16_t ptId, const Key &key, uint64_t offset, uint64_t len
 
 BResult Cache::Stat(uint16_t ptId, const Key &key, CacheObjStat &cacheObjStat)
 {
-    BIO_TRACE_START(WCACHE_TRACE_STAT);
-    auto ret = mWCacheManager->Stat(ptId, key, cacheObjStat);
-    BIO_TRACE_END(WCACHE_TRACE_STAT, ret);
-    if ((ret == BIO_OK) || (ret != BIO_NOT_EXISTS)) {
+    BResult ret = StatWCache(ptId, key, cacheObjStat);
+    if (ret != BIO_NOT_EXISTS) {
         return ret;
     }
-    if (!mUfsEnable) {  // 未使能underfs则直接返回结果.
-        return ret;
+    return StatUnderFsDirect(key, cacheObjStat);
+}
+
+BResult Cache::StatWCache(uint16_t ptId, const Key &key, CacheObjStat &cacheObjStat)
+{
+    BIO_TRACE_START(WCACHE_TRACE_STAT);
+    BResult ret = mWCacheManager->Stat(ptId, key, cacheObjStat);
+    BIO_TRACE_END(WCACHE_TRACE_STAT, ret);
+    return ret;
+}
+
+BResult Cache::StatUnderFsDirect(const Key &key, CacheObjStat &cacheObjStat)
+{
+    if (!mUfsEnable) {
+        return BIO_NOT_EXISTS;
     }
 
     UfsHelper::ObjStat stat;
-    ret = UfsHelper::Instance()->Stat(key, stat);
+    BResult ret = UfsHelper::Instance()->Stat(key, stat);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Get key " << key << " stat from under fs failed, error code: " << ret);
     } else {
@@ -520,6 +578,14 @@ BResult Cache::Stat(uint16_t ptId, const Key &key, CacheObjStat &cacheObjStat)
             cacheObjStat.time << ".");
     }
     return ret;
+}
+
+BResult Cache::ExistUnderFsDirect(const Key &key)
+{
+    if (!mUfsEnable) {
+        return BIO_NOT_EXISTS;
+    }
+    return UfsHelper::Instance()->Exist(key);
 }
 
 bool Cache::Exist(uint16_t ptId, const Key &key)

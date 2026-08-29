@@ -30,6 +30,10 @@ struct WFlowSliceMeta {
     uint64_t hasEvict;
 };
 
+struct WFlowCompactSliceMeta {
+    char key[NO_256];
+};
+
 enum WCacheTierType {
     WCACHE_MEMORY,
     WCACHE_DISK,
@@ -69,7 +73,7 @@ using WFlowTruncateCursorPtr = Ref<WFlowTruncateCursor>;
 class WCacheTier {
 public:
 
-    BResult Init(WCacheTierType cacheTier, uint64_t flowId, uint16_t diskId);
+    BResult Init(WCacheTierType cacheTier, uint64_t flowId, uint16_t diskId, bool useCompactMeta = false);
 
     BResult Write(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader,
         WCacheSliceRefPtr &destSliceRef);
@@ -134,6 +138,8 @@ private:
 
     SpinLock mEvictSliceQueueLock;
     std::list<WCacheSliceRefPtr> mEvictSliceQueue;
+    uint64_t mMetaEntrySize{ sizeof(WFlowSliceMeta) };
+    bool mUseCompactMeta{ false };
 
     DEFINE_REF_COUNT_VARIABLE;
 };

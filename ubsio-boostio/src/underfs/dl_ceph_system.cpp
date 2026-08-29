@@ -188,11 +188,9 @@ BResult DlCephSystem::Put(const char *key, const char *value, const size_t len)
     ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
     LOG_DEBUG("UnderFs put key:" << key);
 
-    BIO_TRACE_START(UFS_TRACE_PUT);
     BIO_TP_START(SERVER_UNDERFS_PUT, &ret, -1);
     ret = mRadosWrite(mIoCtx, key, value, len, 0);
     BIO_TP_END;
-    BIO_TRACE_END(UFS_TRACE_PUT, ret);
     if (ret < 0) {
         LOG_ERROR("Failed to write object, ret:" << ret << ".");
         return BIO_UFS_IOERR;
@@ -206,14 +204,12 @@ BResult DlCephSystem::Get(const char *key, char *value, const size_t len, const 
     ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
     LOG_DEBUG("UnderFs get key:" << key);
 
-    BIO_TRACE_START(UFS_TRACE_GET);
     BIO_TP_START(SERVER_UNDERFS_GET, &ret, -1);
     ret = mRadosRead(mIoCtx, key, value, len, off);
     BIO_TP_END;
     BIO_TP_START(UNDERFS_CEPH_GET_FAIL, &ret, (-ENOENT));
     BIO_TP_END;
     int res = (ret < 0) ? BIO_UFS_IOERR : BIO_OK;
-    BIO_TRACE_END(UFS_TRACE_GET, res);
     if (ret == -ENOENT) {
         LOG_WARN("Fail to get object " << key << ", not exist.");
         return BIO_NOT_EXISTS;
@@ -231,13 +227,11 @@ BResult DlCephSystem::Delete(const char *key)
     ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
     LOG_DEBUG("UnderFs delete key:" << key);
 
-    BIO_TRACE_START(UFS_TRACE_DEL);
     BIO_TP_START(SERVER_UNDERFS_DELETE, &ret, -1);
     ret = mRadosRemove(mIoCtx, key);
     BIO_TP_END;
     BIO_TP_START(UNDERFS_CEPH_DELETE_NOT_EXIST, &ret, (-ENOENT));
     BIO_TP_END;
-    BIO_TRACE_END(UFS_TRACE_DEL, ret);
     if (ret == -ENOENT) {
         LOG_WARN("Fail to check file, not exist, " << key);
         return BIO_NOT_EXISTS;
@@ -255,13 +249,11 @@ BResult DlCephSystem::Stat(const char *key, ObjStat &stat)
     ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
     LOG_DEBUG("UnderFs stat key:" << key);
 
-    BIO_TRACE_START(UFS_TRACE_STAT);
     BIO_TP_START(SERVER_UNDERFS_STAT, &ret, -1);
     ret = mRadosStat(mIoCtx, key, &stat.size, &stat.time);
     BIO_TP_END;
     BIO_TP_START(UNDERFS_CEPH_STAT_NOT_EXIST, &ret, (-ENOENT));
     BIO_TP_END;
-    BIO_TRACE_END(UFS_TRACE_STAT, ret);
     if (ret == -ENOENT) {
         LOG_WARN("Fail to stat object " << key << ", not exist.");
         return BIO_NOT_EXISTS;
@@ -294,7 +286,6 @@ BResult DlCephSystem::List(const char *prefix, std::unordered_map<std::string, D
         return BIO_UFS_IOERR;
     }
 
-    BIO_TRACE_START(UFS_TRACE_LIST);
     char *entry = nullptr;
     size_t prefixLength = strlen(prefix);
     while (mRadosNobjectsListNext(listCtx, const_cast<const char **>(&entry), nullptr, nullptr) == 0) {
@@ -309,7 +300,6 @@ BResult DlCephSystem::List(const char *prefix, std::unordered_map<std::string, D
         }
     }
     mRadosNobjectsListClose(listCtx);
-    BIO_TRACE_END(UFS_TRACE_LIST, ret);
     return BIO_OK;
 }
 

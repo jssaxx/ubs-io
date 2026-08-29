@@ -115,6 +115,17 @@ typedef struct {
     time_t time;
 } ObjStat;
 
+#ifndef UBSIO_KV_BATCH_STAT_DEFINED
+#define UBSIO_KV_BATCH_STAT_DEFINED
+typedef struct {
+    char key[UBSIO_KV_MAX_KEY_SIZE];
+    uint32_t size;
+    int32_t result;
+} UbsioKvBatchStat;
+#endif
+
+typedef UbsioKvBatchStat BatchObjStat;
+
 typedef struct {
     uint64_t location[LOCATION_SIZE];
 } ObjLocation;
@@ -481,6 +492,19 @@ void BioFreeListResources(ObjStat **objs, uint64_t objNum);
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
 CResult BioStat(uint64_t tenantId, const char *key, ObjLocation location, ObjStat *stat);
+
+/**
+ * @brief: Stat multiple objects in standalone mode
+ *
+ * @param[in]: tenantId: tenant id
+ * @param[in]: keys: key array
+ * @param[in]: locations: location info array
+ * @param[in]: count: key count
+ * @param[out]: stats: key, size and result for each object
+ * @return: return RET_CACHE_OK when the batch is processed, others return a batch-level error
+ */
+CResult BioBatchStat(uint64_t tenantId, const char **keys, ObjLocation *locations, uint32_t count,
+    BatchObjStat *stats);
 
 /**
  * @brief: Batch exist object

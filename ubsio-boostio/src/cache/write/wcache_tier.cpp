@@ -23,9 +23,11 @@
 
 namespace ock {
 namespace bio {
-BResult WCacheTier::Init(WCacheTierType cacheTier, uint64_t flowId, uint16_t diskId)
+BResult WCacheTier::Init(WCacheTierType cacheTier, uint64_t flowId, uint16_t diskId, bool useCompactMeta)
 {
     type = cacheTier;
+    mUseCompactMeta = useCompactMeta;
+    mMetaEntrySize = mUseCompactMeta ? sizeof(WFlowCompactSliceMeta) : sizeof(WFlowSliceMeta);
     FlowType flowType;
     auto ret = ToFlowType(cacheTier, flowType);
     ChkTrueNot(ret == BIO_OK, ret);
@@ -60,27 +62,34 @@ BResult WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice, const Sli
 {
     // fill meta flow.
     BResult res;
-    if (slice->GetIndexInFlow() != 0 && UINT64_MAX / slice->GetIndexInFlow() < sizeof(WFlowSliceMeta)) {
-        LOG_ERROR("Index in flow error " << slice->GetIndexInFlow() << ", flow meta size:" << sizeof(WFlowSliceMeta));
+    if (slice->GetIndexInFlow() != 0 && UINT64_MAX / slice->GetIndexInFlow() < mMetaEntrySize) {
+        LOG_ERROR("Index in flow error, index:" << slice->GetIndexInFlow() << ", flowMetaSize:" <<
+            mMetaEntrySize << ".");
         return BIO_INNER_RETRY;
     }
-    auto metaFlowOffset = slice->GetIndexInFlow() * sizeof(WFlowSliceMeta);
+    auto metaFlowOffset = slice->GetIndexInFlow() * mMetaEntrySize;
     WCacheSlicePtr metaSlice;
     BIO_TP_START(WCACHE_GET_MEM_SLICE_FAIL, &res, BIO_INNER_RETRY);
-    res = GetSlice(mMetaFlow, metaFlowOffset, slice->GetIndexInFlow(), sizeof(WFlowSliceMeta), metaSlice);
+    res = GetSlice(mMetaFlow, metaFlowOffset, slice->GetIndexInFlow(), mMetaEntrySize, metaSlice);
     BIO_TP_END;
     ChkTrue(res == BIO_OK, res, "Failed to get meta slice, flowId" <<
         mMetaFlow->GetFlowId() << " ret:" << res);
-    WFlowSliceMeta sliceMeta{};
-    auto ret = memcpy_s(sliceMeta.key, (NO_512 - NO_32), key, (strlen(key) + 1UL));
-    if (ret != 0) {
-        return BIO_INNER_RETRY;
+    BResult ret = BIO_OK;
+    if (mUseCompactMeta) {
+        WFlowCompactSliceMeta sliceMeta{};
+        ret = memcpy_s(sliceMeta.key, sizeof(sliceMeta.key), key, strlen(key) + 1UL);
+        ChkTrue(ret == BIO_OK, BIO_INNER_RETRY, "Copy compact wcache key failed, keyLength:" << strlen(key) << ".");
+        ret = mSliceOperator.Copy(reinterpret_cast<const char *>(&sliceMeta), metaSlice.Get());
+    } else {
+        WFlowSliceMeta sliceMeta{};
+        ret = memcpy_s(sliceMeta.key, sizeof(sliceMeta.key), key, strlen(key) + 1UL);
+        ChkTrue(ret == BIO_OK, BIO_INNER_RETRY, "Copy wcache key failed, keyLength:" << strlen(key) << ".");
+        sliceMeta.offset = slice->GetOffsetInFlow();
+        sliceMeta.length = slice->GetLength();
+        sliceMeta.magic = slice->GetFlowId();
+        sliceMeta.hasEvict = 0;
+        ret = mSliceOperator.Copy(reinterpret_cast<const char *>(&sliceMeta), metaSlice.Get());
     }
-    sliceMeta.offset = slice->GetOffsetInFlow();
-    sliceMeta.length = slice->GetLength();
-    sliceMeta.magic = slice->GetFlowId();
-    sliceMeta.hasEvict = 0;
-    ret = mSliceOperator.Copy(reinterpret_cast<const char *>(&sliceMeta), metaSlice.Get());
     ChkTrueNot(ret == BIO_OK, ret);
 
     // fill data flow.
@@ -161,7 +170,7 @@ BResult WCacheTier::GetMetaSlice(uint64_t indexInFlow, WCacheSlicePtr &slice)
 {
     BResult ret = BIO_ERR;
     BIO_TP_START(WCACHE_GET_META_SLICE_FAIL, ret, BIO_ERR);
-    ret = GetSlice(mMetaFlow, indexInFlow * sizeof(WFlowSliceMeta), indexInFlow, sizeof(WFlowSliceMeta), slice);
+    ret = GetSlice(mMetaFlow, indexInFlow * mMetaEntrySize, indexInFlow, mMetaEntrySize, slice);
     BIO_TP_END;
     ChkTrue(ret == BIO_OK, ret,
         "Failed to get meta slice, flowId " << mMetaFlow->GetFlowId() << " indexInFlow:" << indexInFlow);
@@ -179,8 +188,7 @@ BResult WCacheTier::GetMetaDataSlice(uint64_t indexInFlow, uint64_t offset, uint
     WFlowMetaDataSlice &metaDataSlice)
 {
     WCacheSlicePtr metaSlice;
-    BResult ret = GetSlice(mMetaFlow, indexInFlow * sizeof(WFlowSliceMeta), indexInFlow, sizeof(WFlowSliceMeta),
-        metaSlice);
+    BResult ret = GetSlice(mMetaFlow, indexInFlow * mMetaEntrySize, indexInFlow, mMetaEntrySize, metaSlice);
     ChkTrue(ret == BIO_OK, ret,
         "Failed to get slice, metaFlow id: " << mMetaFlow->GetFlowId() << " indexInFlow:" << indexInFlow);
 
@@ -304,7 +312,7 @@ BResult WCacheTier::Evict(const WCacheSlicePtr &slice)
         return BIO_OK;
     }
 
-    auto ret = mMetaFlow->TruncateOffset((truncateSlice->GetIndexInFlow() + 1) * sizeof(WFlowSliceMeta));
+    auto ret = mMetaFlow->TruncateOffset((truncateSlice->GetIndexInFlow() + 1) * mMetaEntrySize);
     ChkTrue(ret == BIO_OK, ret,
         "Failed to truncateOffset in metaFlow, FlowId:" << truncateSlice->GetFlowId() << ", fLowType:" <<
         truncateSlice->GetFlowType() << ", flowOffset:" << truncateSlice->GetOffsetInFlow() << ", flowIndex:" <<

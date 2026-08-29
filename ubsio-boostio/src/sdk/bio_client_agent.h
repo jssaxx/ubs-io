@@ -72,9 +72,11 @@ public:
     using GetFuncPtr = int32_t (*)(GetRequest *, GetResponse *);
     using BatchGetFuncPtr = int32_t (*)(BatchGetRequest *, BatchGetResponse *);
     using BatchExistFuncPtr = int32_t (*)(BatchExistRequest *, BatchExistResponse *);
+    using BatchExistStandaloneFuncPtr = int32_t (*)(const char **, ObjLocation *, uint32_t, bool *);
     using DeleteFuncPtr = int32_t (*)(DeleteRequest *);
     using AddDiskFuncPtr = int32_t (*)(AddDiskRequest *, AddDiskResponse *);
     using StatFuncPtr = int32_t (*)(StatRequest *, StatResponse *);
+    using BatchStatFuncPtr = int32_t (*)(const char **, ObjLocation *, uint32_t, BatchObjStat *);
     using ListFuncPtr = int32_t (*)(ListRequest *, ListResponse **);
     using LoadFuncPtr = int32_t (*)(LoadRequest *);
     using GetCacheHitLocalFuncPtr = int32_t (*)(CacheHitResponse *);
@@ -161,6 +163,8 @@ public:
 
     void BatchGetLocal(BatchGetRequest *req,  uint32_t reqLen, Callback callback);
 
+    BResult BatchGetLocalSync(BatchGetRequest *req, BatchGetResponse &rsp);
+
     BResult GetLocal(GetRequest &req, char *value, Callback callback);
 
     void DeleteLocal(DeleteRequest &req, Callback &callback);
@@ -170,6 +174,10 @@ public:
     BResult ListLocal(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
 
     BResult StatLocal(StatRequest &req, ObjStat &objInfo);
+
+    BResult BatchStatLocalSync(const char **keys, ObjLocation *locations, uint32_t count, BatchObjStat *stats);
+
+    BResult BatchExistStandaloneLocalSync(const char **keys, ObjLocation *locations, uint32_t count, bool *results);
 
     void BatchExistLocal(uint32_t reqLen, BatchExistRequest *req, Callback &callback);
 
@@ -285,9 +293,11 @@ private:
     GetFuncPtr getOp = nullptr;
     BatchGetFuncPtr batchGetOp = nullptr;
     BatchExistFuncPtr batchExistOp = nullptr;
+    BatchExistStandaloneFuncPtr batchExistStandaloneOp = nullptr;
     DeleteFuncPtr deleteOp = nullptr;
     AddDiskFuncPtr addDiskOp = nullptr;
     StatFuncPtr statOp = nullptr;
+    BatchStatFuncPtr batchStatOp = nullptr;
     ListFuncPtr listOp = nullptr;
     LoadFuncPtr loadOp = nullptr;
     GetCacheHitLocalFuncPtr cacheHitOp = nullptr;

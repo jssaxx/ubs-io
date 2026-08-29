@@ -106,6 +106,8 @@ int32_t BatchGet(BatchGetRequest *req, BatchGetResponse *rsp);
 
 int32_t BatchExist(BatchExistRequest *req, BatchExistResponse *rsp);
 
+int32_t BatchExistStandalone(const char **keys, ObjLocation *locations, uint32_t count, bool *results);
+
 int32_t Delete(DeleteRequest *req);
 
 // Variable-length direct-call response. Server allocates *rsp with new[];
@@ -113,6 +115,8 @@ int32_t Delete(DeleteRequest *req);
 int32_t List(ListRequest *req, ListResponse **rsp);
 
 int32_t Stat(StatRequest *req, StatResponse *rsp);
+
+int32_t BatchStat(const char **keys, ObjLocation *locations, uint32_t count, BatchObjStat *stats);
 
 int32_t Load(LoadRequest *req);
 
