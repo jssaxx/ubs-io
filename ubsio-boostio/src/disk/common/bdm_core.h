@@ -172,6 +172,9 @@ int32_t BdmUpdate(char *diskPath, uint64_t chunkSize, uint64_t diskCap);
 int32_t BdmAttachDisk(char *diskPath, uint64_t chunkSize, uint64_t diskCap, uint32_t *diskId,
     uint64_t *virtualCapacity);
 
+int32_t BdmAttachDiskAt(char *diskPath, uint64_t chunkSize, uint64_t diskCap, uint32_t diskId,
+    uint64_t *diskCapacity);
+
 uint32_t BdmGetDiskCount(void);
 
 int32_t BdmResetDisk(uint16_t diskId);

@@ -790,6 +790,55 @@ int32_t BdmAttachDisk(char *diskPath, uint64_t chunkSize, uint64_t diskCap, uint
     return BDM_CODE_OK;
 }
 
+int32_t BdmAttachDiskAt(char *diskPath, uint64_t chunkSize, uint64_t diskCap, uint32_t diskId,
+    uint64_t *diskCapacity)
+{
+    if (UNLIKELY(diskPath == NULL || diskId >= g_bdmDiskMaxId)) {
+        BDM_LOGERROR(0, "Bdm attach at reserved id failed, diskId(%u), maxDiskId(%u).", diskId, g_bdmDiskMaxId);
+        return BDM_CODE_INVALID_PARAM;
+    }
+
+    uint64_t regionOffset = 0;
+    uint64_t regionLength = diskCap;
+    int32_t ret = BDM_CODE_OK;
+    if (g_bdmVirtualDeviceCount != 0) {
+        ret = BdmCalculateVirtualRegion(diskCap, chunkSize, g_bdmVirtualDeviceId, g_bdmVirtualDeviceCount,
+            &regionOffset, &regionLength);
+        if (UNLIKELY(ret != BDM_CODE_OK)) {
+            return ret;
+        }
+    }
+
+    ret = BdmDevicesCreate(diskId, diskPath, regionOffset, regionLength, chunkSize);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        BDM_LOGERROR(0, "Create reserved device failed, diskId(%u), ret(%d).", diskId, ret);
+        return ret;
+    }
+    __sync_fetch_and_add(&g_bdmDiskCount, 1);
+
+    // Startup did not recover this disk, so its persisted allocator and chunks
+    // are not present in the in-memory Flow/WCache index. Recreate it as an
+    // empty disk before any PT is allowed to route traffic to the slot.
+    ret = BdmResetDisk((uint16_t)diskId);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        BdmSetDiskUsedStatus(diskId, false);
+        BDM_LOGERROR(0, "Reset reserved device failed, diskId(%u), ret(%d).", diskId, ret);
+        return ret;
+    }
+
+    if (diskCapacity != NULL) {
+        uint64_t usedCapacity = 0;
+        ret = BdmGetCapacity(diskId, diskCapacity, &usedCapacity);
+        if (UNLIKELY(ret != BDM_CODE_OK)) {
+            BdmSetDiskUsedStatus(diskId, false);
+            BDM_LOGERROR(0, "Get reserved device capacity failed, diskId(%u), ret(%d).", diskId, ret);
+            return ret;
+        }
+    }
+    BDM_LOGINFO(0, "Attach reserved disk success, diskId(%u), device(%s).", diskId, diskPath);
+    return BDM_CODE_OK;
+}
+
 int32_t BdmUpdate(char *diskPath, uint64_t chunkSize, uint64_t diskCap)
 {
     return BdmAttachDisk(diskPath, chunkSize, diskCap, NULL, NULL);
