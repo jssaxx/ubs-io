@@ -12,22 +12,22 @@
 
 #include "trace_mark.h"
 
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <atomic>
 #include <cerrno>
+#include <chrono>
 #include <cmath>
 #include <condition_variable>
-#include <chrono>
 #include <ctime>
-#include <fcntl.h>
 #include <fstream>
 #include <iomanip>
 #include <memory>
 #include <mutex>
 #include <new>
 #include <sstream>
-#include <sys/stat.h>
 #include <thread>
-#include <unistd.h>
 
 namespace ock {
 namespace tracemark {
@@ -46,8 +46,7 @@ constexpr mode_t FILE_MODE = S_IRUSR | S_IWUSR | S_IRGRP;
 constexpr uint32_t HISTOGRAM_SUB_BUCKET_BITS = 5;
 constexpr uint32_t HISTOGRAM_SUB_BUCKET_NUM = 1U << HISTOGRAM_SUB_BUCKET_BITS;
 constexpr uint32_t HISTOGRAM_EXPONENT_NUM = 64 - HISTOGRAM_SUB_BUCKET_BITS;
-constexpr uint32_t HISTOGRAM_BUCKET_NUM =
-    HISTOGRAM_SUB_BUCKET_NUM + HISTOGRAM_EXPONENT_NUM * HISTOGRAM_SUB_BUCKET_NUM;
+constexpr uint32_t HISTOGRAM_BUCKET_NUM = HISTOGRAM_SUB_BUCKET_NUM + HISTOGRAM_EXPONENT_NUM * HISTOGRAM_SUB_BUCKET_NUM;
 constexpr double P99_QUANTILE = 0.99;
 
 uint32_t ServiceId(int32_t traceId)
@@ -64,15 +63,16 @@ std::string CurrentTime()
 {
     time_t rawTime = 0;
     time(&rawTime);
-    struct tm timeInfo {};
+    struct tm timeInfo {
+    };
     if (localtime_r(&rawTime, &timeInfo) == nullptr) {
         return "";
     }
 
     std::stringstream ss;
-    ss << std::setfill('0') << std::setw(TIME_WIDTH) << std::right << timeInfo.tm_hour << ":"
-       << std::setfill('0') << std::setw(TIME_WIDTH) << std::right << timeInfo.tm_min << ":"
-       << std::setfill('0') << std::setw(TIME_WIDTH) << std::right << timeInfo.tm_sec;
+    ss << std::setfill('0') << std::setw(TIME_WIDTH) << std::right << timeInfo.tm_hour << ":" << std::setfill('0')
+       << std::setw(TIME_WIDTH) << std::right << timeInfo.tm_min << ":" << std::setfill('0') << std::setw(TIME_WIDTH)
+       << std::right << timeInfo.tm_sec;
     return ss.str();
 }
 
@@ -97,19 +97,18 @@ std::string HeaderString()
 void UpdateMin(std::atomic<uint64_t> &target, uint64_t value)
 {
     uint64_t current = target.load(std::memory_order_relaxed);
-    while (value < current && !target.compare_exchange_weak(current, value, std::memory_order_relaxed)) {
-    }
+    while (value < current && !target.compare_exchange_weak(current, value, std::memory_order_relaxed)) {}
 }
 
 void UpdateMax(std::atomic<uint64_t> &target, uint64_t value)
 {
     uint64_t current = target.load(std::memory_order_relaxed);
-    while (value > current && !target.compare_exchange_weak(current, value, std::memory_order_relaxed)) {
-    }
+    while (value > current && !target.compare_exchange_weak(current, value, std::memory_order_relaxed)) {}
 }
 
 std::string FormatTraceLine(const std::string &name, uint64_t begin, uint64_t goodEnd, uint64_t badEnd,
-    uint64_t minLatency, uint64_t maxLatency, uint64_t totalLatency, double p99LatencyUs, uint16_t interval)
+                            uint64_t minLatency, uint64_t maxLatency, uint64_t totalLatency, double p99LatencyUs,
+                            uint16_t interval)
 {
     const uint64_t finished = goodEnd + badEnd;
     const uint64_t onFly = begin > finished ? begin - finished : 0;
@@ -118,18 +117,16 @@ std::string FormatTraceLine(const std::string &name, uint64_t begin, uint64_t go
     std::ostringstream os;
     os.flags(std::ios::fixed);
     os.precision(NUMBER_PRECISION);
-    os << std::left << std::setw(NAME_WIDTH) << name << "\t" << std::left << std::setw(DIGIT_WIDTH) << begin
-       << "\t" << std::left << std::setw(DIGIT_WIDTH) << goodEnd
-       << "\t" << std::left << std::setw(DIGIT_WIDTH) << badEnd
-       << "\t" << std::left << std::setw(DIGIT_WIDTH) << onFly
-       << "\t" << std::left << std::setw(DIGIT_WIDTH) << (static_cast<double>(begin) / intervalSeconds)
-       << "\t" << std::left << std::setw(DIGIT_WIDTH)
-       << (minLatency == UINT64_MAX ? 0.0 : static_cast<double>(minLatency) / NS_PER_US)
-       << "\t" << std::left << std::setw(DIGIT_WIDTH) << static_cast<double>(maxLatency) / NS_PER_US
-       << "\t" << std::left << std::setw(DIGIT_WIDTH)
-       << (goodEnd == 0 ? 0.0 : static_cast<double>(totalLatency) / static_cast<double>(goodEnd) / NS_PER_US)
-       << "\t" << std::left << std::setw(DIGIT_WIDTH) << p99LatencyUs
-       << "\t" << std::left << std::setw(DIGIT_WIDTH) << static_cast<double>(totalLatency) / NS_PER_US;
+    os << std::left << std::setw(NAME_WIDTH) << name << "\t" << std::left << std::setw(DIGIT_WIDTH) << begin << "\t"
+       << std::left << std::setw(DIGIT_WIDTH) << goodEnd << "\t" << std::left << std::setw(DIGIT_WIDTH) << badEnd
+       << "\t" << std::left << std::setw(DIGIT_WIDTH) << onFly << "\t" << std::left << std::setw(DIGIT_WIDTH)
+       << (static_cast<double>(begin) / intervalSeconds) << "\t" << std::left << std::setw(DIGIT_WIDTH)
+       << (minLatency == UINT64_MAX ? 0.0 : static_cast<double>(minLatency) / NS_PER_US) << "\t" << std::left
+       << std::setw(DIGIT_WIDTH) << static_cast<double>(maxLatency) / NS_PER_US << "\t" << std::left
+       << std::setw(DIGIT_WIDTH)
+       << (goodEnd == 0 ? 0.0 : static_cast<double>(totalLatency) / static_cast<double>(goodEnd) / NS_PER_US) << "\t"
+       << std::left << std::setw(DIGIT_WIDTH) << p99LatencyUs << "\t" << std::left << std::setw(DIGIT_WIDTH)
+       << static_cast<double>(totalLatency) / NS_PER_US;
     return os.str();
 }
 
@@ -206,8 +203,8 @@ public:
         uint64_t counts[HISTOGRAM_BUCKET_NUM];
         uint64_t total = 0;
         for (uint32_t index = 0; index < HISTOGRAM_BUCKET_NUM; ++index) {
-            counts[index] = reset ? mBuckets[index].exchange(0, std::memory_order_relaxed)
-                                  : mBuckets[index].load(std::memory_order_relaxed);
+            counts[index] = reset ? mBuckets[index].exchange(0, std::memory_order_relaxed) :
+                                    mBuckets[index].load(std::memory_order_relaxed);
             total += counts[index];
         }
         if (total == 0) {
@@ -235,8 +232,7 @@ private:
         uint32_t exponent = 63U - static_cast<uint32_t>(__builtin_clzll(latencyNs));
         uint32_t shift = exponent - HISTOGRAM_SUB_BUCKET_BITS;
         uint32_t subBucket = static_cast<uint32_t>(latencyNs >> shift) - HISTOGRAM_SUB_BUCKET_NUM;
-        return HISTOGRAM_SUB_BUCKET_NUM +
-               (exponent - HISTOGRAM_SUB_BUCKET_BITS) * HISTOGRAM_SUB_BUCKET_NUM + subBucket;
+        return HISTOGRAM_SUB_BUCKET_NUM + (exponent - HISTOGRAM_SUB_BUCKET_BITS) * HISTOGRAM_SUB_BUCKET_NUM + subBucket;
     }
 
     static uint64_t BucketUpperBound(uint32_t index)
@@ -308,9 +304,9 @@ struct TracePoint {
     std::string TotalLine(uint16_t interval) const
     {
         return FormatTraceLine(GetName(), begin.load(std::memory_order_relaxed),
-            goodEnd.load(std::memory_order_relaxed), badEnd.load(std::memory_order_relaxed),
-            minLatency.load(std::memory_order_relaxed), maxLatency.load(std::memory_order_relaxed),
-            totalLatency.load(std::memory_order_relaxed), PercentileUs(false), interval);
+                               goodEnd.load(std::memory_order_relaxed), badEnd.load(std::memory_order_relaxed),
+                               minLatency.load(std::memory_order_relaxed), maxLatency.load(std::memory_order_relaxed),
+                               totalLatency.load(std::memory_order_relaxed), PercentileUs(false), interval);
     }
 
     std::string IntervalLine(uint16_t interval)
@@ -322,7 +318,7 @@ struct TracePoint {
         const uint64_t minValue = intervalMinLatency.exchange(UINT64_MAX, std::memory_order_relaxed);
         const uint64_t maxValue = intervalMaxLatency.exchange(0, std::memory_order_relaxed);
         return FormatTraceLine(GetName(), beginValue, goodValue, badValue, minValue, maxValue, totalValue,
-            PercentileUs(true), interval);
+                               PercentileUs(true), interval);
     }
 
 private:
@@ -364,19 +360,19 @@ private:
 private:
     mutable std::mutex nameMutex;
     std::string name;
-    std::atomic<bool> active{ false };
-    std::atomic<uint64_t> begin{ 0 };
-    std::atomic<uint64_t> goodEnd{ 0 };
-    std::atomic<uint64_t> badEnd{ 0 };
-    std::atomic<uint64_t> totalLatency{ 0 };
-    std::atomic<uint64_t> minLatency{ UINT64_MAX };
-    std::atomic<uint64_t> maxLatency{ 0 };
-    std::atomic<uint64_t> intervalBegin{ 0 };
-    std::atomic<uint64_t> intervalGoodEnd{ 0 };
-    std::atomic<uint64_t> intervalBadEnd{ 0 };
-    std::atomic<uint64_t> intervalTotalLatency{ 0 };
-    std::atomic<uint64_t> intervalMinLatency{ UINT64_MAX };
-    std::atomic<uint64_t> intervalMaxLatency{ 0 };
+    std::atomic<bool> active{false};
+    std::atomic<uint64_t> begin{0};
+    std::atomic<uint64_t> goodEnd{0};
+    std::atomic<uint64_t> badEnd{0};
+    std::atomic<uint64_t> totalLatency{0};
+    std::atomic<uint64_t> minLatency{UINT64_MAX};
+    std::atomic<uint64_t> maxLatency{0};
+    std::atomic<uint64_t> intervalBegin{0};
+    std::atomic<uint64_t> intervalGoodEnd{0};
+    std::atomic<uint64_t> intervalBadEnd{0};
+    std::atomic<uint64_t> intervalTotalLatency{0};
+    std::atomic<uint64_t> intervalMinLatency{UINT64_MAX};
+    std::atomic<uint64_t> intervalMaxLatency{0};
     LatencyHistogram totalHistogram;
     LatencyHistogram intervalHistogram;
 };
@@ -462,7 +458,7 @@ public:
 private:
     TraceStore() = default;
     TraceStore(const TraceStore &) = delete;
-    TraceStore &operator = (const TraceStore &) = delete;
+    TraceStore &operator=(const TraceStore &) = delete;
 
     void EnsurePoints()
     {
@@ -547,14 +543,14 @@ private:
 
 private:
     std::mutex initMutex;
-    TracePoint *points{ nullptr };
+    TracePoint *points{nullptr};
     bool enabled = false;
     mutable std::mutex dumpMutex;
     std::condition_variable dumpCond;
     std::thread dumpThread;
     std::string dumpFile;
-    uint16_t dumpInterval{ DEFAULT_IOPS_INTERVAL };
-    bool dumpRunning{ false };
+    uint16_t dumpInterval{DEFAULT_IOPS_INTERVAL};
+    bool dumpRunning{false};
 };
 
 } // namespace
@@ -591,7 +587,8 @@ bool TraceMark::IsEnable()
 
 uint64_t TraceMark::NowNs()
 {
-    struct timespec ts {};
+    struct timespec ts {
+    };
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return static_cast<uint64_t>(ts.tv_sec) * 1000000000ULL + static_cast<uint64_t>(ts.tv_nsec);
 }
@@ -614,5 +611,5 @@ void TraceMark::MarkEnd(int32_t traceId, uint64_t latencyNs, int32_t retCode)
     point->End(latencyNs, retCode);
 }
 
-}
-}
+} // namespace tracemark
+} // namespace ock

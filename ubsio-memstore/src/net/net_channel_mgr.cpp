@@ -10,8 +10,8 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <mutex>
 #include "net_channel_mgr.h"
+#include <mutex>
 
 namespace ock {
 namespace mms {
@@ -65,8 +65,8 @@ BResult NetChannelMgr::AddChannel(const NetNode &dstNid, ChannelPtr &ch, uint32_
         auto chInfo = iter->second;
         chInfo->channel[groupIndex] = ch;
         chInfo->num++;
-        NET_LOG_INFO("Add channel success, dstNid:" << dstNid.nid << ", pid:" << dstNid.pid <<
-            ", channel:" << ch->GetId() << ", groupIndex:" << groupIndex << ".");
+        NET_LOG_INFO("Add channel success, dstNid:" << dstNid.nid << ", pid:" << dstNid.pid << ", channel:"
+                                                    << ch->GetId() << ", groupIndex:" << groupIndex << ".");
         return MMS_OK;
     }
 
@@ -79,8 +79,8 @@ BResult NetChannelMgr::AddChannel(const NetNode &dstNid, ChannelPtr &ch, uint32_
     }
 
     mChannelMgr.insert(std::make_pair(dstNid.whole, chInfo));
-    NET_LOG_INFO("Add channel success, dstNid:" << dstNid.nid << ", pid:" << dstNid.pid <<
-        ", channel:" << ch->GetId() << ", groupIndex:" << groupIndex << ".");
+    NET_LOG_INFO("Add channel success, dstNid:" << dstNid.nid << ", pid:" << dstNid.pid << ", channel:" << ch->GetId()
+                                                << ", groupIndex:" << groupIndex << ".");
     return MMS_OK;
 }
 
@@ -107,9 +107,9 @@ BResult NetChannelMgr::RemoveChannel(const NetNode &dstNid, const ChannelPtr &ch
         delete chInfo;
         chInfo = nullptr;
     }
-    NET_LOG_INFO("Remove channel, dstNid:" << dstNid.nid << ", pid:" << dstNid.pid << ", channel:" << ch->GetId() <<
-        ", groupIndex:" << groupIndex << ".");
+    NET_LOG_INFO("Remove channel, dstNid:" << dstNid.nid << ", pid:" << dstNid.pid << ", channel:" << ch->GetId()
+                                           << ", groupIndex:" << groupIndex << ".");
     return MMS_OK;
 }
-}
-}
+} // namespace mms
+} // namespace ock

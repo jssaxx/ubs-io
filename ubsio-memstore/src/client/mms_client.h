@@ -16,12 +16,12 @@
 #include <atomic>
 #include <mutex>
 
-#include "net_engine.h"
-#include "net_common.h"
-#include "mms_execution.h"
 #include "mms_client_log.h"
+#include "mms_execution.h"
 #include "mms_kv_client.h"
 #include "mms_notify_shm_client.h"
+#include "net_common.h"
+#include "net_engine.h"
 #ifdef USE_CLI_TOOLS
 #include "cli.h"
 #include "client_diagnose.h"
@@ -139,7 +139,7 @@ private:
 
 private:
     bool mStarted = false;
-    ExecutorServicePtr mStartService{ nullptr };
+    ExecutorServicePtr mStartService{nullptr};
 
     MmsKvClientPtr mKvClient = nullptr;
     CachePtr mCache = nullptr;
@@ -160,10 +160,10 @@ private:
     uint32_t mMaxMsgBuffSize;
     DataBlockInfo mBlockInfo{};
 
-    std::atomic<bool> mServiceable {false};
+    std::atomic<bool> mServiceable{false};
     ServiceCallback mServiceCallback = nullptr;
-    std::atomic<NotifyCallback> mNotifyCallback {nullptr};
-    std::atomic<void *> mNotifyUserData {nullptr};
+    std::atomic<NotifyCallback> mNotifyCallback{nullptr};
+    std::atomic<void *> mNotifyUserData{nullptr};
     std::mutex mNotifyMutex;
     MmsNotifyShmConsumer mNotifyShmConsumer;
     uint32_t mServerPid = 0;
@@ -176,6 +176,6 @@ private:
 
     DEFINE_REF_COUNT_VARIABLE;
 };
-}
-}
+} // namespace mms
+} // namespace ock
 #endif

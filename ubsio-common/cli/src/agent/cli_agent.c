@@ -188,14 +188,13 @@ static void print_agent_help(AgentCmdContext *ctx)
 {
     append_print_buffer(ctx, "<command>        <description>\n", strlen("<command>        <description>\n"));
     append_print_buffer(ctx, " help            show help information\n",
-        strlen(" help            show help information\n"));
+                        strlen(" help            show help information\n"));
     for (int i = 0; i < CLI_AGENT_MAX_COMMANDS; i++) {
         if (!g_agent.commands[i].used) {
             continue;
         }
         char line[160];
-        size_t n = format_text(line, sizeof(line), " %-16s %s\n",
-                               g_agent.commands[i].cmd.command,
+        size_t n = format_text(line, sizeof(line), " %-16s %s\n", g_agent.commands[i].cmd.command,
                                g_agent.commands[i].cmd.description);
         if (n != 0) {
             append_print_buffer(ctx, line, n);
@@ -360,9 +359,7 @@ int32_t cli_agent_init(uint32_t current_pid, char *app_name)
     return RETURN_OK;
 }
 
-void cli_agent_sync_status(void)
-{
-}
+void cli_agent_sync_status(void) {}
 
 int32_t cli_agent_destroy(uint32_t current_pid)
 {
@@ -590,8 +587,7 @@ int32_t cli_get_option(int32_t argc, char *argv[], const char *option_string, Cl
             opt_info->option_index = index + 2;
         } else {
             opt_info->option = opt;
-            format_text(opt_info->error_msg, sizeof(opt_info->error_msg),
-                        "option requires an argument -- '%c'", opt);
+            format_text(opt_info->error_msg, sizeof(opt_info->error_msg), "option requires an argument -- '%c'", opt);
             opt_info->option_index = index + 1;
             return '?';
         }

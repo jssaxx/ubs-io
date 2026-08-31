@@ -74,5 +74,5 @@ BResult NetExecutorPool::AddTask(NetTaskHandler &handler, ServiceContext &contex
 
     return MMS_OK;
 }
-}
-}
+} // namespace mms
+} // namespace ock

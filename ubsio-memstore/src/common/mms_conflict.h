@@ -14,9 +14,9 @@
 #define MMS_CONFLICT_H
 
 #include <unordered_map>
-#include "mms_ref.h"
 #include "mms_err.h"
 #include "mms_lock.h"
+#include "mms_ref.h"
 
 namespace ock {
 namespace mms {
@@ -49,7 +49,6 @@ private:
 
     DEFINE_REF_COUNT_VARIABLE;
 };
-}
-}
+} // namespace mms
+} // namespace ock
 #endif
-

@@ -13,11 +13,9 @@
 #ifndef CACHE_LOG_H
 #define CACHE_LOG_H
 
-#include <cstdio>
-#include <cstdint>
-#include <iostream>
-#include <sstream>
 #include <sys/time.h>
+#include <cstdint>
+#include <cstdio>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -28,7 +26,8 @@ using CacheLogFunc = void (*)(int32_t level, const char *logBuf);
 
 class CacheLog {
 public:
-    enum class Level {
+    enum class Level
+    {
         LOG_LEVEL_DEBUG = 0,
         LOG_LEVEL_INFO = 1,
         LOG_LEVEL_WARN = 2,
@@ -67,7 +66,8 @@ public:
         if (func != nullptr) {
             func(level, oss.str().c_str());
         } else {
-            struct timeval tv {};
+            struct timeval tv {
+            };
             char strTime[24];
             gettimeofday(&tv, nullptr);
             strftime(strTime, sizeof strTime, "%Y-%m-%d %H:%M:%S.", localtime(&tv.tv_sec));
@@ -93,14 +93,14 @@ private:
 #ifdef DEBUG_UT
 #define CACHE_BASE_LOG(level, args)
 #else
-#define CACHE_BASE_LOG(level, args)                                                                         \
-    do {                                                                                                  \
-        if (((level) + 1) >= CacheLog::Instance()->GetMinLogLevel()) {                                      \
-            std::ostringstream oss;                                                                       \
-            oss << "[" << CACHE_LOG_FILENAME << ":" << __LINE__ << "]"                                      \
-                << "[" << __FUNCTION__ << "] " << args;                                                   \
-            CacheLog::Instance()->Log(level + 1, oss);                                                      \
-        }                                                                                                 \
+#define CACHE_BASE_LOG(level, args)                                    \
+    do {                                                               \
+        if (((level) + 1) >= CacheLog::Instance()->GetMinLogLevel()) { \
+            std::ostringstream oss;                                    \
+            oss << "[" << CACHE_LOG_FILENAME << ":" << __LINE__ << "]" \
+                << "[" << __FUNCTION__ << "] " << args;                \
+            CacheLog::Instance()->Log(level + 1, oss);                 \
+        }                                                              \
     } while (0)
 #endif
 
@@ -109,13 +109,13 @@ private:
 #define CACHE_LOG_WARN(args) CACHE_BASE_LOG(static_cast<int>(CacheLog::Level::LOG_LEVEL_WARN), args)
 #define CACHE_LOG_ERROR(args) CACHE_BASE_LOG(static_cast<int>(CacheLog::Level::LOG_LEVEL_ERROR), args)
 
-#define CheckTrue(ARGS, RET, MSG)                                        \
+#define CheckTrue(ARGS, RET, MSG)                                      \
     do {                                                               \
-        if (__builtin_expect(!(ARGS), 0) != 0) {                         \
+        if (__builtin_expect(!(ARGS), 0) != 0) {                       \
             CACHE_LOG_ERROR("Check Failed: " << #ARGS << ", " << MSG); \
-            return RET;                                                  \
+            return RET;                                                \
         }                                                              \
     } while (0)
-}
-}
+} // namespace mms
+} // namespace ock
 #endif

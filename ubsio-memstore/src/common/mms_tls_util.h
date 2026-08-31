@@ -13,9 +13,9 @@
 #ifndef MMS_TLS_UTIL_H
 #define MMS_TLS_UTIL_H
 
+#include <dlfcn.h>
 #include <algorithm>
 #include <cstdint>
-#include <dlfcn.h>
 
 namespace ock {
 namespace mms {
@@ -71,4 +71,3 @@ public:
 } // namespace ock
 
 #endif // MMS_TLS_UTIL_H
-

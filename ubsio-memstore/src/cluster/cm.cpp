@@ -199,11 +199,7 @@ int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
     WriteLocker<ReadWriteLock> lock(&cm->mPLock);
 
     static CmCopyState s_copystate[PT_COPY_STATE_BUTT] = {
-        CM_COPY_INIT,
-        CM_COPY_RUNNING,
-        CM_COPY_DOWN,
-        CM_COPY_OUT,
-        CM_COPY_RECOVERY,
+        CM_COPY_INIT, CM_COPY_RUNNING, CM_COPY_DOWN, CM_COPY_OUT, CM_COPY_RECOVERY,
     };
 
     CmServiceStatus status = CM_NORMAL;
@@ -225,12 +221,12 @@ int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
             copy.state = s_copystate[ptList->ptEntryList[index].copyList[idx].state];
             ptInfo.copys.push_back(copy);
         }
-        LOG_INFO("Batch pt num: " << ptList->ptNum << ", Pt id: " << ptInfo.ptId << ", master node:"
-        << ptInfo.masterNodeId << ", cm nodeId:" << cm->mNodeId);
+        LOG_INFO("Batch pt num: " << ptList->ptNum << ", Pt id: " << ptInfo.ptId
+                                  << ", master node:" << ptInfo.masterNodeId << ", cm nodeId:" << cm->mNodeId);
         if (ptInfo.masterNodeId == cm->mNodeId) {
             if (cm->mPtInfos.find(ptInfo.ptId) != cm->mPtInfos.end() &&
                 cm->mPtInfos[ptInfo.ptId].masterNodeId != ptInfo.masterNodeId) {
-                ptInfo.state = CM_PT_MST_MIGRATE;  // 写前日志回放等待完成
+                ptInfo.state = CM_PT_MST_MIGRATE; // 写前日志回放等待完成
                 cm->mPtMigrateHandler(ptInfo.ptId);
             }
         }
@@ -242,7 +238,7 @@ int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
         cm->mPtInfos[ptInfo.ptId] = ptInfo;
     }
 
-    for (auto& pt :cm->mPtInfos) {
+    for (auto &pt : cm->mPtInfos) {
         for (uint16_t idx = 0; idx < ptList->maxCopyNum; idx++) {
             if (pt.second.copys[idx].nodeId == cm->mNodeId && pt.second.copys[idx].state != CM_COPY_RUNNING) {
                 status = CM_ABNORMAL;
@@ -253,6 +249,5 @@ int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
     cm->mPtHandler(cm->mPtInfos, (status == CM_NORMAL));
     return 0;
 }
-}
-}
-
+} // namespace mms
+} // namespace ock

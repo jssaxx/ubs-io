@@ -13,11 +13,11 @@
 #ifndef MMS_COMM_H
 #define MMS_COMM_H
 
-#include <sys/syscall.h>
 #include <errno.h>
+#include <sched.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 #include <vector>
-#include <sched.h>
 #include "mms_ref.h"
 #include "mms_types.h"
 
@@ -193,8 +193,7 @@ private:
 
     DEFINE_REF_COUNT_VARIABLE;
 };
-}
-}
+} // namespace mms
+} // namespace ock
 
-#endif  // MMS_COMM_H
-
+#endif // MMS_COMM_H

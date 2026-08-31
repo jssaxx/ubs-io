@@ -44,6 +44,6 @@ private:
     ~TraceMark() = delete;
 };
 
-}
-}
+} // namespace tracemark
+} // namespace ock
 #endif // TRACEMARK_H

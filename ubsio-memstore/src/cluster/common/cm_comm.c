@@ -43,4 +43,3 @@ uint64_t CmGetSecondsTime(void)
 
     return tval.tv_sec;
 }
-

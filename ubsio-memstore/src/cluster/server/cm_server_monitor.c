@@ -11,10 +11,10 @@
  */
 
 #include "cm_server_monitor.h"
-#include "cm_server_schedule.h"
-#include "cm_config.h"
 #include "cm_comm.h"
+#include "cm_config.h"
 #include "cm_log.h"
+#include "cm_server_schedule.h"
 #include "cm_thread.h"
 
 #define MONITOR_THREAD_NAME "cm_server_monitor"
@@ -25,7 +25,8 @@
 
 #define MONITOR_INTERAL_TIME (5000)
 
-typedef enum {
+typedef enum
+{
     RECORD_STATE_NORMAL = 0,
     RECORD_STATE_FAULT = 1,
 } RecordState;
@@ -243,7 +244,7 @@ void CmServerMonitorPoolExpiredUpdate(PoolRecord *record, uint64_t curTimes)
         if (nodeList->list[nodeId].diskNum == 0) {
             continue;
         }
-        uint16_t list[MAX_DISK_NUM] = { 0 };
+        uint16_t list[MAX_DISK_NUM] = {0};
         uint16_t num = 0;
         for (index = 0; index < nodeList->list[nodeId].diskNum; index++) {
             if (nodeList->list[nodeId].diskList[index].times + MONITOR_DISK_PERM_FAULT_TIME <= curTimes) {
@@ -291,7 +292,7 @@ void *CmServerMonitorPoolExpiredHandle(void *ctx)
         for (index = 0; index < nodeList->list[nodeId].diskNum; index++) {
             if (nodeList->list[nodeId].diskList[index].times + MONITOR_DISK_PERM_FAULT_TIME <= curTimes) {
                 g_faultMonitor.handle.ExpiredDiskSet(record->pool->poolId, nodeId,
-                    nodeList->list[nodeId].diskList[index].id);
+                                                     nodeList->list[nodeId].diskList[index].id);
                 continue;
             }
         }
@@ -515,4 +516,3 @@ void CmServerMonitorExit(void)
     CM_LOGINFO("Cm server monitor exit succeed.");
     return;
 }
-

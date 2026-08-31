@@ -10,10 +10,10 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "cm_threadpool.h"
 #include <unistd.h>
 #include "cm_log.h"
 #include "securec.h"
-#include "cm_threadpool.h"
 
 void *ThreadPoolThread(void *thread_pool)
 {
@@ -52,7 +52,7 @@ int ParamCheck(uint16_t *thread_num, uint16_t *queue_size)
 {
     if (*thread_num == 0 || *queue_size == 0) {
         CM_LOGERROR(0, "create thread pool, invalid param, thread_num = %u, queue_size = %u\r\n", *thread_num,
-            *queue_size);
+                    *queue_size);
         return -1;
     }
     if (*thread_num > THREAD_POOL_MAX_THREADS) {

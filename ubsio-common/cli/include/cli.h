@@ -31,11 +31,11 @@ int32_t cli_agent_init(uint32_t current_pid, char *app_name);
 void cli_agent_sync_status(void);
 int32_t cli_agent_destroy(uint32_t current_pid);
 
-#define CLI_RET_UNKNOWN_ARG   1
+#define CLI_RET_UNKNOWN_ARG 1
 
-#define CLI_MAX_COMMAND_LEN   20
-#define CLI_MAX_CMD_DESC_LEN  64
-#define CLI_MAX_ERR_MSG_LEN   80
+#define CLI_MAX_COMMAND_LEN 20
+#define CLI_MAX_CMD_DESC_LEN 64
+#define CLI_MAX_ERR_MSG_LEN 80
 
 typedef void (*CliCommandHandler)(int32_t argc, char *argv[]);
 typedef void (*CliCommandHelpHandler)(char *command, int32_t show_detail);

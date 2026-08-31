@@ -9,24 +9,24 @@
  * IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  */
-#include <iostream>
 #include <arpa/inet.h>
 #include <ifaddrs.h>
-#include <climits>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-#include <cerrno>
-#include <sys/syscall.h>
 #include <linux/version.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+#include <cerrno>
+#include <climits>
+#include <iostream>
 
-#include "securec.h"
 #include "mms_file_util.h"
 #include "mms_ip_util.h"
 #include "mms_trace.h"
-#include "net_log.h"
-#include "net_executor_pool.h"
 #include "net_engine.h"
+#include "net_executor_pool.h"
+#include "net_log.h"
+#include "securec.h"
 
 namespace ock {
 namespace mms {
@@ -37,8 +37,8 @@ static void HcomLog(int level, const char *msg)
     NET_BASE_LOG(level, msg);
 }
 
-static BResult SplitWorkerGroupConfig(const std::string &groups, const std::string &cpuSets,
-                                      WorkerGroupConfig &config, const std::string &type)
+static BResult SplitWorkerGroupConfig(const std::string &groups, const std::string &cpuSets, WorkerGroupConfig &config,
+                                      const std::string &type)
 {
     StrUtil::Split(groups, ",", config.groups);
     StrUtil::Split(cpuSets, ",", config.cpuSets);
@@ -46,8 +46,9 @@ static BResult SplitWorkerGroupConfig(const std::string &groups, const std::stri
         return MMS_OK;
     }
 
-    NET_LOG_ERROR("Worker group size not equal group cpu set size, type:" << type <<
-        ", group size:" << config.groups.size() << ", group cpu set size:" << config.cpuSets.size() << ".");
+    NET_LOG_ERROR("Worker group size not equal group cpu set size, type:"
+                  << type << ", group size:" << config.groups.size() << ", group cpu set size:" << config.cpuSets.size()
+                  << ".");
     return MMS_INVALID_PARAM;
 }
 
@@ -64,7 +65,7 @@ static BResult FillServerIpcWorkerOptions(const WorkerGroupConfig &config, UBSHc
         return MMS_INVALID_PARAM;
     }
     if (UNLIKELY(!StrUtil::StrToUint16(config.groups[0], options.workerGroupThreadCount) ||
-        !StrUtil::StrToUint32Pair(config.cpuSets[0], options.workerGroupCpuIdsRange))) {
+                 !StrUtil::StrToUint32Pair(config.cpuSets[0], options.workerGroupCpuIdsRange))) {
         NET_LOG_ERROR("Invalid ipc worker group config.");
         return MMS_INVALID_PARAM;
     }
@@ -77,7 +78,7 @@ static BResult AddWorkerGroup(UBSHcomService *service, uint32_t groupIndex, cons
     uint16_t workerGroupThreadCount = 0;
     std::pair<uint32_t, uint32_t> workerGroupCpuIdsRange;
     if (UNLIKELY(!StrUtil::StrToUint16(group, workerGroupThreadCount) ||
-        !StrUtil::StrToUint32Pair(cpuSet, workerGroupCpuIdsRange))) {
+                 !StrUtil::StrToUint32Pair(cpuSet, workerGroupCpuIdsRange))) {
         NET_LOG_ERROR("Invalid ipc worker group config, groupIndex:" << groupIndex << ".");
         return MMS_INVALID_PARAM;
     }
@@ -231,15 +232,15 @@ BResult NetEngine::InitMemoryRegister(void)
 {
     uint16_t index;
     for (index = 0; index < mMemList.num; index++) {
-        auto ret = mRpcService->RegisterMemoryRegion(mMemList.address[index], mMemList.size[index],
-            mMemList.mr[index]);
+        auto ret = mRpcService->RegisterMemoryRegion(mMemList.address[index], mMemList.size[index], mMemList.mr[index]);
         if (ret != MMS_OK) {
-            NET_LOG_ERROR("Failed to register memory region, address:" << mMemList.address[index] <<
-                ", size:" << mMemList.size[index] << ".");
+            NET_LOG_ERROR("Failed to register memory region, address:" << mMemList.address[index]
+                                                                       << ", size:" << mMemList.size[index] << ".");
             return ret;
         }
-        LOG_INFO("Register memory success, address:" << mMemList.address[index] <<
-            ", size:" << mMemList.size[index] << ", key:" << mMemList.mr[index].GetHcomMrs()[0]->GetLKey() << ".");
+        LOG_INFO("Register memory success, address:" << mMemList.address[index] << ", size:" << mMemList.size[index]
+                                                     << ", key:" << mMemList.mr[index].GetHcomMrs()[0]->GetLKey()
+                                                     << ".");
     }
     return MMS_OK;
 }
@@ -371,7 +372,7 @@ BResult NetEngine::CreateIpcService(const NetOptions &opt, bool isOobSvr, const 
     std::string name = isOobSvr ? IPC_SERVICE_NAME_SERVER : IPC_SERVICE_NAME_CLIENT;
     UBSHcomServiceOptions options;
     options.workerGroupMode = opt.isBusyPolling ? UBSHcomNetDriverWorkingMode::NET_BUSY_POLLING :
-                              UBSHcomNetDriverWorkingMode::NET_EVENT_POLLING;
+                                                  UBSHcomNetDriverWorkingMode::NET_EVENT_POLLING;
     options.maxSendRecvDataSize = (NO_64 * NO_1024);
     options.workerGroupId = 0;
     options.workerThreadPriority = 0;
@@ -411,8 +412,7 @@ BResult NetEngine::AddIpcWorkerGroups(bool isOobSvr, const WorkerGroupConfig &ip
     }
 
     uint16_t mainGroupThreadCount = 0;
-    if (UNLIKELY(ipcConfig.groups.empty() ||
-        !StrUtil::StrToUint16(ipcConfig.groups[0], mainGroupThreadCount))) {
+    if (UNLIKELY(ipcConfig.groups.empty() || !StrUtil::StrToUint16(ipcConfig.groups[0], mainGroupThreadCount))) {
         NET_LOG_ERROR("Invalid ipc main worker group config.");
         return MMS_INVALID_PARAM;
     }
@@ -527,12 +527,12 @@ BResult NetEngine::CreateRpcService(const NetOptions &opt, bool isOobSvr, const 
     std::string name = isOobSvr ? RPC_SERVICE_NAME_SERVER : RPC_SERVICE_NAME_CLIENT;
     UBSHcomServiceOptions options;
     options.workerGroupMode = opt.isBusyPolling ? UBSHcomNetDriverWorkingMode::NET_BUSY_POLLING :
-                              UBSHcomNetDriverWorkingMode::NET_EVENT_POLLING;
+                                                  UBSHcomNetDriverWorkingMode::NET_EVENT_POLLING;
     options.maxSendRecvDataSize = isOobSvr ? (NO_256 * NO_1024) : (NO_16 * NO_1024);
     options.workerGroupId = 0;
     options.workerThreadPriority = 0;
     if (UNLIKELY(!StrUtil::StrToUint16(rpcConfig.groups[0], options.workerGroupThreadCount) ||
-        !StrUtil::StrToUint32Pair(rpcConfig.cpuSets[0], options.workerGroupCpuIdsRange))) {
+                 !StrUtil::StrToUint32Pair(rpcConfig.cpuSets[0], options.workerGroupCpuIdsRange))) {
         NET_LOG_ERROR("Invalid rpc worker group config.");
         return MMS_INVALID_PARAM;
     }
@@ -631,15 +631,16 @@ int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newCh
     newChannel->SetChannelTimeOut(mTimeout, mTimeout);
 
     if (netPayload.srcNodeId.pid == 0) {
-        NET_LOG_INFO("Receive new channel, not needed add, channel " << newChannel->GetId() << ", peer connected nid "
-            << netPayload.srcNodeId.nid << " pid " << netPayload.srcNodeId.pid << ", ip " << ipPort << ", payload " <<
-            payload << ".");
+        NET_LOG_INFO("Receive new channel, not needed add, channel "
+                     << newChannel->GetId() << ", peer connected nid " << netPayload.srcNodeId.nid << " pid "
+                     << netPayload.srcNodeId.pid << ", ip " << ipPort << ", payload " << payload << ".");
         return MMS_OK;
     }
 
     mChannelMgr->AddChannel(netPayload.srcNodeId, const_cast<ChannelPtr &>(newChannel), groupIndex);
-    NET_LOG_INFO("Receive new channel " << newChannel->GetId() << ", nodeId:" << netPayload.srcNodeId.nid << ", pid:" <<
-        netPayload.srcNodeId.pid << ", ip:" << ipPort << ", payload:" << payload << ".");
+    NET_LOG_INFO("Receive new channel " << newChannel->GetId() << ", nodeId:" << netPayload.srcNodeId.nid
+                                        << ", pid:" << netPayload.srcNodeId.pid << ", ip:" << ipPort
+                                        << ", payload:" << payload << ".");
     return MMS_OK;
 }
 
@@ -652,8 +653,8 @@ void NetEngine::ChannelBroken(const ChannelPtr &ch)
 
     NetChannelUpCtx ctx(ch->GetUpCtx());
     NetNode dstNid(static_cast<uint32_t>(ctx.peerId), ctx.procId);
-    NET_LOG_WARN("Receive broken channel " << ch->GetId() << ", nodeId:" << dstNid.nid << ", pid:" << dstNid.pid <<
-        ", groupIndex:" << ctx.GetGroupIndex() << ".");
+    NET_LOG_WARN("Receive broken channel " << ch->GetId() << ", nodeId:" << dstNid.nid << ", pid:" << dstNid.pid
+                                           << ", groupIndex:" << ctx.GetGroupIndex() << ".");
 
     mChannelMgr->RemoveChannel(dstNid, ch, ctx.GetGroupIndex());
     if (mHandlerBroken != nullptr) {
@@ -763,14 +764,16 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, uint32_t g
             result = netService->Connect(serverUrl, ch, options);
         }
         if (result == 0) {
-            NET_LOG_INFO("Connect to peer success, ip " << info.ip << ", port " << info.port << ", dstNid " <<
-                info.peerId.nid << ", payload " << payload.ToPayloadStr(prefix) << ".");
+            NET_LOG_INFO("Connect to peer success, ip " << info.ip << ", port " << info.port << ", dstNid "
+                                                        << info.peerId.nid << ", payload "
+                                                        << payload.ToPayloadStr(prefix) << ".");
             break;
         }
     }
     if (result != 0) {
-        NET_LOG_ERROR("Connect to peer failed, ret:" << UBSHcomNetErrStr(result) << ", ip " << info.ip << ", port " <<
-            info.port << ", nid " << info.peerId.nid << ", pid " << info.peerId.pid << ".");
+        NET_LOG_ERROR("Connect to peer failed, ret:" << UBSHcomNetErrStr(result) << ", ip " << info.ip << ", port "
+                                                     << info.port << ", nid " << info.peerId.nid << ", pid "
+                                                     << info.peerId.pid << ".");
         return result;
     }
 
@@ -792,5 +795,5 @@ BResult NetEngine::PrepareTlsDecrypter(const NetOptions &config)
     return MMS_OK;
 }
 
-}
-}
+} // namespace mms
+} // namespace ock

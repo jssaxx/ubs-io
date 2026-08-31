@@ -13,16 +13,16 @@
 #ifndef MMSCORE_NET_MULTICAST_ENGINE_H
 #define MMSCORE_NET_MULTICAST_ENGINE_H
 
-#include "net_common.h"
-#include "mms_message.h"
 #include "cm.h"
-#include "hcom/multicast/multicast_publisher_service.h"
 #include "hcom/multicast/multicast_publisher.h"
-#include "hcom/multicast/multicast_subscriber_service.h"
+#include "hcom/multicast/multicast_publisher_service.h"
 #include "hcom/multicast/multicast_subscriber.h"
-#include "net_engine.h"
+#include "hcom/multicast/multicast_subscriber_service.h"
 #include "mms_config_instance.h"
+#include "mms_message.h"
 #include "multicast_connector.h"
+#include "net_common.h"
+#include "net_engine.h"
 
 #include <cstdint>
 #include <mutex>
@@ -123,17 +123,17 @@ public:
                         if (!CheckRemoteNodeStatus(remoteIp)) {
                             continue;
                         }
-                        callback.cb(callback.cbCtx, nullptr, 0, MMS_INNER_RETRY);  // 一个失败就全部失败
+                        callback.cb(callback.cbCtx, nullptr, 0, MMS_INNER_RETRY); // 一个失败就全部失败
                         NET_LOG_ERROR("Request failed, remote node:" << remoteIp << ", status:"
                                                                      << static_cast<int>(item.GetStatus()) << ".");
                         return;
                     }
 
                     int32_t opRet = *(static_cast<int32_t *>(item.GetMultiResponse().data));
-                    if (opRet != MMS_OK) {  // 请求对应的处理失败了
+                    if (opRet != MMS_OK) { // 请求对应的处理失败了
                         callback.cb(callback.cbCtx, nullptr, 0, opRet);
-                        NET_LOG_ERROR("Request failed, remote node:" << item.GetSubInfos()->GetIp()
-                                                                     << ", ret:" << opRet << ".");
+                        NET_LOG_ERROR("Request failed, remote node:" << item.GetSubInfos()->GetIp() << ", ret:" << opRet
+                                                                     << ".");
                         return;
                     }
                 }
@@ -223,7 +223,7 @@ private:
     DecryptFunc mDecryptHandler;
     DEFINE_REF_COUNT_VARIABLE;
 };
-}
-}
+} // namespace mms
+} // namespace ock
 
 #endif // MMSCORE_NET_MULTICAST_ENGINE_H

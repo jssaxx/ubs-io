@@ -28,6 +28,6 @@ public:
 private:
     static bool gSetup;
 };
-}
-}
+} // namespace mms
+} // namespace ock
 #endif // MMS_TEST_CM_H

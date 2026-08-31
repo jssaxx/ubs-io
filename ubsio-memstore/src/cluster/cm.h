@@ -12,19 +12,19 @@
 #ifndef MMSCORE_MMS_CM_H
 #define MMSCORE_MMS_CM_H
 
-#include <string>
-#include <vector>
-#include <map>
-#include <unordered_set>
 #include <atomic>
 #include <functional>
-#include <sstream>
 #include <iomanip>
+#include <map>
+#include <sstream>
+#include <string>
+#include <unordered_set>
+#include <vector>
 
-#include "mms_log.h"
-#include "mms_ref.h"
 #include "mms_err.h"
 #include "mms_lock.h"
+#include "mms_log.h"
+#include "mms_ref.h"
 #include "mms_types.h"
 
 #include "cm_inner.h"
@@ -32,7 +32,8 @@
 namespace ock {
 namespace mms {
 
-enum CmRole : uint16_t {
+enum CmRole : uint16_t
+{
     ROLE_CMM = 1,
     ROLE_DATA = 2,
     ROLE_TOGETHER = 3,
@@ -57,22 +58,24 @@ struct CmOptions {
     CmGroups groups;
 };
 
-enum CmServiceStatus : uint16_t {
+enum CmServiceStatus : uint16_t
+{
     CM_NORMAL = 0,
     CM_ABNORMAL = 1,
 };
 
-enum CmNodeStatus : uint16_t {
+enum CmNodeStatus : uint16_t
+{
     CM_NODE_NORMAL = 0,
     CM_NODE_FAULT = 1,
 };
 
 struct CmNodeInfo {
-    uint16_t id{ 0 };
+    uint16_t id{0};
     std::string ip;
-    uint16_t port{ 0 };
-    uint16_t multiPort{ 0 };
-    CmNodeStatus status{ CM_NODE_NORMAL };
+    uint16_t port{0};
+    uint16_t multiPort{0};
+    CmNodeStatus status{CM_NODE_NORMAL};
     std::vector<uint16_t> numas;
 
     std::string ToString() const
@@ -92,7 +95,8 @@ struct CmNodeInfo {
     }
 };
 
-enum CmCopyState : uint16_t {
+enum CmCopyState : uint16_t
+{
     CM_COPY_INIT = 0,
     CM_COPY_RUNNING = 1,
     CM_COPY_DOWN = 2,
@@ -106,7 +110,8 @@ struct CmPtCopy {
     uint16_t state : 8; // 见 CmCopyState
 };
 
-enum CmPtState : uint16_t {
+enum CmPtState : uint16_t
+{
     CM_PT_INIT = 0,
     CM_PT_NORMAL = 1,
     CM_PT_MST_MIGRATE = 2,
@@ -117,7 +122,7 @@ enum CmPtState : uint16_t {
 struct CmPtInfo {
     uint64_t version = 0;
     uint16_t ptId;
-    CmPtState state{ CM_PT_INIT };
+    CmPtState state{CM_PT_INIT};
     uint16_t masterNodeId;
     uint16_t resv[2L];
     std::vector<CmPtCopy> copys;
@@ -134,8 +139,8 @@ struct CmPtInfo {
     std::string ToString() const
     {
         std::ostringstream oss;
-        oss << "pt id " << std::setw(NO_2) << ptId << ", version " << version << ", master " <<
-            masterNodeId << ", copy num " << copys.size() << ", pt state " << state;
+        oss << "pt id " << std::setw(NO_2) << ptId << ", version " << version << ", master " << masterNodeId
+            << ", copy num " << copys.size() << ", pt state " << state;
         oss << ", copy list [node-state][";
         for (uint32_t idx = 0; idx < copys.size(); idx++) {
             oss << copys[idx].nodeId << "-" << copys[idx].state;
@@ -270,7 +275,7 @@ public:
         ptId = mPtInfo.ptId;
         ptv = mPtInfo.version;
         remoteNum = 0;
-        for (const auto& elem : mPtInfo.copys) {
+        for (const auto &elem : mPtInfo.copys) {
             if (elem.state != CM_COPY_RUNNING) {
                 continue;
             }
@@ -293,7 +298,7 @@ public:
         ptId = mPtInfo.ptId;
         ptv = mPtInfo.version;
         remoteNum = 0;
-        for (const auto& elem : mPtInfo.copys) {
+        for (const auto &elem : mPtInfo.copys) {
             if (elem.state != CM_COPY_RUNNING) {
                 continue;
             }
@@ -347,7 +352,7 @@ public:
     {
         // HandleCmPtEvent在锁里执行,此处不加锁
         uint32_t count = 0;
-        for (auto &item:mNodeInfos) {
+        for (auto &item : mNodeInfos) {
             if (item.second.status == CmNodeStatus::CM_NODE_NORMAL) {
                 count++;
             }
@@ -370,6 +375,7 @@ public:
     static int32_t QueryLocalNodeInfo(NodeInfo *nodeInfo, void *ctx);
     static int32_t NotifyNodeListChange(NodeStateList *nodeList, void *ctx);
     static int32_t NotifyPtListChange(PtEntryList *ptList, void *ctx);
+
 public:
     CmOptions mOptions;
     CmNodeInfo mNode;
@@ -379,8 +385,8 @@ public:
 
     CmServiceStatus mStatus = CM_ABNORMAL;
 
-    uint16_t mNodeId{ NODE_ID_INVALID };
-    MmsNodeId mMasterNode{ NODE_ID_INVALID };
+    uint16_t mNodeId{NODE_ID_INVALID};
+    MmsNodeId mMasterNode{NODE_ID_INVALID};
 
     std::map<uint16_t, CmNodeInfo> mNodeInfos;
     std::map<uint16_t, CmPtInfo> mPtInfos;
@@ -390,11 +396,10 @@ public:
     ReadWriteLock mNLock;
     ReadWriteLock mPLock;
 
-    bool mStarted{ false };
-    bool mInited{ false };
+    bool mStarted{false};
+    bool mInited{false};
     DEFINE_REF_COUNT_VARIABLE;
 };
-}
-}
+} // namespace mms
+} // namespace ock
 #endif // MMSCORE_MMS_CM_H
-

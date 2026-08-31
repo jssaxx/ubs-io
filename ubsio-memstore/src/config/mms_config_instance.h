@@ -240,8 +240,8 @@ private:
     BasicConfig mBasicConfig;
     NotifyShmConfig mNotifyShmConfig;
     CrbConfig mCrbConfig;
-    bool mInited{ false };
+    bool mInited{false};
 };
-}
-}
+} // namespace mms
+} // namespace ock
 #endif // MMS_CONFIG_INSTANCE_H

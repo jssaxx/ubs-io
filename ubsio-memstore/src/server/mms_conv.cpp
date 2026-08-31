@@ -10,12 +10,12 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "mms_conv.h"
+#include "mms_kv_server.h"
+#include "mms_notify.h"
+#include "mms_server.h"
 #include "mms_trace.h"
 #include "mms_types.h"
-#include "mms_kv_server.h"
-#include "mms_server.h"
-#include "mms_notify.h"
-#include "mms_conv.h"
 
 namespace ock {
 namespace mms {
@@ -108,8 +108,7 @@ CResult MmsConv::Put(PutItems *itemList, uint32_t itemNum)
 
     for (uint32_t i = 0; i < itemNum; i++) {
         if (UNLIKELY(!KeyValid(itemList[i].key, itemList[i].keyLen) || itemList[i].value == nullptr ||
-                     itemList[i].valueLen == 0 || itemList[i].valueAddr == nullptr ||
-                     itemList[i].result == nullptr)) {
+                     itemList[i].valueLen == 0 || itemList[i].valueAddr == nullptr || itemList[i].result == nullptr)) {
             return RET_MMS_EPERM;
         }
         *itemList[i].result = static_cast<int32_t>(MMS_OK);
@@ -233,8 +232,8 @@ CResult MmsConv::StartCatchUpTask()
     MMS_TRACE_END(SDK_TRACE_CATCH_UP, ret)
     return ret;
 }
-}
-}
+} // namespace mms
+} // namespace ock
 
 CResult MmsInitialize(const MmsOptions *options, ServiceCallback service)
 {

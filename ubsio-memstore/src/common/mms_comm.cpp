@@ -10,12 +10,12 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <sched.h>
-#include <dirent.h>
-#include <fstream>
-#include <cstring>
-#include "mms_def.h"
 #include "mms_comm.h"
+#include <dirent.h>
+#include <sched.h>
+#include <cstring>
+#include <fstream>
+#include "mms_def.h"
 
 namespace ock {
 namespace mms {
@@ -169,6 +169,5 @@ uint16_t NumaGroupIndex::GetGroupIndex() const
 {
     return __sync_fetch_and_add(&s_index, 1) % Instance()->GetGroupNum();
 }
-}
-}
-
+} // namespace mms
+} // namespace ock

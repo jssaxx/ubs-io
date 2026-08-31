@@ -17,19 +17,19 @@
 #include <mutex>
 #include <utility>
 #include <vector>
+#include "cm.h"
 #include "mms_c.h"
-#include "mms_ref.h"
+#include "mms_cache.h"
 #include "mms_err.h"
 #include "mms_lock.h"
-#include "mms_sequence.h"
+#include "mms_mem_allocator.h"
+#include "mms_mem_mgr.h"
 #include "mms_message.h"
+#include "mms_notify_shm_server.h"
+#include "mms_ref.h"
+#include "mms_sequence.h"
 #include "net_engine.h"
 #include "net_multicast_engine.h"
-#include "mms_mem_mgr.h"
-#include "mms_mem_allocator.h"
-#include "mms_notify_shm_server.h"
-#include "mms_cache.h"
-#include "cm.h"
 
 namespace ock {
 namespace mms {
@@ -116,23 +116,23 @@ private:
     BResult ReplaceLocal(void *ioBuff, uint32_t ioLen);
 
     BResult NotifyPtMigrateImpl(uint16_t ptId);
-    BResult GetSeqNoList(uint64_t seqList[], uint32_t &seqNum, uint16_t ptId, uint64_t ptv,
-                         uint16_t groupIndex, uint16_t nid);
-    BResult MergeSeqNoList(uint64_t negoSeqList[], uint16_t negoLocList[], uint32_t &negoSeqNum,
-                           uint64_t seqList[], uint32_t seqNum, uint16_t remoteId);
+    BResult GetSeqNoList(uint64_t seqList[], uint32_t &seqNum, uint16_t ptId, uint64_t ptv, uint16_t groupIndex,
+                         uint16_t nid);
+    BResult MergeSeqNoList(uint64_t negoSeqList[], uint16_t negoLocList[], uint32_t &negoSeqNum, uint64_t seqList[],
+                           uint32_t seqNum, uint16_t remoteId);
     BResult SyncSeqNoData(uint64_t negoSeqNo, uint16_t negoLocId, uint64_t seqList[], uint32_t seqNum,
                           uint16_t remoteId, CmPtInfo &ptInfo, uint16_t groupIndex);
-    BResult GetSeqNoData(uint64_t negoSeqNo, uint16_t negoLocId, CmPtInfo &ptInfo, uint16_t groupIndex,
-                         void **data, uint32_t &len);
-    BResult PutSeqNoData(uint64_t negoSeqNo, uint16_t negoLocId, CmPtInfo &ptInfo, uint16_t groupIndex,
-                         void *data, uint32_t len);
+    BResult GetSeqNoData(uint64_t negoSeqNo, uint16_t negoLocId, CmPtInfo &ptInfo, uint16_t groupIndex, void **data,
+                         uint32_t &len);
+    BResult PutSeqNoData(uint64_t negoSeqNo, uint16_t negoLocId, CmPtInfo &ptInfo, uint16_t groupIndex, void *data,
+                         uint32_t len);
     void ReplyPeerRequest(ServiceContext &ctx, int32_t retCode, void *resp, uint32_t respSize);
     BResult HandleGetSeqNoList(ServiceContext &ctx);
     BResult HandleGetSeqNoData(ServiceContext &ctx);
     BResult HandleUpdatePtVersion(ServiceContext &ctx);
 
-    void AppendNotifyItem(std::vector<NotifyShmPublishItem> &items, uint32_t &itemNum,
-        const char *key, uint16_t keyLen, OperateType opType);
+    void AppendNotifyItem(std::vector<NotifyShmPublishItem> &items, uint32_t &itemNum, const char *key, uint16_t keyLen,
+                          OperateType opType);
     void NotifyDataChangeBatch(const NotifyShmPublishItem *items, uint32_t itemNum);
 
 private:
@@ -164,6 +164,6 @@ private:
 
     DEFINE_REF_COUNT_VARIABLE;
 };
-} // mms
-} // ock
+} // namespace mms
+} // namespace ock
 #endif

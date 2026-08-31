@@ -122,4 +122,3 @@ static inline int32_t initModulesWithParam(MODULE_DEFINE_WITH_PARAM_S *modules, 
 #endif
 
 #endif
-

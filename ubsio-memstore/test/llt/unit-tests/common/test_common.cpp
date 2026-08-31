@@ -11,9 +11,9 @@
  */
 
 #include "test_common.h"
-#include "mms_log.h"
 #include "mms_comm.h"
 #include "mms_crc_util.h"
+#include "mms_log.h"
 #include "mms_sequence.h"
 
 using namespace ock::mms;

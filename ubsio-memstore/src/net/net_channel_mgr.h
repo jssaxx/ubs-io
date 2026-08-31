@@ -12,11 +12,11 @@
 #ifndef NET_CHANNEL_MGR_H
 #define NET_CHANNEL_MGR_H
 
+#include <list>
 #include <unordered_map>
 #include <utility>
-#include <list>
-#include "net_common.h"
 #include "mms_lock.h"
+#include "net_common.h"
 
 namespace ock {
 namespace mms {
@@ -119,7 +119,6 @@ private:
 };
 
 using NetChannelMgrPtr = Ref<NetChannelMgr>;
-}
-}
+} // namespace mms
+} // namespace ock
 #endif // NET_CHANNEL_MGR_H
-

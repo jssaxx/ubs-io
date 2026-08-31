@@ -13,14 +13,15 @@
 #ifndef MMS_C_H
 #define MMS_C_H
 
-#include <stdint.h>
 #include <limits.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef enum {
+typedef enum
+{
     RET_MMS_OK = 0,            // successful
     RET_MMS_PROTECTED = 1,     // cache write protected
     RET_MMS_ERROR = 2,         // unknown error code
@@ -94,7 +95,8 @@ typedef struct {
     int32_t *result;
 } DeleteItems;
 
-typedef enum {
+typedef enum
+{
     OP_PUT = 0,
     OP_DELETE = 1,
     OP_BUTT

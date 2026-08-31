@@ -167,5 +167,5 @@ BResult MultiNetConnector::SyncConnect(SubscriptionInfo &info)
 
     return task->Wait();
 }
-}
-}
+} // namespace mms
+} // namespace ock

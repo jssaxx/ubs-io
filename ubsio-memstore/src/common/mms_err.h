@@ -18,7 +18,8 @@
 namespace ock {
 namespace mms {
 using BResult = int32_t;
-enum Error : int32_t {
+enum Error : int32_t
+{
     MMS_OK = 0,
     MMS_ERR = 1,
     MMS_INNER_ERR = 2,
@@ -42,8 +43,7 @@ enum Error : int32_t {
     MMS_NEED_UPDATE_PT_VERSION = 20,
     MMS_MAX,
 };
-}
-}
+} // namespace mms
+} // namespace ock
 
 #endif // MMSCORE_MMS_ERR_H
-

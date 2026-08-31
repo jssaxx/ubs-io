@@ -13,20 +13,21 @@
 #ifndef MMS_MESSAGE_H
 #define MMS_MESSAGE_H
 
+#include <semaphore.h>
 #include <stdint.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <semaphore.h>
 #include <atomic>
-#include <vector>
 #include <functional>
+#include <vector>
 #include "mms_c.h"
 #include "mms_err.h"
 #include "mms_types.h"
 
 namespace ock {
 namespace mms {
-enum MmsOpCode : uint16_t {
+enum MmsOpCode : uint16_t
+{
     MMS_OP_C_BASIC = 0,
     MMS_OP_C_SERVICEABLE,
     MMS_OP_C_PUT,
@@ -134,7 +135,7 @@ typedef struct {
 
 static constexpr uint16_t IOCTX_HEADER_LEN = sizeof(IoDataRequest) + sizeof(IoLocDesc);
 static constexpr uint16_t IO_DATA_REQUEST_LEN = sizeof(IoDataRequest);
-static constexpr uint16_t IO_DESCRIPTION_LEN  = sizeof(IoLocDesc);
+static constexpr uint16_t IO_DESCRIPTION_LEN = sizeof(IoLocDesc);
 
 struct KvCbCtx {
     std::atomic<uint16_t> quota;
@@ -209,6 +210,6 @@ uint32_t FillUpdateItemResults(UpdateItems *itemList, uint32_t itemIndex, const 
 uint32_t FillDeleteItemResults(DeleteItems *itemList, uint32_t itemIndex, const std::vector<IOCtxItem> &ctxItems);
 uint32_t FillReplaceItemResults(ReplaceItems *itemList, uint32_t itemIndex, const std::vector<IOCtxItem> &ctxItems);
 
-}
-}
+} // namespace mms
+} // namespace ock
 #endif // MMS_MESSAGE_H

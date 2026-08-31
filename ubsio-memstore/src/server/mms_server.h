@@ -15,17 +15,17 @@
 
 #include <mutex>
 #include <utility>
-#include "mms_err.h"
-#include "mms_ref.h"
-#include "mms_config_instance.h"
-#include "mms_mem_mgr.h"
-#include "mms_mem_allocator.h"
+#include "cm.h"
 #include "mms_cache.h"
+#include "mms_config_instance.h"
+#include "mms_crb_scheduler.h"
+#include "mms_err.h"
+#include "mms_kv_server.h"
+#include "mms_mem_allocator.h"
+#include "mms_mem_mgr.h"
+#include "mms_ref.h"
 #include "net_engine.h"
 #include "net_multicast_engine.h"
-#include "cm.h"
-#include "mms_crb_scheduler.h"
-#include "mms_kv_server.h"
 
 namespace ock {
 namespace mms {
@@ -47,7 +47,8 @@ struct ModuleDesc {
           start(std::move(startFunc)),
           shutdown(std::move(shutdownFunc)),
           exit(std::move(exitFunc))
-    {}
+    {
+    }
 };
 
 class MmsServiceProc {
@@ -310,7 +311,7 @@ private:
     std::atomic<bool> mIsFirst{true};
     std::atomic<bool> mServiceable{false};
     ServiceCallback mServiceCallback = nullptr;
-    ExecutorServicePtr mTaskService{ nullptr };
+    ExecutorServicePtr mTaskService{nullptr};
 
     CrbSchedulerPtr mCrbSchedulerPtr = nullptr;
 #ifdef USE_CLI_TOOLS
@@ -319,6 +320,6 @@ private:
 
     DEFINE_REF_COUNT_VARIABLE;
 };
-}
-}
+} // namespace mms
+} // namespace ock
 #endif // MMS_SERVER_H

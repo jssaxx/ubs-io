@@ -29,7 +29,7 @@ public:
 private:
     static bool gSetup;
 };
-}
-}
+} // namespace mms
+} // namespace ock
 
-#endif  // MMSCORE_TEST_HTRACER_H
+#endif // MMSCORE_TEST_HTRACER_H

@@ -11,15 +11,15 @@
  */
 
 #include "cm_server_view.h"
-#include "cm_server_schedule.h"
-#include "cm_server_monitor.h"
-#include "cm_zkadapter.h"
+#include "cm_comm.h"
+#include "cm_config.h"
+#include "cm_log.h"
 #include "cm_pt_calc.h"
 #include "cm_pt_store.h"
-#include "cm_config.h"
-#include "cm_comm.h"
-#include "cm_log.h"
+#include "cm_server_monitor.h"
+#include "cm_server_schedule.h"
 #include "cm_thread.h"
+#include "cm_zkadapter.h"
 #include "securec.h"
 
 #define CM_SERVER_PT_INITIAL "cm_server_pt_initial"
@@ -140,7 +140,7 @@ static void CmServerViewExpiredNodeSet(uint16_t poolId, uint16_t nodeId)
     g_sPoolMgr.list[poolId].stateChange = TRUE;
 
     CM_LOGINFO("Expired, poolId(%u) nodeId(%u) state(%s-%s).", poolId, nodeId, g_nstate[cmState->state],
-        g_cstate[cmState->clusterState]);
+               g_cstate[cmState->clusterState]);
     return;
 }
 
@@ -158,7 +158,8 @@ static void CmServerViewExpiredDiskSet(uint16_t poolId, uint16_t nodeId, uint16_
                 g_sPoolMgr.list[poolId].stateChange = TRUE;
 
                 CM_LOGINFO("Expired, poolId(%u) nodeId(%u) state(%s-%s) diskId(%u) disk state(%s).", poolId, nodeId,
-                    g_nstate[cmState->state], g_cstate[cmState->clusterState], diskId, CM_DISK_STATE(DISK_STATE_FAULT));
+                           g_nstate[cmState->state], g_cstate[cmState->clusterState], diskId,
+                           CM_DISK_STATE(DISK_STATE_FAULT));
                 return;
             }
         }
@@ -287,7 +288,7 @@ static int32_t CmServerViewBuildNode(uint16_t poolId, uint16_t nodeId)
         CmServerListenNodeFault(poolId, nodeInfo->nodeId); // 恢复节点故障监控
         if (pool->redundanceNum != 0) {
             spool->calcOps->updateState(nodeId, NODE_STATE_DOWN, nodeInfo, spool->ptEntryList,
-                &spool->ptChange); // 更新PT副本状态
+                                        &spool->ptChange); // 更新PT副本状态
         }
         return CM_OK;
     }
@@ -296,7 +297,7 @@ static int32_t CmServerViewBuildNode(uint16_t poolId, uint16_t nodeId)
         CmServerViewCheckDiskFault(poolId, nodeInfo, nodeState); // 扫描节点磁盘故障监控
         if (pool->redundanceNum != 0) {
             spool->calcOps->updateState(nodeId, NODE_STATE_UP, nodeInfo, spool->ptEntryList,
-                &spool->ptChange); // 更新PT副本状态
+                                        &spool->ptChange); // 更新PT副本状态
         }
         return CM_OK;
     }
@@ -389,13 +390,13 @@ static int32_t CmServerViewNodeOffline(uint16_t poolId, uint16_t nodeId)
     CmServerViewUpdateMasterNodeId(poolId);
 
     CM_LOGINFO("Node offline, poolId(%u) nodeId(%u) state(%s-%s).", poolId, nodeId, g_nstate[nodeState->state],
-        g_cstate[nodeState->clusterState]);
+               g_cstate[nodeState->clusterState]);
 
     if (nodeState->clusterState == NODE_CLUSTER_STATE_IN) {
         CmServerListenNodeFault(poolId, nodeId); // 加入节点故障监控
         if (pool->redundanceNum != 0) {
             spool->calcOps->updateState(nodeId, NODE_STATE_DOWN, nodeInfo, spool->ptEntryList,
-                &spool->ptChange); // 更新PT副本状态
+                                        &spool->ptChange); // 更新PT副本状态
         }
     }
 
@@ -460,13 +461,13 @@ int32_t CmServerViewNodeOnline(uint16_t poolId, uint16_t nodeId)
     CmServerViewUpdateMasterNodeId(poolId);
 
     CM_LOGINFO("Node online, poolId(%u) nodeId(%u) state(%s-%s).", poolId, nodeId, g_nstate[nodeState->state],
-        g_cstate[nodeState->clusterState]);
+               g_cstate[nodeState->clusterState]);
 
     if (nodeState->clusterState == NODE_CLUSTER_STATE_IN) {
         CmServerViewCheckDiskFault(poolId, nodeInfo, nodeState); // 扫描节点磁盘故障监控
         if (pool->redundanceNum != 0) {
             spool->calcOps->updateState(nodeId, NODE_STATE_UP, nodeInfo, spool->ptEntryList,
-                &spool->ptChange); // 更新PT副本状态
+                                        &spool->ptChange); // 更新PT副本状态
         }
         return CM_OK;
     }
@@ -588,7 +589,7 @@ void CmServerViewPtEvent(CmPtEvent *ptEvent)
     }
 
     spool->calcOps->updateFinish(ptEvent->nodeId, ptEvent->ptList, ptEvent->ptNum, spool->ptEntryList, &spool->ptChange,
-        pool->maxNodeNum);
+                                 pool->maxNodeNum);
     return;
 }
 
@@ -962,4 +963,3 @@ void CmServerViewExit(void)
     CM_LOGINFO("Cm server view exit succeed.");
     return;
 }
-

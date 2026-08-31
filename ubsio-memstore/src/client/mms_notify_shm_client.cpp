@@ -4,17 +4,17 @@
 
 #include "mms_notify_shm_client.h"
 
+#include <pthread.h>
+#include <sched.h>
+#include <sys/mman.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
 #include <exception>
-#include <pthread.h>
-#include <sched.h>
 #include <string>
-#include <sys/socket.h>
-#include <sys/mman.h>
-#include <sys/un.h>
-#include <unistd.h>
 
 #include "mms_client_log.h"
 #include "mms_def.h"
@@ -27,15 +27,12 @@ namespace mms {
 
 static void CloseReceivedFds(msghdr &message)
 {
-    for (cmsghdr *header = CMSG_FIRSTHDR(&message); header != nullptr;
-        header = CMSG_NXTHDR(&message, header)) {
-        if (header->cmsg_level != SOL_SOCKET || header->cmsg_type != SCM_RIGHTS ||
-            header->cmsg_len < CMSG_LEN(0)) {
+    for (cmsghdr *header = CMSG_FIRSTHDR(&message); header != nullptr; header = CMSG_NXTHDR(&message, header)) {
+        if (header->cmsg_level != SOL_SOCKET || header->cmsg_type != SCM_RIGHTS || header->cmsg_len < CMSG_LEN(0)) {
             continue;
         }
         size_t dataSize = header->cmsg_len - CMSG_LEN(0);
-        if (dataSize % sizeof(int32_t) != 0 ||
-            dataSize > sizeof(int32_t) * NOTIFY_SHM_MAX_FDS) {
+        if (dataSize % sizeof(int32_t) != 0 || dataSize > sizeof(int32_t) * NOTIFY_SHM_MAX_FDS) {
             continue;
         }
         auto *receivedFds = reinterpret_cast<int32_t *>(CMSG_DATA(header));
@@ -51,8 +48,8 @@ MmsNotifyShmConsumer::~MmsNotifyShmConsumer()
     Stop();
 }
 
-BResult MmsNotifyShmConsumer::Start(uint32_t serverPid,
-    std::atomic<NotifyCallback> &callback, std::atomic<void *> &userData)
+BResult MmsNotifyShmConsumer::Start(uint32_t serverPid, std::atomic<NotifyCallback> &callback,
+                                    std::atomic<void *> &userData)
 {
     std::lock_guard<std::mutex> lock(mLifecycleLock);
     StopLocked();
@@ -89,8 +86,8 @@ bool MmsNotifyShmConsumer::IsRunning() const
     return mRunning.load(std::memory_order_acquire);
 }
 
-BResult MmsNotifyShmConsumer::ReceiveSubscription(uint32_t serverPid,
-    std::array<int32_t, NOTIFY_SHM_MAX_FDS> &fds, uint16_t &fdCount, NotifyShmHandshake &handshake)
+BResult MmsNotifyShmConsumer::ReceiveSubscription(uint32_t serverPid, std::array<int32_t, NOTIFY_SHM_MAX_FDS> &fds,
+                                                  uint16_t &fdCount, NotifyShmHandshake &handshake)
 {
     int32_t socketFd = socket(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0);
     if (socketFd < 0) {
@@ -138,11 +135,10 @@ BResult MmsNotifyShmConsumer::ReceiveSubscription(uint32_t serverPid,
     cmsghdr *controlHeader = CMSG_FIRSTHDR(&message);
     bool invalidLength = controlHeader == nullptr || controlHeader->cmsg_len < CMSG_LEN(0);
     size_t controlDataSize = invalidLength ? 0 : controlHeader->cmsg_len - CMSG_LEN(0);
-    bool invalidControl = controlHeader == nullptr || controlHeader->cmsg_level != SOL_SOCKET ||
-        controlHeader->cmsg_type != SCM_RIGHTS || invalidLength || controlDataSize == 0 ||
-        controlDataSize % sizeof(int32_t) != 0 ||
-        controlDataSize > sizeof(int32_t) * NOTIFY_SHM_MAX_FDS ||
-        CMSG_NXTHDR(&message, controlHeader) != nullptr;
+    bool invalidControl =
+        controlHeader == nullptr || controlHeader->cmsg_level != SOL_SOCKET || controlHeader->cmsg_type != SCM_RIGHTS ||
+        invalidLength || controlDataSize == 0 || controlDataSize % sizeof(int32_t) != 0 ||
+        controlDataSize > sizeof(int32_t) * NOTIFY_SHM_MAX_FDS || CMSG_NXTHDR(&message, controlHeader) != nullptr;
     if (invalidControl) {
         CLIENT_LOG_ERROR("Receive notify shm fds failed.");
         CloseReceivedFds(message);
@@ -159,18 +155,19 @@ BResult MmsNotifyShmConsumer::ReceiveSubscription(uint32_t serverPid,
     return MMS_OK;
 }
 
-BResult MmsNotifyShmConsumer::MapQueues(const std::array<int32_t, NOTIFY_SHM_MAX_FDS> &fds,
-    uint16_t fdCount, const NotifyShmHandshake &handshake)
+BResult MmsNotifyShmConsumer::MapQueues(const std::array<int32_t, NOTIFY_SHM_MAX_FDS> &fds, uint16_t fdCount,
+                                        const NotifyShmHandshake &handshake)
 {
     int32_t memFd = fds[NO_0];
-    bool invalidHandshake = handshake.result != MMS_OK || handshake.workerNum == 0 ||
-        handshake.workerNum > NOTIFY_SHM_MAX_WORKERS || handshake.cpuNum < handshake.workerNum ||
-        handshake.queueNum != handshake.workerNum ||
+    bool invalidHandshake =
+        handshake.result != MMS_OK || handshake.workerNum == 0 || handshake.workerNum > NOTIFY_SHM_MAX_WORKERS ||
+        handshake.cpuNum < handshake.workerNum || handshake.queueNum != handshake.workerNum ||
         fdCount != static_cast<uint16_t>(handshake.queueNum + NO_1) ||
         handshake.memorySize != NotifyShmQueue::GetMemorySize(handshake.queueDepth, handshake.queueNum);
     if (UNLIKELY(memFd < 0 || invalidHandshake)) {
-        CLIENT_LOG_ERROR("Invalid notify shm handshake, result:" << handshake.result << ", depth:" <<
-            handshake.queueDepth << ", worker num:" << handshake.workerNum << ".");
+        CLIENT_LOG_ERROR("Invalid notify shm handshake, result:" << handshake.result
+                                                                 << ", depth:" << handshake.queueDepth
+                                                                 << ", worker num:" << handshake.workerNum << ".");
         for (uint16_t index = 0; index < fdCount; ++index) {
             if (fds[index] >= 0) {
                 close(fds[index]);
@@ -361,10 +358,10 @@ void MmsNotifyShmConsumer::BindWorker(uint16_t workerIndex, uint16_t cpuId)
     CPU_SET(cpuId, &cpuSet);
     ret = pthread_setaffinity_np(pthread_self(), sizeof(cpuSet), &cpuSet);
     if (ret != 0) {
-        CLIENT_LOG_WARN("Bind notify shm worker failed, worker:" << workerIndex << ", cpu:" << cpuId <<
-            ", ret:" << ret << ".");
+        CLIENT_LOG_WARN("Bind notify shm worker failed, worker:" << workerIndex << ", cpu:" << cpuId << ", ret:" << ret
+                                                                 << ".");
     }
 }
 
-}
-}
+} // namespace mms
+} // namespace ock

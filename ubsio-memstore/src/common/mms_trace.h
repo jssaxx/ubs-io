@@ -19,7 +19,8 @@ namespace ock {
 namespace mms {
 constexpr uint32_t SERVICE_ID = 0;
 
-enum SdkTracerType {
+enum SdkTracerType
+{
     SDK_TRACE_START = tracemark::GetTraceId(SERVICE_ID, 0U),
     SDK_TRACE_PUT,
     SDK_TRACE_GET,
@@ -35,7 +36,8 @@ enum SdkTracerType {
     SDK_TRACE_END,
 };
 
-enum ServerTracerType {
+enum ServerTracerType
+{
     SERVER_TRACE_START = SDK_TRACE_END,
     SERVER_TRACE_MULTICAST_PUT,
     SERVER_TRACE_MULTICAST_DELETE,
@@ -47,7 +49,8 @@ enum ServerTracerType {
     SERVER_TRACE_END,
 };
 
-enum NetTracerType {
+enum NetTracerType
+{
     NET_TRACE_START = SERVER_TRACE_END,
     NET_TRACE_SYNC_CALL,
     NET_TRACE_IPC_HDL,
@@ -59,14 +62,16 @@ enum NetTracerType {
     NET_TRACE_END,
 };
 
-enum CrbTracerType {
+enum CrbTracerType
+{
     CRB_TRACE_START = NET_TRACE_END,
     CRB_COPY_VALUE_TO_BUFF,
     CRB_BATCH_SEND_BUFF,
     CRB_TRACE_END,
 };
 
-enum CacheTraceType {
+enum CacheTraceType
+{
     CACHE_TRACE_START = CRB_TRACE_END,
     CACHE_ALLOC_BLOCK,
     CACHE_FREE_BLOCK,
@@ -81,6 +86,6 @@ enum CacheTraceType {
 #define MMS_TRACE_END(TP_ID, RET_CODE) TRACE_DELAY_END(TP_ID, RET_CODE)
 #define MMS_TRACE_ASYNC_BEGIN(TP_ID) TRACE_ASYNC_DELAY_BEGIN(TP_ID)
 #define MMS_TRACE_ASYNC_END(TP_ID, RET_CODE, START_TIME) TRACE_ASYNC_DELAY_END(TP_ID, RET_CODE, START_TIME)
-}
-}
+} // namespace mms
+} // namespace ock
 #endif // BIO_TRACE_H

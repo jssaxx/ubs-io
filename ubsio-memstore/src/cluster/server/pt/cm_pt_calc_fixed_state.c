@@ -192,7 +192,7 @@ void ViewPtEntryListUpdateNodeUp(uint16_t nodeId, NodeInfo *info, PtEntryList *p
 }
 
 void ViewPtEntryListUpdateNodeState(uint16_t nodeId, NodeState state, NodeInfo *info, PtEntryList *ptList,
-    int32_t *pgChange)
+                                    int32_t *pgChange)
 {
     if (state == NODE_STATE_DOWN) {
         ViewPtEntryListUpdateNodeDown(nodeId, ptList, pgChange);
@@ -256,7 +256,7 @@ static void ViewPtUpdateCopyState1(PtEntry *ptEntry, PtEntryList *ptList)
 }
 
 void ViewPtEntryListUpdateNodeFinish(uint16_t nodeId, CmPtFinish *ptList, uint16_t ptNum, PtEntryList *ptEntryList,
-    int32_t *ptChange, uint16_t nodeNum)
+                                     int32_t *ptChange, uint16_t nodeNum)
 {
     PtEntry *ptEntry = NULL;
     uint16_t index, copyIndex;
@@ -290,4 +290,3 @@ void ViewPtEntryListUpdateNodeFinish(uint16_t nodeId, CmPtFinish *ptList, uint16
         ptEntryList->globalVersion++;
     }
 }
-

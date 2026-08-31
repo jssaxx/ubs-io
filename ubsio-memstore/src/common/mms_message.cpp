@@ -11,9 +11,9 @@
  */
 
 #include "mms_message.h"
-#include "securec.h"
 #include "mms_crc_util.h"
 #include "mms_trace.h"
+#include "securec.h"
 
 namespace ock {
 namespace mms {
@@ -44,8 +44,8 @@ static void FinishRequestBlock(EncodeBufferState &state, std::vector<IOCtxItem> 
 {
     state.req->num = state.curItemNum;
     if (gCrcSwitch) {
-        static uint32_t skip = sizeof(state.req->head) + sizeof(state.req->seqNo) + sizeof(state.req->negoSeqNo) +
-            sizeof(state.req->crc);
+        static uint32_t skip =
+            sizeof(state.req->head) + sizeof(state.req->seqNo) + sizeof(state.req->negoSeqNo) + sizeof(state.req->crc);
         state.req->crc = MmsCrcUtil::Crc32(reinterpret_cast<void *>(state.buff + skip), state.offset - skip);
     }
     ctxItems.emplace_back(state.buff, state.offset);
@@ -124,7 +124,7 @@ BResult EncodePutRequest(PutItems *itemList, uint32_t itemNum, std::vector<IOCtx
         }
 
         uint64_t needLen = state.offset + sizeof(IoLocDesc) + keyLen + NO_1 + itemList[index].valueLen;
-        if (needLen > ioCtxBuffLen) {  // 超出一个块了，重新申请一个块
+        if (needLen > ioCtxBuffLen) { // 超出一个块了，重新申请一个块
             FinishRequestBlock(state, ctxItems);
             ret = AllocRequestBlock(allocFunc, ioCtxBuffLen, state);
             if (UNLIKELY(ret != MMS_OK)) {
@@ -228,7 +228,7 @@ BResult EncodeUpdateRequest(UpdateItems *itemList, uint32_t itemNum, std::vector
         }
 
         uint64_t needLen = state.offset + sizeof(IoLocDesc) + keyLen + NO_1 + itemList[index].valueLen;
-        if (needLen > ioCtxBuffLen) {  // 超出一个块了，重新申请一个块
+        if (needLen > ioCtxBuffLen) { // 超出一个块了，重新申请一个块
             FinishRequestBlock(state, ctxItems);
             ret = AllocRequestBlock(allocFunc, ioCtxBuffLen, state);
             if (UNLIKELY(ret != MMS_OK)) {
@@ -248,8 +248,7 @@ BResult EncodeUpdateRequest(UpdateItems *itemList, uint32_t itemNum, std::vector
     return MMS_OK;
 }
 
-BResult DeCodeUpdateRequest(std::vector<DecodeUpdateItem> &itemList, uint32_t &itemNum, uint64_t buff,
-                            uint64_t realLen)
+BResult DeCodeUpdateRequest(std::vector<DecodeUpdateItem> &itemList, uint32_t &itemNum, uint64_t buff, uint64_t realLen)
 {
     IoDataRequest *req = reinterpret_cast<IoDataRequest *>(buff);
     itemNum = req->num;
@@ -330,7 +329,7 @@ BResult EncodeDeleteRequest(DeleteItems *itemList, uint32_t itemNum, std::vector
     for (uint32_t index = 0; index < itemNum; index++) {
         uint64_t keyLen = itemList[index].keyLen;
         uint64_t needLen = offset + sizeof(IoLocDesc) + keyLen + NO_1;
-        if (needLen > ioCtxBuffLen) {  // 超出一个块了
+        if (needLen > ioCtxBuffLen) { // 超出一个块了
             req->num = curItemNum;
             if (gCrcSwitch) {
                 static uint32_t skip =
@@ -368,8 +367,7 @@ BResult EncodeDeleteRequest(DeleteItems *itemList, uint32_t itemNum, std::vector
     return MMS_OK;
 }
 
-BResult DeCodeDeleteRequest(std::vector<DecodeDeleteItem> &itemList, uint32_t &itemNum, uint64_t buff,
-                            uint64_t realLen)
+BResult DeCodeDeleteRequest(std::vector<DecodeDeleteItem> &itemList, uint32_t &itemNum, uint64_t buff, uint64_t realLen)
 {
     IoDataRequest *req = reinterpret_cast<IoDataRequest *>(buff);
     itemNum = req->num;
@@ -437,32 +435,41 @@ static uint32_t FillResults(uint32_t itemIndex, const std::vector<IOCtxItem> &ct
 
 uint32_t FillPutItemResults(PutItems *itemList, uint32_t itemIndex, const std::vector<IOCtxItem> &ctxItems)
 {
-    return FillResults(itemIndex, ctxItems, [itemList](uint32_t index, const IoLocDesc &desc) {
-        if (itemList[index].result != nullptr) {
-            *itemList[index].result = desc.result;
-        }
-        if (itemList[index].valueAddr != nullptr) {
-            *itemList[index].valueAddr = reinterpret_cast<char *>(desc.valueAddr);
-        }
-    }, true);
+    return FillResults(
+        itemIndex, ctxItems,
+        [itemList](uint32_t index, const IoLocDesc &desc) {
+            if (itemList[index].result != nullptr) {
+                *itemList[index].result = desc.result;
+            }
+            if (itemList[index].valueAddr != nullptr) {
+                *itemList[index].valueAddr = reinterpret_cast<char *>(desc.valueAddr);
+            }
+        },
+        true);
 }
 
 uint32_t FillUpdateItemResults(UpdateItems *itemList, uint32_t itemIndex, const std::vector<IOCtxItem> &ctxItems)
 {
-    return FillResults(itemIndex, ctxItems, [itemList](uint32_t index, const IoLocDesc &desc) {
-        if (itemList[index].result != nullptr) {
-            *itemList[index].result = desc.result;
-        }
-    }, true);
+    return FillResults(
+        itemIndex, ctxItems,
+        [itemList](uint32_t index, const IoLocDesc &desc) {
+            if (itemList[index].result != nullptr) {
+                *itemList[index].result = desc.result;
+            }
+        },
+        true);
 }
 
 uint32_t FillDeleteItemResults(DeleteItems *itemList, uint32_t itemIndex, const std::vector<IOCtxItem> &ctxItems)
 {
-    return FillResults(itemIndex, ctxItems, [itemList](uint32_t index, const IoLocDesc &desc) {
-        if (itemList[index].result != nullptr) {
-            *itemList[index].result = desc.result;
-        }
-    }, false);
+    return FillResults(
+        itemIndex, ctxItems,
+        [itemList](uint32_t index, const IoLocDesc &desc) {
+            if (itemList[index].result != nullptr) {
+                *itemList[index].result = desc.result;
+            }
+        },
+        false);
 }
 
 uint32_t FillReplaceItemResults(ReplaceItems *itemList, uint32_t itemIndex, const std::vector<IOCtxItem> &ctxItems)
@@ -470,5 +477,5 @@ uint32_t FillReplaceItemResults(ReplaceItems *itemList, uint32_t itemIndex, cons
     return FillUpdateItemResults(itemList, itemIndex, ctxItems);
 }
 
-}
-}
+} // namespace mms
+} // namespace ock

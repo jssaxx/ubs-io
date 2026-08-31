@@ -17,6 +17,5 @@ namespace ock {
 namespace mms {
 void ZkFreeParaList();
 }
-}  // namespace ock
-#endif  // MMS_UT_COMMON_H
-
+} // namespace ock
+#endif // MMS_UT_COMMON_H

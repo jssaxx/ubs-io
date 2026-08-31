@@ -14,8 +14,8 @@
 #define MMS_CONV_H
 
 #include <functional>
-#include <string>
 #include <memory>
+#include <string>
 #include <vector>
 #include "mms_c.h"
 
@@ -116,6 +116,6 @@ public:
      */
     static CResult StartCatchUpTask();
 };
-}
-}
+} // namespace mms
+} // namespace ock
 #endif

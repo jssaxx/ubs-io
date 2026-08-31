@@ -17,7 +17,6 @@
 #include <cstdint>
 #include <memory>
 #include <thread>
-#include <atomic>
 #include <unordered_map>
 
 #include "bio_err.h"

@@ -108,8 +108,7 @@ constexpr uint32_t MIN_VALUE_SIZE = NO_1;
 constexpr uint32_t SEQ_QUEUE_LEN = NO_16;
 constexpr uint32_t SEQ_QUEUE_MASK = SEQ_QUEUE_LEN - NO_1;
 constexpr uint32_t SEQ_QUEUE_LEN_T = SEQ_QUEUE_LEN * NO_2;
-}
-}
-
+} // namespace mms
+} // namespace ock
 
 #endif // MMSCORE_MMS_TYPES_H

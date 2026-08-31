@@ -12,8 +12,8 @@
 #ifndef NET_EXECUTOR_POOL_H
 #define NET_EXECUTOR_POOL_H
 
-#include "mms_execution.h"
 #include "mms_err.h"
+#include "mms_execution.h"
 #include "net_common.h"
 
 namespace ock {
@@ -67,6 +67,7 @@ public:
     BResult AddTask(NetTaskHandler &handler, ServiceContext &context);
 
     DEFINE_REF_COUNT_FUNCTIONS;
+
 private:
     void StopInner()
     {
@@ -79,14 +80,13 @@ private:
 private:
     DEFINE_REF_COUNT_VARIABLE;
 
-    ExecutorServicePtr mExeService{ nullptr };
+    ExecutorServicePtr mExeService{nullptr};
     std::mutex mMutex;
     bool mStarted = false;
     std::string mName;
 };
 using NetExecutorPoolPtr = Ref<NetExecutorPool>;
-}
-}
+} // namespace mms
+} // namespace ock
 
 #endif // NET_EXECUTOR_POOL_H
-

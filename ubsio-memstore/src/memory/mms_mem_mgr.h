@@ -13,15 +13,15 @@
 #ifndef MMS_MEM_MGR_H
 #define MMS_MEM_MGR_H
 
+#include <unistd.h>
 #include <atomic>
 #include <unordered_map>
-#include <unistd.h>
-#include "mms_ref.h"
-#include "mms_lock.h"
-#include "mms_err.h"
 #include "mms.h"
+#include "mms_err.h"
+#include "mms_lock.h"
 #include "mms_mem_common.h"
 #include "mms_mem_log.h"
+#include "mms_ref.h"
 
 namespace ock {
 namespace mms {
@@ -63,10 +63,10 @@ public:
 
     inline BResult Reset(void)
     {
-        for (uint16_t &numaId: mNumaId) {
+        for (uint16_t &numaId : mNumaId) {
             numaId = -1;
         }
-        for (auto &fd: mAreaFd) {
+        for (auto &fd : mAreaFd) {
             close(fd);
             fd = -1;
         }
@@ -103,7 +103,6 @@ private:
                                  uint64_t &shareAddr);
 
 private:
-
     uint16_t mNumaNum;
     uint16_t mNumaId[MAX_NUMAS_NUM];
     uint64_t mNumaSize[MAX_NUMAS_NUM];
@@ -121,6 +120,6 @@ private:
 
     DEFINE_REF_COUNT_VARIABLE;
 };
-}
-}
+} // namespace mms
+} // namespace ock
 #endif

@@ -98,8 +98,8 @@ static int enable_raw_mode(void)
         return RETURN_ERROR;
     }
     struct termios raw = g_old_termios;
-    raw.c_lflag &= (tcflag_t)~(ECHO | ICANON | IEXTEN);
-    raw.c_iflag &= (tcflag_t)~(IXON | ICRNL);
+    raw.c_lflag &= (tcflag_t) ~(ECHO | ICANON | IEXTEN);
+    raw.c_iflag &= (tcflag_t) ~(IXON | ICRNL);
     raw.c_cc[VMIN] = 1;
     raw.c_cc[VTIME] = 0;
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) != 0) {
@@ -337,8 +337,8 @@ static int read_line_plain(FILE *input, const char *prompt, char *out, size_t ou
     return RETURN_OK;
 }
 
-static int read_command_line(FILE *input, const char *prompt, char *out, size_t out_size,
-                             History *history, int save_history)
+static int read_command_line(FILE *input, const char *prompt, char *out, size_t out_size, History *history,
+                             int save_history)
 {
     if (input == stdin && g_raw_enabled) {
         return read_line_raw(prompt, out, out_size, history, save_history);
@@ -348,17 +348,16 @@ static int read_command_line(FILE *input, const char *prompt, char *out, size_t 
 
 static void usage(void)
 {
-    printf("%s",
-        "Usage: cli_client [options]\n"
-        "  --help                : print help informations\n"
-        "  --auto                : auto run mode\n"
-        "  --script=<filename>   : read command from <filename> instead of stdin\n"
-        "  --server-port=<port>  : connect to server port\n"
-        "  --log-file=<filename> : write received output to file\n"
-        "  --set-debug           : accepted for compatibility\n"
-        "  --set-cli             : accepted for compatibility\n"
-        "  --no-prompt           : do not show a command line prompt\n"
-        "  --attach=<AppId>      : attach after login\n");
+    printf("%s", "Usage: cli_client [options]\n"
+                 "  --help                : print help informations\n"
+                 "  --auto                : auto run mode\n"
+                 "  --script=<filename>   : read command from <filename> instead of stdin\n"
+                 "  --server-port=<port>  : connect to server port\n"
+                 "  --log-file=<filename> : write received output to file\n"
+                 "  --set-debug           : accepted for compatibility\n"
+                 "  --set-cli             : accepted for compatibility\n"
+                 "  --no-prompt           : do not show a command line prompt\n"
+                 "  --attach=<AppId>      : attach after login\n");
 }
 
 static int parse_args(ClientConfig *cfg, int argc, char *argv[])
@@ -449,8 +448,7 @@ static int run_one_command(int fd, uint32_t *client_id, uint32_t *attach_id, con
     return client_wait_command(fd, client_id, attach_id, history);
 }
 
-static int run_script_command(int fd, uint32_t *client_id, uint32_t *attach_id,
-                              const char *file_name, History *history)
+static int run_script_command(int fd, uint32_t *client_id, uint32_t *attach_id, const char *file_name, History *history)
 {
     FILE *fp = fopen(file_name, "r");
     if (fp == NULL) {
@@ -473,8 +471,8 @@ static int run_script_command(int fd, uint32_t *client_id, uint32_t *attach_id,
     return RETURN_OK;
 }
 
-static int handle_local_command(int fd, uint32_t *client_id, uint32_t *attach_id,
-                                char *line, History *history, int *should_exit)
+static int handle_local_command(int fd, uint32_t *client_id, uint32_t *attach_id, char *line, History *history,
+                                int *should_exit)
 {
     char copy[CLI_MAX_LINE];
     format_text(copy, sizeof(copy), "%s", line);

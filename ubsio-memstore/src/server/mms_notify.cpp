@@ -85,7 +85,7 @@ CResult MmsNotifyDispatcher::RegisterRemoteNotifyHandler(RemoteNotifyHandler han
 void MmsNotifyDispatcher::Notify(const char *key, uint16_t keyLen, OperateType opType)
 {
     if (UNLIKELY(key == nullptr || keyLen == 0 || keyLen >= MAX_KEY_SIZE ||
-        !mRunning.load(std::memory_order_acquire))) {
+                 !mRunning.load(std::memory_order_acquire))) {
         return;
     }
 

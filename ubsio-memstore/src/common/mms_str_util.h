@@ -14,10 +14,10 @@
 #define MMSCORE_MMS_STR_UTIL_H
 #include <cmath>
 #include <cstring>
+#include <regex>
+#include <set>
 #include <string>
 #include <vector>
-#include <set>
-#include <regex>
 
 namespace ock {
 namespace mms {
@@ -195,7 +195,6 @@ inline void StrUtil::Replace(std::string &src, const std::string &regex, const s
         src = src.substr(0, src.length() - 1);
     }
 }
-}
-}
+} // namespace mms
+} // namespace ock
 #endif // MMSCORE_MMS_STR_UTIL_H
-

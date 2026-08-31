@@ -45,7 +45,7 @@ int DecryptFail(const char *cipherText, const size_t cipherTextLen, char *plainT
     (void)plainTextLen;
     return -1;
 }
-}  // namespace
+} // namespace
 
 bool TestNet::gSetup = false;
 

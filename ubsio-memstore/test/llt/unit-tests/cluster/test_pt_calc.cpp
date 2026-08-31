@@ -78,7 +78,7 @@ void FreePtFixtures(NodeInfoList *nodeList, NodeStateList *stateList, PtEntryLis
     free(stateList);
     free(ptList);
 }
-}  // namespace
+} // namespace
 
 TEST(TestPtCalc, test_fixed_calculator_initial_rebalance_and_need_check)
 {

@@ -14,15 +14,15 @@
 #define MMS_CRB_SCHEDULER_H
 
 #include <unordered_map>
+#include "cm.h"
+#include "mms_cache.h"
+#include "mms_err.h"
+#include "mms_kv_server.h"
 #include "mms_log.h"
+#include "mms_message.h"
 #include "mms_ref.h"
 #include "mms_types.h"
-#include "mms_err.h"
-#include "cm.h"
-#include "mms_message.h"
 #include "net_common.h"
-#include "mms_cache.h"
-#include "mms_kv_server.h"
 #include "net_multicast_engine.h"
 
 namespace ock {
@@ -59,7 +59,7 @@ public:
 
         if (mIsRecovering.load()) {
             mCache->SetRecoverStatus(false);
-            ClearDeletedData();  // CRB结束，清理cache里的墓碑数据
+            ClearDeletedData(); // CRB结束，清理cache里的墓碑数据
             mIsRecovering.store(false);
         }
     }
@@ -128,15 +128,15 @@ private:
     uint16_t mRecoverIndex = 0;
     ReadWriteLock mRecoverLock;
     std::vector<CmPtCopy> mLocalPtCopys{};
-    std::unordered_map<uint16_t, std::unordered_set<uint16_t>> mRecoverNodes{};  // key:nodeId, value:ptIds
+    std::unordered_map<uint16_t, std::unordered_set<uint16_t>> mRecoverNodes{}; // key:nodeId, value:ptIds
 
     ReadWriteLock mRecoverTasksLock;
-    std::unordered_map<uint16_t, std::unordered_set<uint16_t>> mRecoverTasks{};  // <nodeId, ptIds>
+    std::unordered_map<uint16_t, std::unordered_set<uint16_t>> mRecoverTasks{}; // <nodeId, ptIds>
 
     ExecutorServicePtr mExeService = nullptr;
     DEFINE_REF_COUNT_VARIABLE;
 };
-}  // namespace mms
-}  // namespace ock
+} // namespace mms
+} // namespace ock
 
-#endif  // MMS_CRB_SCHEDULER_H
+#endif // MMS_CRB_SCHEDULER_H

@@ -12,10 +12,10 @@
 
 #include "test_mms.h"
 #include "mms_c.h"
-#include "mms_log.h"
-#include "string"
-#include "net_engine.h"
 #include "mms_kv_server.h"
+#include "mms_log.h"
+#include "net_engine.h"
+#include "string"
 
 using namespace ock::mms;
 

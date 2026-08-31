@@ -13,10 +13,10 @@
 #ifndef CM_THREAD_H
 #define CM_THREAD_H
 
-#include <stdint.h>
 #include <errno.h>
-#include <semaphore.h>
 #include <pthread.h>
+#include <semaphore.h>
+#include <stdint.h>
 #include "cm_log.h"
 
 #ifdef __cplusplus
@@ -78,4 +78,3 @@ int32_t CmSwitchThreadAsync(const char *name, void *data, THREAD_CALL_BACK handl
 #endif
 
 #endif
-

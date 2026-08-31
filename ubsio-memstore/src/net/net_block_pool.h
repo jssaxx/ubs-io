@@ -35,8 +35,8 @@ public:
 
     NetBlockPool(const NetBlockPool &) = delete;
     NetBlockPool(NetBlockPool &&) = delete;
-    NetBlockPool &operator = (const NetBlockPool &) = delete;
-    NetBlockPool &operator = (NetBlockPool &&) = delete;
+    NetBlockPool &operator=(const NetBlockPool &) = delete;
+    NetBlockPool &operator=(NetBlockPool &&) = delete;
 
     BResult Start(uintptr_t address, uint64_t blockSize, uint64_t count)
     {
@@ -191,7 +191,7 @@ private:
         uint32_t count = 0;                /* the count of current linked list */
     };
 
-    std::atomic<bool> mIsStarted{ false };
+    std::atomic<bool> mIsStarted{false};
     /* NOTE: to make sure the size of this class is same with one cache line of CPU */
     uint32_t mPopRRIdx = 0;                           /* round-robin index for pop */
     uint32_t mPushRRIdx = 0;                          /* round-robin index for push */
@@ -200,7 +200,7 @@ private:
 };
 
 using NetBlockPoolPtr = Ref<NetBlockPool>;
-}
-}
+} // namespace mms
+} // namespace ock
 
 #endif // NET_BLOCK_POOL_H

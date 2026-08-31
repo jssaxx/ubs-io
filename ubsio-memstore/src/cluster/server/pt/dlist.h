@@ -111,4 +111,3 @@ static inline void DListSpliceInit(DList *list, DList *head)
 #endif
 
 #endif
-

@@ -13,29 +13,29 @@
 #ifndef MMS_MEM_ALLOCTOR_H
 #define MMS_MEM_ALLOCTOR_H
 
-#include <atomic>
 #include <sched.h>
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
-#include "mms_ref.h"
-#include "mms_lock.h"
-#include "mms_err.h"
-#include "mms_comm.h"
 #include "mms.h"
+#include "mms_comm.h"
+#include "mms_err.h"
+#include "mms_lock.h"
 #include "mms_mem_common.h"
 #include "mms_mem_log.h"
+#include "mms_ref.h"
 
 namespace ock {
 namespace mms {
 
-constexpr uint64_t CACHE_LIMIT_PER_THREAD = 128; // 每个线程能缓存的block数
+constexpr uint64_t CACHE_LIMIT_PER_THREAD = 128;      // 每个线程能缓存的block数
 constexpr uint64_t BUDDY_CACHE_LIMIT_PER_THREAD = 64; // 每个order 缓存 64 个
-constexpr uint64_t BUDDY_CACHE_REFILL_COUNT = 64; // 每次refill 64个
-constexpr uint64_t BUDDY_CACHE_DRAIN_COUNT = 32; // cache满了移出去32个
-constexpr uint16_t BUDDY_THREAD_CACHE_MAX_ORDER = 4; // 缓存order 0到4，只缓存小块
+constexpr uint64_t BUDDY_CACHE_REFILL_COUNT = 64;     // 每次refill 64个
+constexpr uint64_t BUDDY_CACHE_DRAIN_COUNT = 32;      // cache满了移出去32个
+constexpr uint16_t BUDDY_THREAD_CACHE_MAX_ORDER = 4;  // 缓存order 0到4，只缓存小块
 constexpr uint16_t BUDDY_THREAD_CACHE_ORDER_NUM = BUDDY_THREAD_CACHE_MAX_ORDER + NO_1;
 constexpr uint16_t NUMA_POOL_SWITCH_THRESHOLD = 3;
 constexpr uint16_t NUMA_POOL_REPROBE_INTERVAL = 256;
@@ -99,11 +99,11 @@ public:
 
     inline uint64_t GetBlockSize(uintptr_t blockAddr) const
     {
-        auto header = reinterpret_cast<BlockHeader*>(blockAddr - sizeof(BlockHeader));
+        auto header = reinterpret_cast<BlockHeader *>(blockAddr - sizeof(BlockHeader));
         return header->blockSize;
     }
 
-    void PutThreadCacheMap(std::thread::id key, ThreadCache* value);
+    void PutThreadCacheMap(std::thread::id key, ThreadCache *value);
 
     void RemoveThreadCacheMap(std::thread::id key);
 
@@ -174,7 +174,7 @@ private:
 
 // 用于连接Node内存块
 struct BlockNode {
-    BlockNode* next;
+    BlockNode *next;
 };
 
 struct BuddyBlockNode {
@@ -192,7 +192,7 @@ public:
         mHead = block;
     }
 
-    inline BlockNode* PopOneBlock()
+    inline BlockNode *PopOneBlock()
     {
         std::lock_guard<std::mutex> lock(mLock);
         if (mHead == nullptr) {
@@ -201,7 +201,7 @@ public:
 
         BlockNode *block = mHead;
         mHead = mHead->next;
-        return  block;
+        return block;
     }
 
     inline bool RemoveBlock(BlockNode *target)
@@ -254,17 +254,17 @@ private:
 
 class NumaMemoryPool {
 public:
-    inline void AddOneBlock(uint16_t blockIndex, BlockNode* block)
+    inline void AddOneBlock(uint16_t blockIndex, BlockNode *block)
     {
         memLists[blockIndex].PushOneBlock(block);
     }
 
-    inline BlockNode* GetOneBlock(uint16_t blockIndex, uint64_t blockSize)
+    inline BlockNode *GetOneBlock(uint16_t blockIndex, uint64_t blockSize)
     {
         return memLists[blockIndex].PopOneBlock();
     }
 
-    inline void AddBatchBlocks(uint16_t blockIndex, const std::vector<BlockNode*>& blocks)
+    inline void AddBatchBlocks(uint16_t blockIndex, const std::vector<BlockNode *> &blocks)
     {
         memLists[blockIndex].PushBatchBlocks(blocks);
     }
@@ -332,7 +332,7 @@ private:
 
 class BuddyNumaPoolManager {
 public:
-    BuddyNumaMemoryPool* CreatNumaMemPool(uint16_t numaId, uint64_t address, uint64_t size, uint64_t baseBlockSize);
+    BuddyNumaMemoryPool *CreatNumaMemPool(uint16_t numaId, uint64_t address, uint64_t size, uint64_t baseBlockSize);
 
     BResult AllocFromPool(uint16_t numaId, uint16_t order, uintptr_t &blockAddr);
     BResult AllocFromOtherPool(uint16_t numaId, uint16_t order, uint16_t &allocNumaId, uintptr_t &blockAddr);
@@ -354,13 +354,13 @@ public:
     }
 
 private:
-    std::unordered_map<uint16_t, BuddyNumaMemoryPool*> mNumaPools;
+    std::unordered_map<uint16_t, BuddyNumaMemoryPool *> mNumaPools;
     ReadWriteLock mLock;
 };
 
 class NumaPoolManager {
 public:
-    inline NumaMemoryPool* GetCurrentNumaPool(uint16_t numaId)
+    inline NumaMemoryPool *GetCurrentNumaPool(uint16_t numaId)
     {
         auto it = mNumaPools.find(numaId);
         if (it == mNumaPools.end()) {
@@ -369,18 +369,18 @@ public:
         return it->second;
     }
 
-    NumaMemoryPool* CreatNumaMemPool(uint16_t numaId);
+    NumaMemoryPool *CreatNumaMemPool(uint16_t numaId);
 
     BResult GetBatchBlocksFromPool(uint16_t numaId, uint64_t blockIndex, std::vector<BlockNode *> &blocks);
     BResult GetBatchBlocksFromOtherPool(uint16_t numaId, uint64_t blockIndex, std::vector<BlockNode *> &blocks);
 
-    BResult AddBatchBlocksToPool(uint16_t numaId, uint64_t blockIndex, std::vector<BlockNode*>& blocks);
+    BResult AddBatchBlocksToPool(uint16_t numaId, uint64_t blockIndex, std::vector<BlockNode *> &blocks);
     BResult AddOneBlocksToPool(uint16_t numaId, uint64_t blockIndex, BlockNode *block);
 
     inline BResult Reset()
     {
         mLock.LockWrite();
-        for (const auto &item: mNumaPools) {
+        for (const auto &item : mNumaPools) {
             delete item.second;
         }
         mNumaPools.clear();
@@ -389,7 +389,7 @@ public:
     }
 
 private:
-    std::unordered_map<uint16_t, NumaMemoryPool*> mNumaPools;
+    std::unordered_map<uint16_t, NumaMemoryPool *> mNumaPools;
     ReadWriteLock mLock;
 };
 
@@ -488,6 +488,6 @@ private:
 
     MmsMemAllocatorPtr mMemAllocator = nullptr;
 };
-}
-}
+} // namespace mms
+} // namespace ock
 #endif

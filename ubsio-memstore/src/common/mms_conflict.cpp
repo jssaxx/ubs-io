@@ -41,6 +41,5 @@ void MmsConflict::ReleaseTicket(uint32_t hashVal)
 
     return;
 }
-}
-}
-
+} // namespace mms
+} // namespace ock

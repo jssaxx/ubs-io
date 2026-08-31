@@ -26,8 +26,7 @@ class TestServer : public testing::Test {
 private:
     static bool gSetup;
 };
-}  // namespace mms
-}  // namespace ock
+} // namespace mms
+} // namespace ock
 
-#endif  // MMS_TEST_SERVER_H
-
+#endif // MMS_TEST_SERVER_H

@@ -12,11 +12,11 @@
 
 #include "cm_zkadapter.h"
 #include "cm_client_schedule.h"
-#include "cm_server_schedule.h"
-#include "cm_config.h"
-#include "cm_thread.h"
 #include "cm_comm.h"
+#include "cm_config.h"
 #include "cm_log.h"
+#include "cm_server_schedule.h"
+#include "cm_thread.h"
 
 static zhandle_t *g_zh = NULL;
 
@@ -71,7 +71,7 @@ static CmClientZkMgr g_cZkMgr;
 
 int32_t CmClientZkGetNodeId(uint16_t poolId, const char *ipv4AddrStr, uint16_t port, uint16_t *nodeId)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     uint16_t cfgNodeId = CmConfigGetNodeId();
@@ -103,7 +103,7 @@ int32_t CmClientZkGetNodeId(uint16_t poolId, const char *ipv4AddrStr, uint16_t p
 
 int32_t CmClientZkRecordNodeInfo(uint16_t poolId, NodeInfo *nodeInfo)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s/%u", CM_POOL, poolId, CM_NODE_INFO_PATH, nodeInfo->nodeId);
@@ -140,11 +140,11 @@ int32_t CmClientZkRecordNodeInfo(uint16_t poolId, NodeInfo *nodeInfo)
 
 static int32_t CmClientZkRecordNodeId(uint16_t poolId, NodeInfo *nodeInfo)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s/%s:%u", CM_POOL, poolId, CM_IP_PATH, nodeInfo->ipv4AddrStr,
-        nodeInfo->port);
+                    nodeInfo->port);
     if (ret < 0) {
         CM_LOGERROR("Sprintf_s path failed, ret(%d).", ret);
         return CM_ERR;
@@ -196,13 +196,13 @@ uint16_t CmClientZkGetNodeIdByPath(const char *path, const char *pre)
 
 int32_t CmClientZkGenNodeIdV2(uint16_t poolId, NodeInfo *nodeInfo)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     int32_t retLen = (int32_t)sizeof(uint16_t);
 
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s/%s:%u", CM_POOL, poolId, CM_IP_PATH, nodeInfo->ipv4AddrStr,
-        nodeInfo->port);
+                    nodeInfo->port);
     if (ret < 0) {
         CM_LOGERROR("Sprintf_s path failed, ret(%d).", ret);
         return CM_ERR;
@@ -244,7 +244,7 @@ int32_t CmClientZkGenNodeIdV2(uint16_t poolId, NodeInfo *nodeInfo)
 
 int32_t CmClientZkGenNodeId(uint16_t poolId, NodeInfo *nodeInfo)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     uint16_t cfgNodeId = CmConfigGetNodeId();
@@ -255,7 +255,7 @@ int32_t CmClientZkGenNodeId(uint16_t poolId, NodeInfo *nodeInfo)
     int32_t retLen = (int32_t)sizeof(uint16_t);
 
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s/%s:%u", CM_POOL, poolId, CM_IP_PATH, nodeInfo->ipv4AddrStr,
-        nodeInfo->port);
+                    nodeInfo->port);
     if (ret < 0) {
         CM_LOGERROR("Sprintf_s path failed, ret(%d).", ret);
         return CM_ERR;
@@ -281,7 +281,7 @@ int32_t CmClientZkGenNodeId(uint16_t poolId, NodeInfo *nodeInfo)
 
 static int32_t CmClientZkCheckNodeIdExist(uint16_t poolId, uint16_t nodeId)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s/%u", CM_POOL, poolId, CM_NODE_PATH, nodeId);
@@ -330,7 +330,7 @@ int32_t CmClientZkRegisterNodeInfo(uint16_t poolId, NodeInfo *nodeInfo)
 
     if (nodeInfo->nodeId >= g_cZkMgr.restore[poolId].pool->maxNodeNum) {
         CM_LOGERROR("Check node num failed, poolId(%u) max(%d) local(%d).", poolId,
-            g_cZkMgr.restore[poolId].pool->maxNodeNum, nodeInfo->nodeId);
+                    g_cZkMgr.restore[poolId].pool->maxNodeNum, nodeInfo->nodeId);
         return CM_ERR;
     }
 
@@ -344,7 +344,7 @@ int32_t CmClientZkRegisterNodeInfo(uint16_t poolId, NodeInfo *nodeInfo)
 
 int32_t CmClientZkRecordMr(uint16_t poolId, NodeMetaBuff *mr)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     int32_t len = (int32_t)(sizeof(NodeMetaBuff) + mr->len);
@@ -383,7 +383,7 @@ int32_t CmClientZkRecordLocalSession(uint16_t poolId)
 {
     NodeStateInfo *local = &g_cZkMgr.restore[poolId].local;
 
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s/%u", CM_POOL, poolId, CM_NODE_PATH, local->nodeId);
@@ -403,7 +403,7 @@ int32_t CmClientZkRecordLocalSession(uint16_t poolId)
 
 int32_t CmClientZkGetNodeSession(uint16_t poolId, uint16_t nodeId, uint64_t *sessionId)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     int len = (int)sizeof(uint64_t);
@@ -424,7 +424,7 @@ int32_t CmClientZkGetNodeSession(uint16_t poolId, uint16_t nodeId, uint64_t *ses
 
 int32_t CmClientZkGetMr(uint16_t poolId, NodeMetaBuff *mr)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     int32_t len = NODE_META_BUFF_LEN;
@@ -445,7 +445,7 @@ int32_t CmClientZkGetMr(uint16_t poolId, NodeMetaBuff *mr)
 
 int32_t CmClientZkGetNodeState(uint16_t poolId, uint16_t nodeId, NodeStateInfo *cmState)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     int32_t len = (int32_t)(sizeof(NodeStateList) + sizeof(NodeStateInfo) * g_cZkMgr.restore[poolId].pool->maxNodeNum);
@@ -477,7 +477,7 @@ int32_t CmClientZkGetNodeState(uint16_t poolId, uint16_t nodeId, NodeStateInfo *
 
 int32_t CmClientZkGetNodeInfo(uint16_t poolId, NodeInfo *nodeInfo)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     int32_t len = (int32_t)sizeof(NodeInfo);
@@ -501,7 +501,7 @@ int32_t CmClientZkGetNodeInfo(uint16_t poolId, NodeInfo *nodeInfo)
 
 int32_t CmClientZkNodeEventExistCheck(uint16_t poolId, uint16_t nodeId)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s/%u", CM_POOL, poolId, CM_NODE_EVENT_PATH, nodeId);
@@ -523,7 +523,7 @@ int32_t CmClientZkNodeEventExistCheck(uint16_t poolId, uint16_t nodeId)
 
 int32_t CmClientZkPtEventExistCheck(uint16_t poolId, uint16_t nodeId)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s/%u", CM_POOL, poolId, CM_PT_EVENT_PATH, nodeId);
@@ -545,13 +545,13 @@ int32_t CmClientZkPtEventExistCheck(uint16_t poolId, uint16_t nodeId)
 
 int32_t CmClientZkRecordNodeEvent(CmNodeEvent *nodeEvent)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     int32_t len = (int32_t)(sizeof(CmNodeEvent));
 
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s/%u", CM_POOL, nodeEvent->poolId, CM_NODE_EVENT_PATH,
-        nodeEvent->nodeId);
+                    nodeEvent->nodeId);
     if (ret < 0) {
         CM_LOGERROR("Sprintf_s path failed, ret(%d).", ret);
         return CM_ERR;
@@ -567,13 +567,13 @@ int32_t CmClientZkRecordNodeEvent(CmNodeEvent *nodeEvent)
 
 int32_t CmClientZkRecordPtEvent(CmPtEvent *ptEvent)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     int32_t len = (int32_t)(sizeof(CmPtEvent) + sizeof(CmPtFinish) * ptEvent->ptNum);
 
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s/%u", CM_POOL, ptEvent->poolId, CM_PT_EVENT_PATH,
-        ptEvent->nodeId);
+                    ptEvent->nodeId);
     if (ret < 0) {
         CM_LOGERROR("Sprintf_s path failed, ret(%d).", ret);
         return CM_ERR;
@@ -646,7 +646,7 @@ static void CmClientZkSubNodeListWatch(zhandle_t *zh, int evtype, int state, con
 static int32_t CmClientZkSubNodeList(uint16_t poolId)
 {
     ZkRestoreC *restore = &g_cZkMgr.restore[poolId];
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     int32_t len = (int32_t)(sizeof(NodeInfoList) + sizeof(NodeInfo) * restore->pool->maxNodeNum);
@@ -753,7 +753,7 @@ static void CmClientZkSubStateListWatch(zhandle_t *zh, int evtype, int state, co
 static int32_t CmClientZkSubStateList(uint16_t poolId)
 {
     ZkRestoreC *restore = &g_cZkMgr.restore[poolId];
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     int32_t len = (int32_t)(sizeof(NodeStateList) + sizeof(NodeStateInfo) * restore->pool->maxNodeNum);
@@ -889,7 +889,7 @@ static void CmClientZkPtWatchFunc(zhandle_t *zh, int evtype, int state, const ch
 int32_t CmClientZkSubPtListChange(uint16_t poolId, ptChangeNotifyFp notifyFp)
 {
     ZkRestoreC *restore = &g_cZkMgr.restore[poolId];
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s", CM_POOL, poolId, CM_PT_PATH);
@@ -923,7 +923,7 @@ int32_t CmClientZkSubPtListChange(uint16_t poolId, ptChangeNotifyFp notifyFp)
 
 int32_t CmClientZkRecordDataInfo(uint16_t poolId, const char *key, void *value, uint32_t valLen)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     int32_t len = (int32_t)valLen;
@@ -984,31 +984,31 @@ static void CmClientZkSubDataChangeWatch(zhandle_t *zh, int evtype, int state, c
 static int32_t CmClientZkSubDataHandle(uint16_t poolId)
 {
     ZkRestoreC *restore = &g_cZkMgr.restore[poolId];
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
-    ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s/%s", CM_POOL, restore->pool->poolId,
-        CM_DATA_INFO_PATH, restore->userKey);
+    ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s/%s", CM_POOL, restore->pool->poolId, CM_DATA_INFO_PATH,
+                    restore->userKey);
     if (ret < 0) {
         CM_LOGERROR("Sprintf_s path failed, ret(%d).", ret);
         return CM_ERR;
     }
-    
+
     int len = USER_DATA_MAX_LEN;
     ret = CmZkWget(g_zh, zkPath, CmClientZkSubDataChangeWatch, restore, (char *)restore->userValue, &len, NULL);
     if (ret != ZOK) {
         CM_LOGERROR("Get znode(%s) failed, ret(%d).", zkPath, ret);
         return CM_ERR;
     }
-    
+
     restore->userHandle.notifyDataInfoChange(restore->userKey, restore->userValue, len, restore->userHandle.ctx);
     return CM_OK;
 }
 
 int32_t CmClientZkSubDataInfoChange(uint16_t poolId, const char *key, void *value, uint32_t valLen,
-    DataInfoChangeOpHandle *handle)
+                                    DataInfoChangeOpHandle *handle)
 {
     ZkRestoreC *restore = &g_cZkMgr.restore[poolId];
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     if (strlen(key) >= USER_DATA_MAX_LEN || valLen > USER_DATA_MAX_LEN) {
@@ -1220,7 +1220,7 @@ static void CmServerZkInitMgr(void)
 
 static int32_t CmServerZkRecordMetaNodeId(const char *ipv4AddrStr)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%s/%s", CM_META, CM_IP_PATH, ipv4AddrStr);
@@ -1257,7 +1257,7 @@ static uint16_t CmServerZkGetNodeIdByPath(const char *path, const char *pre)
 
 static int32_t CmServerZkGenMetaNodeIdV2(const char *ipv4AddrStr)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     uint16_t nodeId;
@@ -1304,7 +1304,7 @@ static int32_t CmServerZkGenMetaNodeIdV2(const char *ipv4AddrStr)
 
 static int32_t CmServerZkGenMetaNodeId(const char *ipv4AddrStr)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     uint16_t cfgNodeId = CmConfigGetNodeId();
@@ -1342,7 +1342,7 @@ static int32_t CmServerZkGenMetaNodeId(const char *ipv4AddrStr)
 
 static int32_t CmServerZkCheckMetaNodeExist(void)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%s/%u", CM_META, CM_NODE_PATH, g_sZkMgr.localId);
@@ -1388,7 +1388,7 @@ int32_t CmServerZkRegisterMetaNode(const char *ipv4AddrStr)
 
 int32_t CmServerZkRecordMetaSession(void)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%s/%u", CM_META, CM_NODE_PATH, g_sZkMgr.localId);
@@ -1398,7 +1398,7 @@ int32_t CmServerZkRecordMetaSession(void)
     }
 
     ret = CmZkCreate(g_zh, zkPath, (char *)&g_sZkMgr.localId, (int)sizeof(uint16_t), &ZOO_OPEN_ACL_UNSAFE,
-        ZOO_EPHEMERAL, NULL, 0);
+                     ZOO_EPHEMERAL, NULL, 0);
     if (ret != ZOK) {
         CM_LOGERROR("Create znode(%s) failed, ret(%d).", zkPath, ret);
         return CM_ERR;
@@ -1408,7 +1408,7 @@ int32_t CmServerZkRecordMetaSession(void)
 
 int32_t CmServerZkRecordPtEntryList(PtEntryList *ptEntryList)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     CM_LOGDEBUG("Record: poolId(%u) global version(%lu).", ptEntryList->poolId, ptEntryList->globalVersion);
@@ -1430,7 +1430,7 @@ int32_t CmServerZkRecordPtEntryList(PtEntryList *ptEntryList)
 
 int32_t CmServerZkRecordNodeList(NodeInfoList *nodeList)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     int32_t len = (int32_t)(sizeof(NodeInfoList) + sizeof(NodeInfo) * nodeList->nodeNum);
@@ -1450,7 +1450,7 @@ int32_t CmServerZkRecordNodeList(NodeInfoList *nodeList)
 
 int32_t CmServerZkRecordStateList(NodeStateList *stateList)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     int32_t len = (int32_t)(sizeof(NodeStateList) + sizeof(NodeStateInfo) * stateList->nodeNum);
@@ -1470,7 +1470,7 @@ int32_t CmServerZkRecordStateList(NodeStateList *stateList)
 
 int32_t CmServerZkGetNodeList(NodeInfoList *nodeList)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     int32_t len = (int32_t)(sizeof(NodeInfoList) + sizeof(NodeInfo) * nodeList->nodeNum);
@@ -1490,7 +1490,7 @@ int32_t CmServerZkGetNodeList(NodeInfoList *nodeList)
 
 int32_t CmServerZkGetStateList(NodeStateList *stateList)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     int32_t len = (int32_t)(sizeof(NodeStateList) + sizeof(NodeStateInfo) * stateList->nodeNum);
@@ -1510,7 +1510,7 @@ int32_t CmServerZkGetStateList(NodeStateList *stateList)
 
 int32_t CmServerZkGetPtEntryList(PtEntryList *ptEntryList)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     int32_t len = (int32_t)(sizeof(PtEntryList) + sizeof(PtEntry) * ptEntryList->ptNum);
@@ -1530,7 +1530,7 @@ int32_t CmServerZkGetPtEntryList(PtEntryList *ptEntryList)
 
 int32_t CmServerZkGetNodeInfo(uint16_t poolId, NodeInfo *nodeInfo)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     int32_t retLen = (int32_t)sizeof(NodeInfo);
@@ -1572,7 +1572,7 @@ static void CmServerZkRoleWatchFunc(zhandle_t *zh, int evtype, int state, const 
 
 int32_t CmServerZkSubRoleChange(ZkNotifyMetaRoleFp notifyFp)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%s", CM_META, CM_MASTER_PATH);
@@ -1582,7 +1582,7 @@ int32_t CmServerZkSubRoleChange(ZkNotifyMetaRoleFp notifyFp)
     }
 
     ret = CmZkCreate(g_zh, zkPath, (char *)&g_sZkMgr.localId, sizeof(uint16_t), &ZOO_OPEN_ACL_UNSAFE, ZOO_EPHEMERAL,
-        NULL, 0);
+                     NULL, 0);
     if (ret != ZOK && ret != ZNODEEXISTS) {
         CM_LOGERROR("Create znode(%s) failed, ret(%d).", zkPath, ret);
         return CM_ERR;
@@ -1650,7 +1650,7 @@ static void CmServerZkSubNodeListWatch(zhandle_t *zh, int evtype, int state, con
 
 int32_t CmServerZkSubNodeListChange(uint16_t poolId, ZkNotifyNodeListFp notifyFp)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     if (g_sZkMgr.role != CM_SERVER_MASTER) {
@@ -1668,7 +1668,7 @@ int32_t CmServerZkSubNodeListChange(uint16_t poolId, ZkNotifyNodeListFp notifyFp
         return CM_ERR;
     }
 
-    struct String_vector retStrings = { 0 };
+    struct String_vector retStrings = {0};
     ret = CmZkWgetChildren(g_zh, zkPath, CmServerZkSubNodeListWatch, (void *)&g_sZkMgr.restore[poolId], &retStrings);
     if (ret != ZOK) {
         CM_LOGERROR("Get znode(%s) failed, ret(%d).", zkPath, ret);
@@ -1694,7 +1694,7 @@ int32_t CmServerZkSubNodeListChange(uint16_t poolId, ZkNotifyNodeListFp notifyFp
 
 static int32_t CmServerZkGetNodeEvent(CmNodeEvent *event)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     int32_t len = (int32_t)sizeof(CmNodeEvent);
@@ -1719,7 +1719,7 @@ static int32_t CmServerZkGetNodeEvent(CmNodeEvent *event)
 
 static int32_t CmServerZkDeleteNodeEvent(uint16_t poolId, uint16_t nodeId)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s/%u", CM_POOL, poolId, CM_NODE_EVENT_PATH, nodeId);
@@ -1806,7 +1806,7 @@ static void CmServerZkSubNodeEventWatch(zhandle_t *zh, int evtype, int state, co
 
 int32_t CmServerZkSubNodeEvent(uint16_t poolId, ZkNotifyNodeEventFp notifyFp)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     if (g_sZkMgr.role != CM_SERVER_MASTER) {
@@ -1824,7 +1824,7 @@ int32_t CmServerZkSubNodeEvent(uint16_t poolId, ZkNotifyNodeEventFp notifyFp)
         return CM_ERR;
     }
 
-    struct String_vector retStrings = { 0 };
+    struct String_vector retStrings = {0};
     ret = CmZkWgetChildren(g_zh, zkPath, CmServerZkSubNodeEventWatch, (void *)&g_sZkMgr.restore[poolId], &retStrings);
     if (ret != ZOK) {
         CM_LOGERROR("Get znode(%s) failed, ret(%d).", zkPath, ret);
@@ -1857,7 +1857,7 @@ int32_t CmServerZkSubNodeEvent(uint16_t poolId, ZkNotifyNodeEventFp notifyFp)
 
 static int32_t CmServerZkGetPtEvent(CmPtEvent *event)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     int32_t len = NODE_META_BUFF_LEN;
@@ -1881,7 +1881,7 @@ static int32_t CmServerZkGetPtEvent(CmPtEvent *event)
 
 static int32_t CmServerZkDeletePtEvent(uint16_t poolId, uint16_t nodeId)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s/%u", CM_POOL, poolId, CM_PT_EVENT_PATH, nodeId);
@@ -1945,7 +1945,7 @@ static void *CmServerZkSubPtEventHandle(void *ctx)
     g_sZkMgr.restore[nodeList->poolId].ptIdle = TRUE;
 
     ret = CmServerZkSubPtEvent(nodeList->poolId, g_sZkMgr.restore[nodeList->poolId].ptEvent,
-        g_sZkMgr.restore[nodeList->poolId].ptCommit);
+                               g_sZkMgr.restore[nodeList->poolId].ptCommit);
     if (ret != CM_OK) {
         CM_LOGERROR("Sub pt event failed, ret(%d) poolId(%u).", ret, nodeList->poolId);
         free(nodeList);
@@ -1984,7 +1984,7 @@ static void CmServerZkSubPtEventWatch(zhandle_t *zh, int evtype, int state, cons
 
 int32_t CmServerZkSubPtEvent(uint16_t poolId, ZkNotifyPtEventFp notifyFp, ZkCommitPtEventFp commitFp)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     if (g_sZkMgr.role != CM_SERVER_MASTER) {
@@ -2007,7 +2007,7 @@ int32_t CmServerZkSubPtEvent(uint16_t poolId, ZkNotifyPtEventFp notifyFp, ZkComm
         return CM_ERR;
     }
 
-    struct String_vector retStrings = { 0 };
+    struct String_vector retStrings = {0};
     ret = CmZkWgetChildren(g_zh, zkPath, CmServerZkSubPtEventWatch, (void *)&g_sZkMgr.restore[poolId], &retStrings);
     if (ret != ZOK) {
         CM_LOGERROR("Get znode(%s) failed, ret(%d).", zkPath, ret);
@@ -2085,7 +2085,7 @@ int CmServerZkInit(void)
 #define CM_ZK_MAX_TRY_NUM (3)
 
 int CmZkCreate(zhandle_t *zh, const char *path, const char *value, int valuelen, const struct ACL_vector *acl, int mode,
-    char *pathBuffer, int pathBufferLen)
+               char *pathBuffer, int pathBufferLen)
 {
     int ret;
 
@@ -2166,7 +2166,7 @@ int CmZkSet(zhandle_t *zh, const char *path, const char *buffer, int buflen, int
 }
 
 int CmZkWget(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx, char *buffer, int *bufferLen,
-    struct Stat *stat)
+             struct Stat *stat)
 {
     int ret;
 
@@ -2183,7 +2183,7 @@ int CmZkWget(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherC
 }
 
 int CmZkWgetChildren(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx,
-    struct String_vector *strings)
+                     struct String_vector *strings)
 {
     int ret;
 
@@ -2245,7 +2245,7 @@ static void CmZkServerRestore(void)
     if (ret != CM_OK) {
         CM_LOGWARN("Record meta session failed, ret(%d) nid(%u).", ret, g_sZkMgr.localId);
     }
-    
+
     ret = CmServerZkSubRoleChange(g_sZkMgr.roleChange); // 恢复订阅
     if (ret != CM_OK) {
         return;
@@ -2412,7 +2412,7 @@ int32_t CmZkComparePoolDir(PoolInfo *pool, PoolInfo *record)
 
 static int32_t CmZkCheckPoolDir(PoolInfo *pool)
 {
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
 
     ret = CmZkCreate(g_zh, CM_POOL, NULL, -1, &ZOO_OPEN_ACL_UNSAFE, 0, NULL, 0);

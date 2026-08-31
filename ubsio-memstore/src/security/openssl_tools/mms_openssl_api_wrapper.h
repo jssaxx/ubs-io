@@ -13,8 +13,8 @@
 #ifndef MMS_OPENSSL_API_WRAPPER_H
 #define MMS_OPENSSL_API_WRAPPER_H
 
-#include "mms_log.h"
 #include "mms_err.h"
+#include "mms_log.h"
 #include "mms_openssl_api_dl.h"
 
 namespace ock {
@@ -428,7 +428,6 @@ public:
 
     static inline void UnLoad() {}
 };
-} // namespace bio
+} // namespace mms
 } // namespace ock
 #endif // MMS_OPENSSL_API_WRAPPER_H
-

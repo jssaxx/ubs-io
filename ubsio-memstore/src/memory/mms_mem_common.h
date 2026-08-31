@@ -13,15 +13,15 @@
 #ifndef MMS_MEM_COMM_H
 #define MMS_MEM_COMM_H
 
-#include <map>
 #include <functional>
+#include <map>
 #include <utility>
 
-#include "mms_err.h"
-#include "mms_types.h"
-#include "mms_ref.h"
 #include "mms_def.h"
+#include "mms_err.h"
+#include "mms_ref.h"
 #include "mms_str_util.h"
+#include "mms_types.h"
 
 namespace ock {
 namespace mms {
@@ -30,13 +30,15 @@ constexpr uint64_t META_SHM_IOCTX_SIZE = 512 * 1024 * 1024;
 constexpr uint64_t META_SHM_INDEX_SIZE = 64 * 1024 * 1024;
 constexpr uint16_t MAX_BLOCK_NUM = 4;
 
-enum MmapMode : uint16_t {
+enum MmapMode : uint16_t
+{
     MMAP_MODE_RW = 0,
     MMAP_MODE_WRITE = 1,
     MMAP_MODE_READ = 2,
 };
 
-enum MmapArea : uint16_t {
+enum MmapArea : uint16_t
+{
     MMAP_AREA_IOCTX = 0,
     MMAP_AREA_INDEX = 1,
     MMAP_AREA_VALUE = 2,
@@ -66,7 +68,8 @@ struct MemMgrOptions {
 };
 
 struct MemAllocOptions {
-    enum AllocMode : uint16_t {
+    enum AllocMode : uint16_t
+    {
         ALLOC_MODE_FIXED = 0,
         ALLOC_MODE_BUDDY = 1,
     };
@@ -85,7 +88,7 @@ struct MemAllocOptions {
     MemAllocOptions() = default;
     ~MemAllocOptions() = default;
 };
-}
-}
+} // namespace mms
+} // namespace ock
 
 #endif // MMS_MEM_COMM_H

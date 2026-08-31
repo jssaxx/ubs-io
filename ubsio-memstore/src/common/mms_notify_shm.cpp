@@ -109,7 +109,7 @@ bool NotifyShmQueue::Attach(void *address, uint64_t size, uint32_t queueDepth, u
 bool NotifyShmQueue::IsValid() const
 {
     return mHeader != nullptr && mSlots != nullptr &&
-        mHeader->state.load(std::memory_order_acquire) == static_cast<uint32_t>(NotifyShmState::ACTIVE);
+           mHeader->state.load(std::memory_order_acquire) == static_cast<uint32_t>(NotifyShmState::ACTIVE);
 }
 
 void NotifyShmQueue::Close()
@@ -125,9 +125,8 @@ void NotifyShmQueue::Reset()
     mSlots = nullptr;
 }
 
-NotifyShmResult NotifyShmQueue::TryEnqueueBatch(
-    const NotifyShmPublishItem *items, uint32_t itemNum, uint64_t enqueueTimeNs,
-    NotifyShmProducerContext &producerContext)
+NotifyShmResult NotifyShmQueue::TryEnqueueBatch(const NotifyShmPublishItem *items, uint32_t itemNum,
+                                                uint64_t enqueueTimeNs, NotifyShmProducerContext &producerContext)
 {
     if (items == nullptr || itemNum == 0 || mHeader == nullptr || itemNum > mHeader->queueDepth) {
         return NotifyShmResult::FULL;
@@ -143,8 +142,7 @@ NotifyShmResult NotifyShmQueue::TryEnqueueBatch(
     return NotifyShmResult::OK;
 }
 
-NotifyShmResult NotifyShmQueue::ReserveSlots(
-    uint32_t itemNum, uint64_t &pos, NotifyShmProducerContext &producerContext)
+NotifyShmResult NotifyShmQueue::ReserveSlots(uint32_t itemNum, uint64_t &pos, NotifyShmProducerContext &producerContext)
 {
     if (producerContext.queueId != mHeader) {
         producerContext.queueId = mHeader;
@@ -161,8 +159,8 @@ NotifyShmResult NotifyShmQueue::ReserveSlots(
                 return NotifyShmResult::FULL;
             }
         }
-        if (mHeader->enqueuePos.compare_exchange_weak(
-            pos, pos + itemNum, std::memory_order_relaxed, std::memory_order_relaxed)) {
+        if (mHeader->enqueuePos.compare_exchange_weak(pos, pos + itemNum, std::memory_order_relaxed,
+                                                      std::memory_order_relaxed)) {
             return NotifyShmResult::OK;
         }
         CpuRelax();
@@ -170,8 +168,8 @@ NotifyShmResult NotifyShmQueue::ReserveSlots(
     return NotifyShmResult::CLOSED;
 }
 
-void NotifyShmQueue::PublishSlots(
-    uint64_t pos, const NotifyShmPublishItem *items, uint32_t itemNum, uint64_t enqueueTimeNs)
+void NotifyShmQueue::PublishSlots(uint64_t pos, const NotifyShmPublishItem *items, uint32_t itemNum,
+                                  uint64_t enqueueTimeNs)
 {
     for (uint32_t index = 0; index < itemNum; ++index) {
         uint64_t slotPos = pos + index;
@@ -245,5 +243,5 @@ void NotifyShmQueue::CpuRelax()
 #endif
 }
 
-}
-}
+} // namespace mms
+} // namespace ock

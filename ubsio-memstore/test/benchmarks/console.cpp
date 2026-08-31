@@ -10,16 +10,16 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include <sys/resource.h>
+#include <climits>
+#include <csignal>
 #include <iostream>
 #include <memory>
-#include <csignal>
-#include <climits>
 #include <sstream>
-#include <sys/resource.h>
 #include "mms_client.h"
 #include "mms_client_log.h"
 
-static std::atomic<bool> gDaemonRunning = { false };
+static std::atomic<bool> gDaemonRunning = {false};
 
 std::string OpTypeToString(OperateType opType)
 {
@@ -51,10 +51,7 @@ static void ConsoleHandleSigterm(int signum)
         return;
     }
 
-    struct rlimit coreLimiter = {
-        .rlim_cur = 0,
-        .rlim_max = 0
-    };
+    struct rlimit coreLimiter = {.rlim_cur = 0, .rlim_max = 0};
     int result = setrlimit(RLIMIT_CORE, &coreLimiter);
     if (UNLIKELY(result != 0)) {
         std::cout << "Failed to disable core dump, errno " << errno << std::endl;

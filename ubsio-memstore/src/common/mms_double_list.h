@@ -18,7 +18,8 @@
 
 namespace ock {
 namespace mms {
-template <typename T> class MmsDoubleList {
+template <typename T>
+class MmsDoubleList {
 public:
     void Initialize(uint8_t lane)
     {
@@ -138,8 +139,7 @@ private:
     T head = nullptr;
     T tail = nullptr;
 };
-}
-}
+} // namespace mms
+} // namespace ock
 
 #endif // MMSCORE_MMS_DOUBLE_LIST_H
-

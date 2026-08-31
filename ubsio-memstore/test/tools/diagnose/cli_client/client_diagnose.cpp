@@ -10,21 +10,21 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "client_diagnose.h"
+#include <semaphore.h>
+#include <sys/resource.h>
+#include <atomic>
 #include <chrono>
+#include <condition_variable>
+#include <csignal>
 #include <iostream>
 #include <memory>
-#include <csignal>
-#include <sys/resource.h>
 #include <regex>
-#include <condition_variable>
-#include <semaphore.h>
-#include <atomic>
 #include "cli.h"
-#include "tracer.h"
 #include "mms_c.h"
 #include "mms_client.h"
 #include "mms_lock.h"
-#include "client_diagnose.h"
+#include "tracer.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -215,8 +215,8 @@ static void HandleGet(std::vector<std::string> cmds)
     if (ret != RET_MMS_OK) {
         cli_print_buffer("Failed to get a value, result:%d.\n", ret);
     } else {
-        cli_print_buffer("Get value success, key:%s, offset:%llu, length:%llu, realLen:%llu.\n",
-            key, offset, length, realLen);
+        cli_print_buffer("Get value success, key:%s, offset:%llu, length:%llu, realLen:%llu.\n", key, offset, length,
+                         realLen);
         if (fwrite(value, sizeof(char), realLen, fp) != realLen) {
             cli_print_buffer("fwrite value to file failed, errno:%d.\n", errno);
         }
@@ -657,7 +657,7 @@ static void *PerfTestMixesImpl(void *param)
         int32_t randnum = rand();
         if (randnum % 10 >= 7) {
             for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            FillPerfKey(getParam, putList[i].key, keyIndex.load());
+                FillPerfKey(getParam, putList[i].key, keyIndex.load());
                 keyIndex++;
             }
             RefreshKeyLen(putList, getParam->batchNum);
@@ -668,7 +668,7 @@ static void *PerfTestMixesImpl(void *param)
             }
         } else {
             for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            FillPerfKey(getParam, getList[i].key, randnum % keyIndex.load());
+                FillPerfKey(getParam, getList[i].key, randnum % keyIndex.load());
             }
             RefreshKeyLen(getList, getParam->batchNum);
             auto ret = MmsGet(getList, getParam->batchNum);
@@ -732,8 +732,8 @@ static void HandlePerf(std::vector<std::string> cmds)
         return;
     }
 
-    cli_print_buffer("Perf test start, operate:%s, bs:%u, ioDepth:%u, batchNum:%u, size:%u, count:%u.\n", rw, bs, ioDepth,
-                 batchNum, size, count);
+    cli_print_buffer("Perf test start, operate:%s, bs:%u, ioDepth:%u, batchNum:%u, size:%u, count:%u.\n", rw, bs,
+                     ioDepth, batchNum, size, count);
     pthread_t *th = (pthread_t *)malloc(sizeof(pthread_t) * ioDepth);
     PerfTestParam *param = (PerfTestParam *)malloc(sizeof(PerfTestParam) * ioDepth);
     if (th == nullptr || param == nullptr) {
@@ -812,7 +812,7 @@ static void HandlePerf(std::vector<std::string> cmds)
     float cost_sec = stopT.tv_sec - startT.tv_sec;
     float cost_usec = stopT.tv_usec - startT.tv_usec;
     float time_use = cost_sec * 1000000U + cost_usec;
-    auto totalCount = static_cast<double>(count * ioDepth) ;
+    auto totalCount = static_cast<double>(count * ioDepth);
     auto totalSize = static_cast<double>(count * bs);
     double dataPerf = static_cast<double>(((totalSize / 1048576U) * 1000000U / time_use) * ioDepth);
     double iops = static_cast<double>(totalCount * 1000000U) / time_use;
@@ -820,7 +820,8 @@ static void HandlePerf(std::vector<std::string> cmds)
 
     time_t rawtime;
     struct tm *timeinfo = nullptr;
-    struct tm timebuf{};
+    struct tm timebuf {
+    };
     rawtime = time(nullptr);
     timeinfo = localtime_r(&rawtime, &timebuf);
     cli_print_buffer("Perf Test Result: @ %s\n", asctime(timeinfo));
@@ -850,7 +851,7 @@ static void MmsClientDebugHelp(char *command, int detail) noexcept
     cli_print_buffer("\ttrace: mms trace [open/close/show/clear]\n");
     cli_print_buffer("\tnotify: mms notify [open/close]\n");
     cli_print_buffer("\tperf: mms perf [put/get/update/replace/delete/mixes] [bs(Kb)] [ioDepth] [batchNum] [size(Mb)] "
-                 "[userId] [numaNum] [cpuNum] [cpuStart]\n");
+                     "[userId] [numaNum] [cpuNum] [cpuStart]\n");
     cli_print_buffer("\texit: exit console\n");
 }
 
@@ -917,7 +918,7 @@ static void MmsClientDebugProcess(int argc, char *argv[]) noexcept
         HandleDelete(cmds);
     } else if (cmdType == "catchup") {
         HandleCatchUp(cmds);
-    }  else if (cmdType == "trace") {
+    } else if (cmdType == "trace") {
         if (cmds.size() != 2) {
             cli_print_buffer("Input parameters failed!, num:%u\n", cmds.size());
             return;

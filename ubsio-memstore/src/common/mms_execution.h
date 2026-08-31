@@ -12,20 +12,21 @@
 
 #ifndef MMSCORE_MMS_EXECUTION_SERVICE_H
 #define MMSCORE_MMS_EXECUTION_SERVICE_H
+#include <unistd.h>
 #include <atomic>
+#include <functional>
 #include <mutex>
 #include <thread>
-#include <unistd.h>
 #include <vector>
-#include <functional>
+#include "mms_def.h"
 #include "mms_log.h"
 #include "mms_ref.h"
-#include "mms_def.h"
 #include "mms_ring_buffer.h"
 
 namespace ock {
 namespace mms {
-enum RunnableType {
+enum RunnableType
+{
     NORMAL = 0,
     STOP = 1,
 };
@@ -35,9 +36,9 @@ enum RunnableType {
  */
 class Runnable {
 public:
-    Runnable() : mTask{ nullptr } {}
+    Runnable() : mTask{nullptr} {}
 
-    explicit Runnable(const std::function<void()> &task) : mTask{ task } {}
+    explicit Runnable(const std::function<void()> &task) : mTask{task} {}
     virtual ~Runnable() = default;
 
     virtual void Run()
@@ -48,6 +49,7 @@ public:
     }
 
     DEFINE_REF_COUNT_FUNCTIONS;
+
 private:
     inline void Type(RunnableType type)
     {
@@ -61,7 +63,7 @@ private:
 
 private:
     RunnableType mType = RunnableType::NORMAL;
-    std::function<void()> mTask{ nullptr };
+    std::function<void()> mTask{nullptr};
 
     DEFINE_REF_COUNT_VARIABLE;
 
@@ -187,7 +189,8 @@ private:
           mStarted(false),
           mStopped(false),
           mStartedThreadNum(0)
-    {}
+    {
+    }
 
     inline int32_t GetThreadCpuId(uint16_t threadIndex) const;
     bool CheckCpuIds() const;
@@ -350,6 +353,6 @@ inline void ExecutorService::RunInThread(int32_t cpuId)
     }
     LOG_INFO("Thread for executor service <" << threadName << ">, cpuId:" << cpuId << " exiting.");
 }
-}
-}
+} // namespace mms
+} // namespace ock
 #endif // MMSCORE_MMS_EXECUTION_SERVICE_H

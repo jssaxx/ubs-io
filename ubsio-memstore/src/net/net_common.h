@@ -13,17 +13,17 @@
 #ifndef NET_COMMON_H
 #define NET_COMMON_H
 
-#include <map>
 #include <functional>
+#include <map>
 #include <utility>
 
 #include "hcom/hcom_service.h"
 #include "hcom/hcom_service_context.h"
-#include "mms_err.h"
-#include "mms_types.h"
-#include "mms_ref.h"
 #include "mms_def.h"
+#include "mms_err.h"
+#include "mms_ref.h"
 #include "mms_str_util.h"
+#include "mms_types.h"
 #include "net_log.h"
 
 namespace ock {
@@ -51,7 +51,8 @@ struct Callback {
     Callback(CbFunc func, void *ctx) : cb(std::move(func)), cbCtx(ctx) {}
 };
 
-enum ConnectMode {
+enum ConnectMode
+{
     CONNECT_IPC = 0,
     CONNECT_RPC = 1,
 };
@@ -70,7 +71,7 @@ union NetNode {
     NetNode(uint32_t inNid, uint32_t inPid) : nid(inNid), pid(inPid) {}
     explicit NetNode(uint64_t p) : whole(p) {}
     NetNode(const NetNode &inNid) : nid(inNid.nid), pid(inNid.pid) {}
-    NetNode &operator = (const NetNode &inNid)
+    NetNode &operator=(const NetNode &inNid)
     {
         whole = inNid.whole;
         return *this;
@@ -102,10 +103,16 @@ struct ConnectInfo {
           port(param.port),
           retryTimes(param.retryTimes),
           isSelfPoll(false)
-    {}
+    {
+    }
     ConnectInfo(uint32_t srcId, uint32_t srcPid, uint32_t nid, bool selfPool = false)
-        : srcId(srcId, srcPid), peerId(nid, 0), port(0), retryTimes(NO_3), isSelfPoll(selfPool)
-    {}
+        : srcId(srcId, srcPid),
+          peerId(nid, 0),
+          port(0),
+          retryTimes(NO_3),
+          isSelfPoll(selfPool)
+    {
+    }
 };
 
 struct SubscriptionInfo {
@@ -126,7 +133,8 @@ struct SubscriptionInfo {
 using AsyncConnHandler = std::function<void(uintptr_t userCtx, int32_t ret, ConnectInfo &info)>;
 using MulticastAsyncHandler = std::function<void(int32_t ret, SubscriptionInfo &info)>;
 
-enum Role {
+enum Role
+{
     NET_CLIENT = 0,
     NET_SERVER = 1,
     NET_BUTT = 2,
@@ -257,7 +265,7 @@ class NetMulticastEngine;
 using NetMulticastEnginePtr = Ref<NetMulticastEngine>;
 class NetEngine;
 using NetEnginePtr = Ref<NetEngine>;
-}
-}
+} // namespace mms
+} // namespace ock
 
 #endif // NET_COMMON_H

@@ -10,19 +10,19 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <functional>
+#include "mms_mem_mgr.h"
+#include <linux/version.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/sysinfo.h>
+#include <unistd.h>
+#include <cerrno>
+#include <functional>
 #include <string>
 #include <vector>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-#include <cerrno>
-#include <sys/syscall.h>
-#include <linux/version.h>
 #include "mms_comm.h"
 #include "mms_log.h"
-#include "mms_mem_mgr.h"
 
 namespace ock {
 namespace mms {
@@ -38,7 +38,7 @@ void ValueIndexMemCfg::Calculate()
     double totalValueMemIdeal = static_cast<double>(usableTotalMem) / (factor + indexToValueRatio);
 
     uint64_t alignedValueMem = static_cast<uint64_t>(totalValueMemIdeal);
-    alignedValueMem = alignedValueMem - (alignedValueMem % pageSize);  // 向下对齐
+    alignedValueMem = alignedValueMem - (alignedValueMem % pageSize); // 向下对齐
     uint64_t alignedIndexMem = usableTotalMem - alignedValueMem;
 
     valueMemSize = alignedValueMem;
@@ -48,12 +48,13 @@ void ValueIndexMemCfg::Calculate()
 static bool CheckMemEnough(MemMgrOptions &options)
 {
     uint64_t sizeRequired = 0;
-    for (auto &area: options.areaSize) {
+    for (auto &area : options.areaSize) {
         for (uint16_t index = 0; index < options.numaNum; index++) {
             sizeRequired += area[index];
         }
     }
-    struct sysinfo info{};
+    struct sysinfo info {
+    };
     if (sysinfo(&info) != 0) {
         MEM_LOG_ERROR("get sysinfo failed!");
         return false;
@@ -222,8 +223,8 @@ BResult MmsMemMgr::CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::strin
     return MMS_OK;
 }
 
-BResult MmsMemMgr::CreateShmMmapAddress(int32_t shmFd, uint16_t numaId[], uint64_t size[], uint16_t num,
-                                        MmapMode mode, uint64_t &shareAddr)
+BResult MmsMemMgr::CreateShmMmapAddress(int32_t shmFd, uint16_t numaId[], uint64_t size[], uint16_t num, MmapMode mode,
+                                        uint64_t &shareAddr)
 {
     int prot = 0;
     if (mode == MMAP_MODE_RW) {
@@ -270,5 +271,5 @@ BResult MmsMemMgr::CreateShmMmapAddress(int32_t shmFd, uint16_t numaId[], uint64
     }
     return MMS_OK;
 }
-}
-}
+} // namespace mms
+} // namespace ock

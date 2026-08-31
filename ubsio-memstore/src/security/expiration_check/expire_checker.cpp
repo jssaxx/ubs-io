@@ -10,9 +10,9 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "expire_checker.h"
 #include <iostream>
 #include "mms_config_instance.h"
-#include "expire_checker.h"
 
 namespace ock {
 namespace mms {
@@ -71,10 +71,10 @@ BResult ExpireChecker::CertExpiredCheck(const std::string &path, const std::stri
     return MMS_OK;
 }
 
-BResult ExpireChecker::ValidateCertificateTime(X509* x509, const std::string &type)
+BResult ExpireChecker::ValidateCertificateTime(X509 *x509, const std::string &type)
 {
-    ASN1_TIME* notBefore = OpenSslApiWrapper::X509GetNotBefore(x509);
-    ASN1_TIME* notAfter = OpenSslApiWrapper::X509GetNotAfter(x509);
+    ASN1_TIME *notBefore = OpenSslApiWrapper::X509GetNotBefore(x509);
+    ASN1_TIME *notAfter = OpenSslApiWrapper::X509GetNotAfter(x509);
     if (notBefore == nullptr || notAfter == nullptr) {
         LOG_ERROR(type << " certificate time is nullptr.");
         return MMS_ERR;
@@ -82,7 +82,8 @@ BResult ExpireChecker::ValidateCertificateTime(X509* x509, const std::string &ty
 
     time_t now;
     time(&now);
-    struct tm tm{};
+    struct tm tm {
+    };
     time_t notBeforeTime = OpenSslApiWrapper::Asn1Time2Tm(notBefore, &tm) ? mktime(&tm) : -1;
     time_t notAfterTime = OpenSslApiWrapper::Asn1Time2Tm(notAfter, &tm) ? mktime(&tm) : -1;
     if (notBeforeTime == -1 || notAfterTime == -1) {
@@ -125,9 +126,7 @@ void ExpireChecker::TimingManagement()
             HandleCertExpiredCheck();
 
             std::unique_lock<std::mutex> lock(mutex);
-            cv.wait_for(lock, std::chrono::seconds(ONE_DAY), [this] {
-                return stopFlag.load();
-            });
+            cv.wait_for(lock, std::chrono::seconds(ONE_DAY), [this] { return stopFlag.load(); });
         }
     });
 }

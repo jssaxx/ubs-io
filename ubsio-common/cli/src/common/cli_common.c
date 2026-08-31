@@ -113,8 +113,7 @@ int cli_connect_server(uint16_t port)
     return fd;
 }
 
-int cli_send_frame(int fd, uint16_t type, uint32_t client_id, uint32_t agent_id,
-                   const void *data, uint32_t length)
+int cli_send_frame(int fd, uint16_t type, uint32_t client_id, uint32_t agent_id, const void *data, uint32_t length)
 {
     if (length > CLI_MAX_PAYLOAD) {
         return RETURN_ERROR;
@@ -137,8 +136,7 @@ int cli_send_frame(int fd, uint16_t type, uint32_t client_id, uint32_t agent_id,
     return RETURN_OK;
 }
 
-int cli_send_text(int fd, uint16_t type, uint32_t client_id, uint32_t agent_id,
-                  const char *text)
+int cli_send_text(int fd, uint16_t type, uint32_t client_id, uint32_t agent_id, const char *text)
 {
     if (text == NULL) {
         text = "";
@@ -275,6 +273,5 @@ void cli_sleep_ms(unsigned int ms)
     struct timespec ts;
     ts.tv_sec = (time_t)(ms / 1000u);
     ts.tv_nsec = (long)(ms % 1000u) * 1000000L;
-    while (nanosleep(&ts, &ts) != 0 && errno == EINTR) {
-    }
+    while (nanosleep(&ts, &ts) != 0 && errno == EINTR) {}
 }

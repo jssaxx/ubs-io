@@ -19,7 +19,8 @@
 extern "C" {
 #endif
 
-typedef enum {
+typedef enum
+{
     PT_NUM_LIMIT_FIXED = 0,
     PT_NUM_LIMIT_UNFIXED = 1,
     PT_NUM_LIMIT_BUTT
@@ -31,14 +32,14 @@ typedef struct {
     Calculator (*createCalculator)(uint16_t maxNodeNum, uint16_t maxPtNum, uint16_t copyNum, uint16_t minCopyNum);
     void (*destoryCalculator)(Calculator calculator);
     int32_t (*viewInitial)(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList,
-        PtEntryList *ptList);
+                           PtEntryList *ptList);
     int32_t (*viewRebalance)(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList,
-        PtEntryList *ptList);
+                             PtEntryList *ptList);
     int32_t (*needRebalance)(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList,
-        PtEntryList *ptList);
+                             PtEntryList *ptList);
     void (*updateState)(uint16_t nodeId, NodeState state, NodeInfo *info, PtEntryList *ptList, int32_t *ptChange);
     void (*updateFinish)(uint16_t nodeId, CmPtFinish *ptList, uint16_t ptNum, PtEntryList *ptEntryList,
-        int32_t *ptChange, uint16_t nodeNum);
+                         int32_t *ptChange, uint16_t nodeNum);
 } CalcOps;
 
 CalcOps *CmPtCalcOpsGet(PtNumLimitMode numLimit);
@@ -48,4 +49,3 @@ CalcOps *CmPtCalcOpsGet(PtNumLimitMode numLimit);
 #endif
 
 #endif
-

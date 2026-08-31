@@ -25,8 +25,7 @@ class TestNet : public testing::Test {
 private:
     static bool gSetup;
 };
-}  // namespace mms
-}  // namespace ock
+} // namespace mms
+} // namespace ock
 
-#endif  // MMS_TEST_NET_H
-
+#endif // MMS_TEST_NET_H

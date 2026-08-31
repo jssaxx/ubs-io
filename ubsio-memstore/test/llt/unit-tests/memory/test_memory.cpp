@@ -75,7 +75,7 @@ MmsMemAllocatorPtr GetValueAllocator()
 {
     return MmsMemAllocator::Instance(MMAP_AREA_VALUE);
 }
-}
+} // namespace
 
 bool TestMemory::gSetup = false;
 

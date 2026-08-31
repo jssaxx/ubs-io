@@ -18,14 +18,14 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include "mms_log.h"
 #include "mms_conv.h"
-#include "mms_types.h"
-#include "mms_err.h"
-#include "mms_message.h"
 #include "mms_crb_scheduler.h"
-#include "mms_server.h"
+#include "mms_err.h"
+#include "mms_log.h"
+#include "mms_message.h"
 #include "mms_mock.h"
+#include "mms_server.h"
+#include "mms_types.h"
 
 using namespace ock::mms;
 
@@ -58,9 +58,7 @@ void NotifyTestCallback(const char *key, uint32_t keyLen, OperateType opType, vo
 bool WaitForNotifyCount(size_t count, std::chrono::milliseconds timeout = std::chrono::milliseconds(5000))
 {
     std::unique_lock<std::mutex> lock(gNotifyMutex);
-    return gNotifyCv.wait_for(lock, timeout, [count] {
-        return gNotifyEvents.size() >= count;
-    });
+    return gNotifyCv.wait_for(lock, timeout, [count] { return gNotifyEvents.size() >= count; });
 }
 
 std::vector<std::pair<std::string, OperateType>> GetNotifyEvents()
@@ -86,22 +84,32 @@ void ResetItemState()
 
 PutItems MakePut(const char *key, const char *value, uint64_t valueLen, uint32_t index = 0, uint16_t isNotify = 0)
 {
-    return {key, value, static_cast<uint32_t>(valueLen), static_cast<uint16_t>(strlen(key)), isNotify,
-            &gValueAddrs[index], &gItemResults[index]};
+    return {key,
+            value,
+            static_cast<uint32_t>(valueLen),
+            static_cast<uint16_t>(strlen(key)),
+            isNotify,
+            &gValueAddrs[index],
+            &gItemResults[index]};
 }
 
 GetItems MakeGet(const char *key, uint32_t offset, uint64_t length, char *value, uint32_t index = 0)
 {
     gGetValues[index] = value;
     gRealLengths[index] = 0;
-    return {key, static_cast<uint16_t>(strlen(key)), offset, static_cast<uint32_t>(length), &gGetValues[index],
-            &gRealLengths[index], &gItemResults[index]};
+    return {key,
+            static_cast<uint16_t>(strlen(key)),
+            offset,
+            static_cast<uint32_t>(length),
+            &gGetValues[index],
+            &gRealLengths[index],
+            &gItemResults[index]};
 }
 
 UpdateItems MakeUpdate(const char *key, const char *value, uint32_t offset, uint64_t valueLen, uint32_t index = 0)
 {
-    return {key, value, static_cast<uint16_t>(strlen(key)), static_cast<uint32_t>(valueLen), offset,
-            &gItemResults[index]};
+    return {
+        key, value, static_cast<uint16_t>(strlen(key)), static_cast<uint32_t>(valueLen), offset, &gItemResults[index]};
 }
 
 DeleteItems MakeDelete(const char *key, uint32_t index = 0, uint16_t isNotify = 0)
@@ -111,10 +119,10 @@ DeleteItems MakeDelete(const char *key, uint32_t index = 0, uint16_t isNotify = 
 
 ReplaceItems MakeReplace(const char *key, const char *value, uint32_t offset, uint64_t valueLen, uint32_t index = 0)
 {
-    return {key, value, static_cast<uint16_t>(strlen(key)), static_cast<uint32_t>(valueLen), offset,
-            &gItemResults[index]};
+    return {
+        key, value, static_cast<uint16_t>(strlen(key)), static_cast<uint32_t>(valueLen), offset, &gItemResults[index]};
 }
-}
+} // namespace
 
 void TestServer::SetUp()
 {
@@ -190,10 +198,10 @@ TEST_F(TestServer, test_mms_get_zero_copy)
 TEST_F(TestServer, test_mms_batch_put_and_batch_get)
 {
     LOG_INFO("test_mms_batch_put");
-    const char* key1 = "key1";
-    const char* value1 = "value1";
-    const char* key2 = "key2";
-    const char* value2 = "value2";
+    const char *key1 = "key1";
+    const char *value1 = "value1";
+    const char *key2 = "key2";
+    const char *value2 = "value2";
     uint64_t length1 = strlen(value1);
     uint64_t length2 = strlen(value2);
 
@@ -248,10 +256,10 @@ TEST_F(TestServer, test_mms_update)
 TEST_F(TestServer, test_mms_batch_update)
 {
     LOG_INFO("test_mms_batch_update");
-    const char* key1 = "key1";
-    const char* value1 = "value1";
-    const char* key2 = "key2";
-    const char* value2 = "value2";
+    const char *key1 = "key1";
+    const char *value1 = "value1";
+    const char *key2 = "key2";
+    const char *value2 = "value2";
     uint64_t length1 = strlen(value1);
     uint64_t length2 = strlen(value2);
     auto offset = NO_0;
@@ -385,10 +393,10 @@ TEST_F(TestServer, test_mms_replace)
 TEST_F(TestServer, test_mms_batch_replace)
 {
     LOG_INFO("test_mms_batch_replace");
-    const char* key1 = "key1";
-    const char* value1 = "value1";
-    const char* key2 = "key2";
-    const char* value2 = "value2";
+    const char *key1 = "key1";
+    const char *value1 = "value1";
+    const char *key2 = "key2";
+    const char *value2 = "value2";
     uint64_t length1 = strlen(value1);
     uint64_t length2 = strlen(value2);
     auto offset = NO_0;
@@ -427,10 +435,10 @@ TEST_F(TestServer, test_mms_batch_replace)
 TEST_F(TestServer, test_mms_batch_replace_and_batch_get)
 {
     LOG_INFO("test_mms_batch_replace_and_batch_get");
-    const char* key1 = "key1";
-    const char* value1 = "value1";
-    const char* key2 = "key2";
-    const char* value2 = "value2";
+    const char *key1 = "key1";
+    const char *value1 = "value1";
+    const char *key2 = "key2";
+    const char *value2 = "value2";
     uint32_t offset1 = 0;
     uint32_t offset2 = 0;
     uint64_t length1 = strlen(value1);
@@ -461,10 +469,10 @@ TEST_F(TestServer, test_mms_batch_replace_and_batch_get)
 TEST_F(TestServer, test_mms_batch_delete)
 {
     LOG_INFO("test_mms_batch_delete");
-    const char* key1 = "test_mms_batch_delete_key1";
-    const char* value1 = "test_mms_batch_delete_value1";
-    const char* key2 = "test_mms_batch_delete_key2";
-    const char* value2 = "test_mms_batch_delete_value2";
+    const char *key1 = "test_mms_batch_delete_key1";
+    const char *value1 = "test_mms_batch_delete_value1";
+    const char *key2 = "test_mms_batch_delete_key2";
+    const char *value2 = "test_mms_batch_delete_value2";
     uint64_t length1 = strlen(value1);
     uint64_t length2 = strlen(value2);
     auto offset = NO_0;
@@ -477,10 +485,7 @@ TEST_F(TestServer, test_mms_batch_delete)
     auto ret = MmsConv::Put(putItems, itemNum);
     EXPECT_EQ(ret, MMS_OK);
 
-    DeleteItems deleteItems[] = {
-        MakeDelete(key1, 0),
-        MakeDelete(key2, 1)
-    };
+    DeleteItems deleteItems[] = {MakeDelete(key1, 0), MakeDelete(key2, 1)};
     ret = MmsConv::Delete(deleteItems, itemNum);
     EXPECT_EQ(ret, MMS_OK);
 
@@ -493,7 +498,7 @@ TEST_F(TestServer, test_mms_batch_delete)
     GetItems getItem2 = MakeGet(key2, offset, length2, getValue2);
     ret = MmsConv::Get(&getItem2, NO_1);
     EXPECT_EQ(ret, MMS_NOT_EXISTS);
-    
+
     delete[] getValue1;
     delete[] getValue2;
 }

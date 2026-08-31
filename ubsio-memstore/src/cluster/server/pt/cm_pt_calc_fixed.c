@@ -243,7 +243,7 @@ int32_t ViewCalcCheckNodeIsFault(NodeInfoList *nodeList, NodeStateList *stateLis
 }
 
 void ViewCalcFillBusyList(CalcCore *calc, uint16_t copyIndex, NodeInfoList *nodeList, NodeStateList *stateList,
-    PtEntryList *ptEntryList)
+                          PtEntryList *ptEntryList)
 {
     uint16_t ptId, nodeId, diskId;
 
@@ -314,7 +314,7 @@ void ViewCalcInitPtEntryList(CalcCore *calc, PtEntryList *ptEntryList)
 }
 
 void ViewCalcInitPtEntryList1(CalcCore *calc, PtEntryList *ptEntryList, NodeInfoList *nodeList,
-    NodeStateList *stateList)
+                              NodeStateList *stateList)
 {
     PtEntry *ptEntry;
     uint16_t ptId, copyIndex, index, nodeId, diskId, isFault;
@@ -354,7 +354,7 @@ static void ViewCalcBuildPrintf(uint16_t copyIndex, DList *head, const char *nam
     {
         elem = D_LIST_ENTRY(start, CalcElem, node);
         CM_LOGDEBUG("[%s]: copyIndex(%u) nodeId(%u) diskId(%u) referNum(%u).", name, copyIndex, elem->nodeId,
-            elem->diskId, elem->referNum);
+                    elem->diskId, elem->referNum);
     }
 }
 
@@ -530,7 +530,7 @@ int32_t ViewCalcBuildPtEntryList(CalcCore *calc, PtEntryList *ptEntryList)
             ret = ViewCalcBuildPtEntry(calc, copyIndex, &ptEntryList->ptEntryList[ptId], &calc->busy);
             if (ret != CM_OK) {
                 CM_LOGERROR("Build ptEntry failed, copyIndex(%u) poolId(%u) ptId(%u).", copyIndex, ptEntryList->poolId,
-                    ptId);
+                            ptId);
                 return ret;
             }
         }
@@ -541,7 +541,7 @@ int32_t ViewCalcBuildPtEntryList(CalcCore *calc, PtEntryList *ptEntryList)
 }
 
 int32_t ViewCalcBuildPtEntryList1(CalcCore *calc, NodeInfoList *nodeList, NodeStateList *stateList,
-    PtEntryList *ptEntryList)
+                                  PtEntryList *ptEntryList)
 {
     uint16_t copyIndex, ptId;
     int32_t ret;
@@ -562,16 +562,16 @@ int32_t ViewCalcBuildPtEntryList1(CalcCore *calc, NodeInfoList *nodeList, NodeSt
             ret = ViewCalcBuildPtEntry(calc, copyIndex, &ptEntryList->ptEntryList[ptId], &calc->busy);
             if (ret != CM_OK) {
                 CM_LOGERROR("Build ptEntry failed, copyIndex(%u) poolId(%u) ptId(%u).", copyIndex, ptEntryList->poolId,
-                    ptId);
+                            ptId);
                 return ret;
             }
         }
         for (ptId = 0; ptId < calc->ptNum; ptId++) {
             ret = ViewCalcBuildPtEntry1(calc, copyIndex, &ptEntryList->ptEntryList[ptId], ptEntryList->globalVersion,
-                &calc->busy);
+                                        &calc->busy);
             if (ret != CM_OK) {
                 CM_LOGERROR("Build ptEntry failed, copyIndex(%u) poolId(%u) ptId(%u).", copyIndex, ptEntryList->poolId,
-                    ptId);
+                            ptId);
                 return ret;
             }
         }
@@ -649,7 +649,7 @@ void ViewCalcUpdatePtEntryList1(PtEntryList *ptEntryList, CalcCore *calc)
 }
 
 int32_t ViewCalculatorInitial(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList,
-    PtEntryList *ptEntryList)
+                              PtEntryList *ptEntryList)
 {
     CalcCore *calc = (CalcCore *)calculator;
 
@@ -678,7 +678,7 @@ int32_t ViewCalculatorInitial(Calculator calculator, NodeInfoList *nodeList, Nod
 }
 
 int32_t ViewCalculatorRebalance(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList,
-    PtEntryList *ptEntryList)
+                                PtEntryList *ptEntryList)
 {
     CalcCore *calc = (CalcCore *)calculator;
 
@@ -705,7 +705,7 @@ int32_t ViewCalculatorRebalance(Calculator calculator, NodeInfoList *nodeList, N
 }
 
 int32_t ViewCalcCheckPtEntryList(CalcCore *calc, PtEntryList *ptEntryList, NodeInfoList *nodeList,
-    NodeStateList *stateList)
+                                 NodeStateList *stateList)
 {
     PtEntry *ptEntry;
     uint16_t ptId, copyIndex, nodeId, diskId, isFault;
@@ -731,7 +731,7 @@ int32_t ViewCalcCheckPtEntryList(CalcCore *calc, PtEntryList *ptEntryList, NodeI
 }
 
 int32_t ViewCalcCheckPtEntryList1(CalcCore *calc, NodeInfoList *nodeList, NodeStateList *stateList,
-    PtEntryList *ptEntryList)
+                                  PtEntryList *ptEntryList)
 {
     uint16_t ptId, copyIndex, nodeId, diskId;
 
@@ -773,7 +773,7 @@ int32_t ViewCalcCheckPtEntryList1(CalcCore *calc, NodeInfoList *nodeList, NodeSt
 }
 
 int32_t ViewCalculatorNeedRebalance(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList,
-    PtEntryList *ptEntryList)
+                                    PtEntryList *ptEntryList)
 {
     CalcCore *calc = (CalcCore *)calculator;
 
@@ -798,4 +798,3 @@ int32_t ViewCalculatorNeedRebalance(Calculator calculator, NodeInfoList *nodeLis
     ViewCalcDestroyBusyList(calc);
     return ret;
 }
-

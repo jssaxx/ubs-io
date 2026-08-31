@@ -163,4 +163,3 @@ int32_t CmConfigInit(ConfigRole role, PoolInfo *pools, uint16_t num, const CmCfg
     CM_LOGINFO("Cm pool init succeed.");
     return RETURN_OK;
 }
-

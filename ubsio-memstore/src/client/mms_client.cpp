@@ -10,17 +10,17 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "expire_checker.h"
-#include "mms_trace.h"
-#include "mms_mem_mgr.h"
-#include "mms_mem_allocator.h"
-#include "mms_cache.h"
-#include "mms_message.h"
 #include "mms_client.h"
+#include "expire_checker.h"
+#include "mms_cache.h"
+#include "mms_mem_allocator.h"
+#include "mms_mem_mgr.h"
+#include "mms_message.h"
+#include "mms_trace.h"
 
+#include <pthread.h>
 #include <cerrno>
 #include <exception>
-#include <pthread.h>
 #include <string>
 #include <thread>
 
@@ -379,10 +379,9 @@ BResult MmsClient::StartNotifyConsumerLocked()
 
 BResult MmsClient::ClientBasicInit(void)
 {
-    BasicRequest req = { { 0, MMS_OP_C_BASIC, 0, 0 } };
+    BasicRequest req = {{0, MMS_OP_C_BASIC, 0, 0}};
     BasicResponse rsp;
-    BResult ret = mNetEngine->SyncCall<BasicRequest,
-        BasicResponse>(INVALID_NID, NO_0, MMS_OP_C_BASIC, req, rsp);
+    BResult ret = mNetEngine->SyncCall<BasicRequest, BasicResponse>(INVALID_NID, NO_0, MMS_OP_C_BASIC, req, rsp);
     if (ret != MMS_OK) {
         CLIENT_LOG_ERROR("Send basic info request failed, ret:" << ret << ".");
         return ret;
@@ -396,13 +395,14 @@ BResult MmsClient::ClientBasicInit(void)
 
     if (rsp.serverPid <= 0 || rsp.logLevel > MMSLOG_LEVEL_ERROR || rsp.logLevel < MMSLOG_LEVEL_TRACE ||
         rsp.memNum > MAX_NUMAS_NUM || rsp.netTimeOut < NO_10 || rsp.netTimeOut > NO_60) {
-        CLIENT_LOG_ERROR("Invalid response, server pid:" << rsp.serverPid << ", log level:" << rsp.logLevel <<
-            ", numa num:" << rsp.memNum << ", net timeout:" << rsp.netTimeOut << ".");
+        CLIENT_LOG_ERROR("Invalid response, server pid:" << rsp.serverPid << ", log level:" << rsp.logLevel
+                                                         << ", numa num:" << rsp.memNum
+                                                         << ", net timeout:" << rsp.netTimeOut << ".");
         return MMS_INVALID_PARAM;
     }
 
     mNetEngine->UpdateTimeOut(static_cast<int16_t>(rsp.netTimeOut)); // 更新消息请求发送超时参数.
-    ret = mNetEngine->UpdateChannelTimeOut(INVALID_NID); // 更新链路超时参数.
+    ret = mNetEngine->UpdateChannelTimeOut(INVALID_NID);             // 更新链路超时参数.
     if (ret != MMS_OK) {
         CLIENT_LOG_ERROR("Update channel timeout failed, ret:" << ret << ".");
         return ret;
@@ -433,9 +433,7 @@ BResult MmsClient::ClientBasicInit(void)
     return MMS_OK;
 }
 
-void MmsClient::ClientBasicExit(void)
-{
-}
+void MmsClient::ClientBasicExit(void) {}
 
 BResult MmsClient::InitMemMgr()
 {
@@ -505,9 +503,7 @@ BResult MmsClient::ClientMemInit(void)
     return MMS_OK;
 }
 
-void MmsClient::ClientMemExit(void)
-{
-}
+void MmsClient::ClientMemExit(void) {}
 
 BResult MmsClient::ClientCacheInit(void)
 {
@@ -529,9 +525,7 @@ BResult MmsClient::ClientCacheInit(void)
     return MMS_OK;
 }
 
-void MmsClient::ClientCacheExit(void)
-{
-}
+void MmsClient::ClientCacheExit(void) {}
 
 BResult MmsClient::ClientKvInit(void)
 {
@@ -555,11 +549,11 @@ BResult MmsClient::ResetResource()
         mNotifyShmConsumer.Stop();
         mServerPid = 0;
     }
-    for (uint16_t &numaId: mNumaId) {
+    for (uint16_t &numaId : mNumaId) {
         numaId = -1;
     }
 
-    for (auto &fd: mAreaFd) {
+    for (auto &fd : mAreaFd) {
         fd = -1;
     }
 
@@ -664,8 +658,7 @@ BResult MmsClient::ReregisterNotifyCallback(uint32_t interval)
         if (ret == MMS_OK) {
             return MMS_OK;
         }
-        CLIENT_LOG_WARN("Re-register notify callback failed, ret:" << ret <<
-            ", retry count:" << retryCount++ << ".");
+        CLIENT_LOG_WARN("Re-register notify callback failed, ret:" << ret << ", retry count:" << retryCount++ << ".");
         sleep(interval);
     }
     return MMS_NET_RETRY;
@@ -722,7 +715,7 @@ BResult MmsClient::BuildServices(void)
 
 BResult MmsClient::CheckServiceState(std::atomic<bool> &serviceable)
 {
-    ServiceRequest req = { { 0, MMS_OP_C_SERVICEABLE, 0, 0 } };
+    ServiceRequest req = {{0, MMS_OP_C_SERVICEABLE, 0, 0}};
     ServiceResponse rsp;
     BResult ret = mNetEngine->SyncCall<ServiceRequest, ServiceResponse>(INVALID_NID, g_groupIndex, MMS_OP_C_SERVICEABLE,
                                                                         req, rsp);
@@ -767,9 +760,7 @@ BResult MmsClient::MmsStartCatchUpTask(void)
 
     bool expected = false;
     if (mServiceCheckStarted.compare_exchange_strong(expected, true)) {
-        std::thread t([this]() {
-            BackCheckStateTask();
-        });
+        std::thread t([this]() { BackCheckStateTask(); });
         t.detach();
     }
 
@@ -844,5 +835,5 @@ void MmsClient::ClientDiagnoseExit(void)
     mClientDiagnoseHandler = nullptr;
 }
 #endif
-}
-}
+} // namespace mms
+} // namespace ock

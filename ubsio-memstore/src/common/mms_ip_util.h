@@ -15,9 +15,9 @@
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <net/if.h>
-#include <string>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <string>
 #include <vector>
 
 #include "mms_str_util.h"
@@ -99,7 +99,7 @@ inline bool IpUtil::FilterIpByMask(const std::string &ipMask, std::vector<std::s
 
         char ipStr[INET_ADDRSTRLEN] = {0};
         inet_ntop(AF_INET, &((reinterpret_cast<struct sockaddr_in *>(iter->ifa_addr))->sin_addr), ipStr,
-            INET_ADDRSTRLEN);
+                  INET_ADDRSTRLEN);
         outIps.emplace_back(ipStr);
 
         iter = iter->ifa_next;
@@ -108,8 +108,7 @@ inline bool IpUtil::FilterIpByMask(const std::string &ipMask, std::vector<std::s
 
     return true;
 }
-}
-}
+} // namespace mms
+} // namespace ock
 
 #endif // MMSCORE_MMS_IP_UTIL_H
-

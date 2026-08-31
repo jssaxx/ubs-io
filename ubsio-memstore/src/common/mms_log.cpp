@@ -10,15 +10,15 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "mms_log.h"
+#include <sys/stat.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 #include <cstdio>
 #include <ctime>
 #include <iomanip>
 #include <iostream>
 #include <new>
-#include <sys/stat.h>
-#include <sys/syscall.h>
-#include <unistd.h>
-#include "mms_log.h"
 
 namespace ock {
 namespace mms {
@@ -45,7 +45,8 @@ constexpr mode_t ROTATED_LOG_FILE_MODE = S_IRUSR | S_IRGRP;
 
 void Logger::LogToStdErr(const std::ostringstream &oss)
 {
-    struct timeval tv {};
+    struct timeval tv {
+    };
     char strTime[24];
 
     gettimeofday(&tv, nullptr);
@@ -109,8 +110,10 @@ const char *Logger::LevelToString(int level)
 
 std::string Logger::FormatLogLine(int level, const std::string &message)
 {
-    struct timeval tv {};
-    struct tm timeInfo {};
+    struct timeval tv {
+    };
+    struct tm timeInfo {
+    };
     char strTime[32] = {0};
 
     gettimeofday(&tv, nullptr);
@@ -132,7 +135,8 @@ std::string Logger::GetRotatedFileName(uint32_t index) const
 
 bool Logger::NeedRotate() const
 {
-    struct stat st {};
+    struct stat st {
+    };
     if (stat(mOptions.path.c_str(), &st) != 0) {
         return false;
     }
@@ -258,5 +262,5 @@ void Logger::ResetLogLevel(int32_t logLevel)
 {
     mOptions.minLogLevel = logLevel;
 }
-}
-}
+} // namespace mms
+} // namespace ock

@@ -10,12 +10,12 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "mms_crb_scheduler.h"
 #include <cstring>
+#include "mms_crc_util.h"
 #include "mms_def.h"
 #include "mms_server.h"
-#include "mms_crc_util.h"
 #include "mms_trace.h"
-#include "mms_crb_scheduler.h"
 
 namespace ock {
 namespace mms {
@@ -103,8 +103,8 @@ void CrbScheduler::Exit()
 BResult CrbScheduler::SendStartRecoverRequest(CrbStartRequest &req, uint16_t dstNode, BResult &rsp)
 {
     if (mMulticast) {
-        return mMulticastEngine->MulticastSyncCall<CrbStartRequest, BResult>(
-            dstNode, MMS_OP_S_CRB_START_RECOVER, req, rsp);
+        return mMulticastEngine->MulticastSyncCall<CrbStartRequest, BResult>(dstNode, MMS_OP_S_CRB_START_RECOVER, req,
+                                                                             rsp);
     }
     return mNetEngine->SyncCall<CrbStartRequest, BResult>(dstNode, g_groupIndex, MMS_OP_S_CRB_START_RECOVER, req, rsp);
 }
@@ -307,7 +307,7 @@ BResult CrbScheduler::HandleCrbReceiveData(ServiceContext &ctx)
     }
 
     IoDataRequest *req = reinterpret_cast<IoDataRequest *>(ctx.MessageData());
-    if (req->head.ptv == CRB_PT_RECOVER_FINISH_FLAG) {  // pt恢复完了
+    if (req->head.ptv == CRB_PT_RECOVER_FINISH_FLAG) { // pt恢复完了
         LOG_INFO("Recover done, start report pt done:" << req->head.ptId << ".");
         ret = ReportPtRecoverDone(req->head.nodeId, req->head.ptId);
     }
@@ -546,7 +546,7 @@ void CrbScheduler::CrbBrokenHandle(const std::map<uint16_t, CmNodeInfo> &nodeInf
             for (auto &ptId : ptIds) {
                 ret = MigrateCrbToNewNode(item.first, ptId);
                 if (UNLIKELY(ret != MMS_OK)) {
-                    mIsRecovering.store(false);  // 副本节点全挂了，退出恢复流程
+                    mIsRecovering.store(false); // 副本节点全挂了，退出恢复流程
                     mCache->SetRecoverStatus(false);
                     LOG_ERROR("Migrate crb to new node failed, ret:" << ret << ".");
                     return;
@@ -563,7 +563,7 @@ void CrbScheduler::CrbBrokenHandle(const std::map<uint16_t, CmNodeInfo> &nodeInf
     }
 
     for (auto &item : nodeInfos) {
-        if (item.second.status == CmNodeStatus::CM_NODE_FAULT) {  // 被恢复的节点又挂了，清理掉后台恢复任务
+        if (item.second.status == CmNodeStatus::CM_NODE_FAULT) { // 被恢复的节点又挂了，清理掉后台恢复任务
             mRecoverTasks.erase(item.first);
         }
     }
@@ -587,8 +587,8 @@ BResult CrbScheduler::EncodeKeyValueToBuff(char *msgBuff, uint32_t &buffOffset, 
     buffOffset += (keyLen + NO_1);
 
     // copy value
-    uint64_t readLen = Cache::Instance()->GetDataFromBlock(indexValue, msgBuff + buffOffset, 0,
-                                                           indexValue->totalDataLen);
+    uint64_t readLen =
+        Cache::Instance()->GetDataFromBlock(indexValue, msgBuff + buffOffset, 0, indexValue->totalDataLen);
     if (UNLIKELY(readLen == 0)) {
         LOG_ERROR("Get data failed.");
         return MMS_INNER_ERR;
@@ -600,8 +600,8 @@ BResult CrbScheduler::EncodeKeyValueToBuff(char *msgBuff, uint32_t &buffOffset, 
     return MMS_OK;
 }
 
-BResult CrbScheduler::ProcessIndexValue(IndexValue *indexValue, uint32_t &curItemNum, uint16_t dstNodeId,
-                                        char *msgBuff, uint32_t &buffOffset)
+BResult CrbScheduler::ProcessIndexValue(IndexValue *indexValue, uint32_t &curItemNum, uint16_t dstNodeId, char *msgBuff,
+                                        uint32_t &buffOffset)
 {
     IoDataRequest *req = reinterpret_cast<IoDataRequest *>(msgBuff);
     uint16_t keyLen = indexValue->keyLen;
@@ -612,12 +612,11 @@ BResult CrbScheduler::ProcessIndexValue(IndexValue *indexValue, uint32_t &curIte
         return MMS_INVALID_PARAM;
     }
 
-    if (needLen > (CRB_RECOVER_MESSAGE_BUFF_LEN - buffOffset)) {  // 装满了
+    if (needLen > (CRB_RECOVER_MESSAGE_BUFF_LEN - buffOffset)) { // 装满了
         req->num = curItemNum;
         req->head.ptv = 0;
         if (mCrcSwitch) {
-            static uint32_t skip =
-                sizeof(req->head) + sizeof(req->seqNo) + sizeof(req->negoSeqNo) + sizeof(req->crc);
+            static uint32_t skip = sizeof(req->head) + sizeof(req->seqNo) + sizeof(req->negoSeqNo) + sizeof(req->crc);
             req->crc = MmsCrcUtil::Crc32(reinterpret_cast<void *>(msgBuff + skip), buffOffset - skip);
         }
 
@@ -711,7 +710,7 @@ void CrbScheduler::BackGroundRecoverTask(uint16_t nodeId, uint16_t taskPtId)
         }
     }
 
-    req->head.ptv = CRB_PT_RECOVER_FINISH_FLAG;  // 借用该字段表示该pt是否已经完成恢复
+    req->head.ptv = CRB_PT_RECOVER_FINISH_FLAG; // 借用该字段表示该pt是否已经完成恢复
     req->num = curItemNum;
     if (mCrcSwitch) {
         static uint32_t skip = sizeof(req->head) + sizeof(req->seqNo) + sizeof(req->negoSeqNo) + sizeof(req->crc);
@@ -760,5 +759,5 @@ BResult CrbScheduler::HandleRecoverData(CrbStartRequest *req)
     return MMS_OK;
 }
 
-}  // namespace mms
-}  // namespace ock
+} // namespace mms
+} // namespace ock

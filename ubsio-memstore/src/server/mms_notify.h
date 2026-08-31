@@ -13,13 +13,13 @@
 #ifndef MMS_NOTIFY_H
 #define MMS_NOTIFY_H
 
-#include <atomic>
+#include <semaphore.h>
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <mutex>
-#include <semaphore.h>
 #include <thread>
 
 #include "mms_c.h"

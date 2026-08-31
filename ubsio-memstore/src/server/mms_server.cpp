@@ -10,18 +10,18 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "mms_server.h"
 #include <unistd.h>
 #include <utility>
 #include "expire_checker.h"
-#include "mms_log.h"
-#include "mms_trace.h"
 #include "mms_functions.h"
+#include "mms_log.h"
 #include "mms_monotonic.h"
-#include "mms_server.h"
+#include "mms_trace.h"
 
 #ifdef USE_CLI_TOOLS
-#include "cli.h"
 #include <dlfcn.h>
+#include "cli.h"
 #endif
 
 namespace ock {
@@ -37,18 +37,18 @@ MmsServer::MmsServer() noexcept
 {
     std::vector<ModuleDesc> modules = {
 #ifdef USE_CLI_TOOLS
-        { "Diagnose", std::bind(&MmsServer::MmsServerDiagnoseInit, this), nullptr, nullptr,
-            std::bind(&MmsServer::MmsServerDiagnoseExit, this) },
+        {"Diagnose", std::bind(&MmsServer::MmsServerDiagnoseInit, this), nullptr, nullptr,
+         std::bind(&MmsServer::MmsServerDiagnoseExit, this)},
 #endif
-        { "Mem", std::bind(&MmsServer::MmsMemInit, this), nullptr, nullptr, std::bind(&MmsServer::MmsMemExit, this) },
-        { "Net", std::bind(&MmsServer::MmsNetInit, this), nullptr, nullptr, std::bind(&MmsServer::MmsNetExit, this) },
-        { "Cache", std::bind(&MmsServer::MmsCacheInit, this), nullptr, nullptr,
-            std::bind(&MmsServer::MmsCacheExit, this) },
-        { "CrbScheduler", std::bind(&MmsServer::MmsCrbSchedulerInit, this), nullptr, nullptr,
-          std::bind(&MmsServer::MmsCrbSchedulerExit, this) },
-        { "MmsKvServer", std::bind(&MmsServer::MmsKvServerInit, this), nullptr, nullptr,
-            std::bind(&MmsServer::MmsKvServerExit, this) },
-        { "CM", std::bind(&MmsServer::MmsCmInit, this), nullptr, nullptr, std::bind(&MmsServer::MmsCmExit, this) },
+        {"Mem", std::bind(&MmsServer::MmsMemInit, this), nullptr, nullptr, std::bind(&MmsServer::MmsMemExit, this)},
+        {"Net", std::bind(&MmsServer::MmsNetInit, this), nullptr, nullptr, std::bind(&MmsServer::MmsNetExit, this)},
+        {"Cache", std::bind(&MmsServer::MmsCacheInit, this), nullptr, nullptr,
+         std::bind(&MmsServer::MmsCacheExit, this)},
+        {"CrbScheduler", std::bind(&MmsServer::MmsCrbSchedulerInit, this), nullptr, nullptr,
+         std::bind(&MmsServer::MmsCrbSchedulerExit, this)},
+        {"MmsKvServer", std::bind(&MmsServer::MmsKvServerInit, this), nullptr, nullptr,
+         std::bind(&MmsServer::MmsKvServerExit, this)},
+        {"CM", std::bind(&MmsServer::MmsCmInit, this), nullptr, nullptr, std::bind(&MmsServer::MmsCmExit, this)},
     };
     mService = MakeRef<MmsServiceProc>(modules);
 }
@@ -164,7 +164,8 @@ BResult MmsServer::InitServerExpireChecker()
         return MMS_ALLOC_FAIL;
     }
     return expireChecker->ExpireCheckerInit(mConfig->GetNetConfig().caCerPath,
-        mConfig->GetNetConfig().certificationPath, mConfig->GetNetConfig().opensslLibDir);
+                                            mConfig->GetNetConfig().certificationPath,
+                                            mConfig->GetNetConfig().opensslLibDir);
 }
 
 void MmsServer::Exit()
@@ -396,9 +397,7 @@ BResult MmsServer::MmsMemInit()
     return MMS_OK;
 }
 
-void MmsServer::MmsMemExit()
-{
-}
+void MmsServer::MmsMemExit() {}
 
 BResult MmsServer::MmsMulticastNetInit()
 {
@@ -408,7 +407,7 @@ BResult MmsServer::MmsMulticastNetInit()
         return MMS_ALLOC_FAIL;
     }
 
-    int16_t timeoutSec = mConfig->GetCmConfig().registeredTimeoutSec;  // 同zk心跳超时
+    int16_t timeoutSec = mConfig->GetCmConfig().registeredTimeoutSec; // 同zk心跳超时
     auto &netConfig = mConfig->GetNetConfig();
     MulticastNetMemList memList;
     BResult ret = MmsMemMgr::Instance()->GetAreaMemDesc(memList.address, memList.size, memList.num);
@@ -641,9 +640,7 @@ BResult MmsServer::MmsCacheInit()
     return MMS_OK;
 }
 
-void MmsServer::MmsCacheExit()
-{
-}
+void MmsServer::MmsCacheExit() {}
 
 BResult MmsServer::MmsCmInit()
 {
@@ -934,8 +931,8 @@ void MmsServer::NetConnect(const std::map<uint16_t, CmNodeInfo> &nodeInfos)
         if (it->second.status != CM_NODE_NORMAL) {
             continue;
         }
-        LOG_INFO("Connect to node:" << it->second.id << ", ip:" << it->second.ip << ", port:" <<
-            it->second.port << ".");
+        LOG_INFO("Connect to node:" << it->second.id << ", ip:" << it->second.ip << ", port:" << it->second.port
+                                    << ".");
         ConnectInfo info({localNid, 0, it->second.id, it->second.ip, it->second.port, NO_1});
         auto handler = [this](uintptr_t userCtx, int32_t ret, ConnectInfo &info) -> void {
             if (ret != MMS_OK) {
@@ -1004,5 +1001,5 @@ void MmsServer::NotifyServiceable(bool serviceable)
         return;
     }
 }
-}
-}
+} // namespace mms
+} // namespace ock

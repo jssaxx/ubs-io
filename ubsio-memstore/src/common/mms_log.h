@@ -13,13 +13,13 @@
 #ifndef MMSCORE_MMS_LOG_H
 #define MMSCORE_MMS_LOG_H
 
+#include <sys/time.h>
 #include <cstdint>
 #include <cstring>
 #include <fstream>
 #include <mutex>
 #include <sstream>
 #include <string>
-#include <sys/time.h>
 #include <utility>
 
 namespace ock {
@@ -151,7 +151,7 @@ private:
     static std::mutex gMutex;
     static bool gInited;
 };
-}
-}
+} // namespace mms
+} // namespace ock
 
 #endif // MMSCORE_MMS_LOG_H

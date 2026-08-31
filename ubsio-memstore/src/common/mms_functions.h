@@ -14,11 +14,11 @@
 #define mms_FUNCTIONS_H
 
 #include <sys/sysinfo.h>
-#include "securec.h"
-#include "mms_log.h"
 #include "mms_def.h"
-#include "mms_types.h"
+#include "mms_log.h"
 #include "mms_str_util.h"
+#include "mms_types.h"
+#include "securec.h"
 
 namespace ock {
 namespace mms {
@@ -74,6 +74,6 @@ inline uint64_t GetSysFreeMemCap()
     return info.freeram;
 }
 
-}
-}
+} // namespace mms
+} // namespace ock
 #endif

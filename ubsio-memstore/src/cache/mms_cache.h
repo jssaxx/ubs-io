@@ -13,19 +13,19 @@
 #ifndef MMS_CACHE_H
 #define MMS_CACHE_H
 
-#include <functional>
 #include <algorithm>
+#include <functional>
 #include <string>
 #include <vector>
 
-#include "mms_err.h"
-#include "mms_ref.h"
-#include "mms_types.h"
-#include "mms_cache_log.h"
 #include "mms_cache_lock.h"
+#include "mms_cache_log.h"
+#include "mms_err.h"
 #include "mms_lock.h"
 #include "mms_mem_allocator.h"
 #include "mms_mem_mgr.h"
+#include "mms_ref.h"
+#include "mms_types.h"
 
 namespace ock {
 namespace mms {
@@ -241,7 +241,7 @@ private:
 
     DEFINE_REF_COUNT_VARIABLE;
 };
-}
-}
+} // namespace mms
+} // namespace ock
 
 #endif // MMS_CACHE_H

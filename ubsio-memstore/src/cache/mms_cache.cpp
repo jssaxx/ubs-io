@@ -12,8 +12,8 @@
 
 #include "mms_cache.h"
 #include <cstring>
-#include "securec.h"
 #include "mms_trace.h"
+#include "securec.h"
 
 namespace ock {
 namespace mms {
@@ -64,8 +64,7 @@ BResult Cache::Init(uint64_t bucketMemAddr, uint64_t bucketMemSize, CacheLogFunc
                 CACHE_LOG_ERROR("Invalid bucket area size:" << bucketMemSize << ".");
                 return MMS_ERR;
             }
-            uint32_t bucketCount = static_cast<uint32_t>((bucketMemSize - BUCKET_NODE_BASE_OFFSET) /
-                                                         BUCKET_NODE_SIZE);
+            uint32_t bucketCount = static_cast<uint32_t>((bucketMemSize - BUCKET_NODE_BASE_OFFSET) / BUCKET_NODE_SIZE);
             mShards.push_back({0, bucketMemAddr, bucketMemSize, bucketCount});
             mTotalBucketCount = bucketCount;
             return MMS_OK;
@@ -82,8 +81,7 @@ BResult Cache::Init(uint64_t bucketMemAddr, uint64_t bucketMemSize, CacheLogFunc
             mTotalBucketCount += bucketCount;
         }
         if (mShards.empty() && bucketMemSize > BUCKET_NODE_BASE_OFFSET) {
-            uint32_t bucketCount = static_cast<uint32_t>((bucketMemSize - BUCKET_NODE_BASE_OFFSET) /
-                                                         BUCKET_NODE_SIZE);
+            uint32_t bucketCount = static_cast<uint32_t>((bucketMemSize - BUCKET_NODE_BASE_OFFSET) / BUCKET_NODE_SIZE);
             mShards.push_back({0, bucketMemAddr, bucketMemSize, bucketCount});
             mTotalBucketCount = bucketCount;
         }
@@ -172,9 +170,7 @@ uint64_t Cache::GetBucketAddr(const CacheShard &shard, uint32_t bucketIndex) con
     return shard.bucketBaseAddr + BUCKET_NODE_BASE_OFFSET + static_cast<uint64_t>(bucketIndex) * BUCKET_NODE_SIZE;
 }
 
-void Cache::Exit()
-{
-}
+void Cache::Exit() {}
 
 void FreeValueBlock(IndexValue *indexValue, MmsMemMgrPtr memMgr, MmsMemAllocatorPtr valueAllocator)
 {
@@ -483,9 +479,9 @@ BResult Cache::Get(const GetPara &para)
             realLen = GetDataAddrFromBlock(indexValue, para.value, 0, indexValue->totalDataLen);
         } else {
             if (indexValue->totalDataLen <= para.offset) {
-                CACHE_LOG_ERROR("Out of bounds, key:" << std::string(para.key, para.keyLen) << ", offset:"
-                                                      << para.offset << ", total len:" << indexValue->totalDataLen
-                                                      << ".");
+                CACHE_LOG_ERROR("Out of bounds, key:" << std::string(para.key, para.keyLen)
+                                                      << ", offset:" << para.offset
+                                                      << ", total len:" << indexValue->totalDataLen << ".");
                 CacheReadUnLock(&bucketNode->status);
                 return MMS_ERR;
             }
@@ -521,7 +517,7 @@ BResult Cache::ReviveDataBlock(IndexValue *indexValue, const char *data, uint64_
     // 复活墓碑数据
     BResult ret = PutDataIntoBlock(indexValue, data, dataLen, preferNumaId);
     if (UNLIKELY(ret != MMS_OK)) {
-        CACHE_LOG_ERROR("Put data into cache failed, ret:" << ret << ", key:" << indexValue->key <<  ".");
+        CACHE_LOG_ERROR("Put data into cache failed, ret:" << ret << ", key:" << indexValue->key << ".");
         return ret;
     }
     return MMS_OK;
@@ -583,7 +579,7 @@ BResult Cache::UpdateDataBlock(IndexValue *indexValue, const char *data, uint64_
         return MMS_INVALID_PARAM;
     }
 
-    if (offset > indexValue->totalDataLen) {  // 不允许本次更新与老数据之间有空洞
+    if (offset > indexValue->totalDataLen) { // 不允许本次更新与老数据之间有空洞
         CACHE_LOG_ERROR("Out of bounds, data end:" << indexValue->totalDataLen << ", offset" << offset << ".");
         return MMS_INNER_ERR;
     }
@@ -635,9 +631,9 @@ BResult Cache::Update(const UpdatePara &para)
         }
 
         CACHE_LOG_DEBUG("Update success, key:" << std::string(para.key, para.keyLen) << ", offset:" << para.offset
-                                               << ", length:" << para.length
-                                               << ", new length:" << indexValue->totalDataLen << ", old version:"
-                                               << indexValue->version << ", new version:" << para.version << ".");
+                                               << ", length:" << para.length << ", new length:"
+                                               << indexValue->totalDataLen << ", old version:" << indexValue->version
+                                               << ", new version:" << para.version << ".");
         indexValue->version = para.version;
         CacheWriteUnLock(&bucketNode->status);
         return MMS_OK;
@@ -805,9 +801,9 @@ BResult Cache::ReplaceExistingNode(IndexNode *existingNode, const ReplacePara &p
     }
 
     CACHE_LOG_DEBUG("Update success, key:" << std::string(para.key, para.keyLen) << ", offset:" << para.offset
-                                           << ", length:" << para.length
-                                           << ", new length:" << indexValue->totalDataLen << ", old version:"
-                                           << indexValue->version << ", new version:" << para.version << ".");
+                                           << ", length:" << para.length << ", new length:" << indexValue->totalDataLen
+                                           << ", old version:" << indexValue->version
+                                           << ", new version:" << para.version << ".");
     indexValue->version = para.version;
     indexValue->isDelete = DATA_ALIVE;
     return MMS_OK;
@@ -847,8 +843,8 @@ BResult Cache::Replace(const ReplacePara &para)
 
     CacheWriteLock(&bucketNode->status);
     IndexNode *existingNode = FindExistingNode(bucketNode, para.key, para.keyLen, hashCode);
-    BResult ret = existingNode == nullptr ? InsertReplaceNode(bucketNode, hashCode, para, shard.numaId)
-                                          : ReplaceExistingNode(existingNode, para, shard.numaId);
+    BResult ret = existingNode == nullptr ? InsertReplaceNode(bucketNode, hashCode, para, shard.numaId) :
+                                            ReplaceExistingNode(existingNode, para, shard.numaId);
     CacheWriteUnLock(&bucketNode->status);
     return ret;
 }
@@ -887,5 +883,5 @@ void Cache::ClearDeletedData()
     CACHE_LOG_INFO("Clear deleted data done.");
 }
 
-}  // namespace mms
-}  // namespace ock
+} // namespace mms
+} // namespace ock

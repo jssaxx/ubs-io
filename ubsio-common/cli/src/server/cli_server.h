@@ -17,7 +17,8 @@
 
 #define CLI_SERVER_MAX_CONN 128
 
-typedef enum {
+typedef enum
+{
     CONN_EMPTY = 0,
     CONN_UNKNOWN,
     CONN_CLIENT,

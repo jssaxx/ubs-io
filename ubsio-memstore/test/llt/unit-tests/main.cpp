@@ -10,21 +10,21 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <gtest/gtest.h>
-#include <mockcpp/mockcpp.hpp>
 #include <arpa/inet.h>
-#include <cstring>
+#include <gtest/gtest.h>
 #include <ifaddrs.h>
 #include <netinet/in.h>
-#include "tracer.h"
-#include "server/cm_server_view.h"
-#include "server/cm_server_monitor.h"
-#include "ut_common.h"
-#include "mms_conv.h"
+#include <cstring>
+#include <mockcpp/mockcpp.hpp>
 #include "mms_c.h"
-#include "test_cluster.h"
+#include "mms_conv.h"
 #include "mms_types.h"
 #include "net_engine.h"
+#include "server/cm_server_monitor.h"
+#include "server/cm_server_view.h"
+#include "test_cluster.h"
+#include "tracer.h"
+#include "ut_common.h"
 
 using namespace ock::mms;
 

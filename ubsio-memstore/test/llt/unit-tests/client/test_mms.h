@@ -32,8 +32,7 @@ public:
 private:
     static bool gSetup;
 };
-}
-}
+} // namespace mms
+} // namespace ock
 
 #endif // MMSCORE_TEST_MMS_H
-

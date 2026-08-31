@@ -13,21 +13,19 @@
 #ifndef MMS_CLIENT_LOG_H
 #define MMS_CLIENT_LOG_H
 
-#include <cstdio>
-#include <cstdint>
-#include <functional>
-#include <iostream>
-#include <sstream>
 #include <sys/time.h>
+#include <unistd.h>
+#include <cstdint>
+#include <cstdio>
+#include <functional>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <thread>
-#include <unistd.h>
-#include "mms_ref.h"
-#include "mms_log.h"
-#include "mms_types.h"
 #include "mms_file_util.h"
+#include "mms_log.h"
+#include "mms_ref.h"
+#include "mms_types.h"
 
 namespace ock {
 namespace mms {
@@ -36,7 +34,8 @@ class MmsClientLog;
 using MmsClientLogPtr = Ref<MmsClientLog>;
 class MmsClientLog {
 public:
-    enum class Level {
+    enum class Level
+    {
         LOG_LEVEL_TRACE = 0,
         LOG_LEVEL_DEBUG = 1,
         LOG_LEVEL_INFO = 2,
@@ -78,7 +77,9 @@ public:
             std::cout << "Failed to init log, ret:" << ret << "." << std::endl;
             return -1;
         }
-        auto logFunc = [](int level, const char *message) { Logger::gInstance->Log(level, message); };
+        auto logFunc = [](int level, const char *message) {
+            Logger::gInstance->Log(level, message);
+        };
         mFunc = logFunc;
         return 0;
     }
@@ -98,7 +99,8 @@ public:
         if (mFunc != nullptr) {
             mFunc(level, message.c_str());
         } else {
-            struct timeval tv {};
+            struct timeval tv {
+            };
             char strTime[24];
             gettimeofday(&tv, nullptr);
             strftime(strTime, sizeof strTime, "%Y-%m-%d %H:%M:%S.", localtime(&tv.tv_sec));
@@ -137,14 +139,14 @@ private:
 #ifdef DEBUG_UT
 #define BASE_LOG(level, args)
 #else
-#define BASE_LOG(level, args)                                                                                    \
-    do {                                                                                                         \
-        if ((level) >= MmsClientLog::Instance()->GetMinLogLevel()) {                                             \
-            std::ostringstream oss;                                                                              \
-            oss << "[" << MMS_CLIENT_LOG_FILENAME << ":" << __LINE__ << "]"                                      \
-                << "[" << __FUNCTION__ << "] " << args;                                                          \
-            MmsClientLog::Instance()->Log(level, oss.str());                                                     \
-        }                                                                                                        \
+#define BASE_LOG(level, args)                                               \
+    do {                                                                    \
+        if ((level) >= MmsClientLog::Instance()->GetMinLogLevel()) {        \
+            std::ostringstream oss;                                         \
+            oss << "[" << MMS_CLIENT_LOG_FILENAME << ":" << __LINE__ << "]" \
+                << "[" << __FUNCTION__ << "] " << args;                     \
+            MmsClientLog::Instance()->Log(level, oss.str());                \
+        }                                                                   \
     } while (0)
 #endif
 
@@ -153,6 +155,6 @@ private:
 #define CLIENT_LOG_INFO(args) BASE_LOG(static_cast<int>(MmsClientLog::Level::LOG_LEVEL_INFO), args)
 #define CLIENT_LOG_WARN(args) BASE_LOG(static_cast<int>(MmsClientLog::Level::LOG_LEVEL_WARN), args)
 #define CLIENT_LOG_ERROR(args) BASE_LOG(static_cast<int>(MmsClientLog::Level::LOG_LEVEL_ERROR), args)
-}
-}
+} // namespace mms
+} // namespace ock
 #endif

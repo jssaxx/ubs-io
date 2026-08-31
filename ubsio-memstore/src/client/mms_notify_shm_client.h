@@ -23,16 +23,15 @@ public:
     MmsNotifyShmConsumer() = default;
     ~MmsNotifyShmConsumer();
 
-    BResult Start(uint32_t serverPid,
-        std::atomic<NotifyCallback> &callback, std::atomic<void *> &userData);
+    BResult Start(uint32_t serverPid, std::atomic<NotifyCallback> &callback, std::atomic<void *> &userData);
     void Stop();
     bool IsRunning() const;
 
 private:
-    BResult ReceiveSubscription(uint32_t serverPid, std::array<int32_t, NOTIFY_SHM_MAX_FDS> &fds,
-        uint16_t &fdCount, NotifyShmHandshake &handshake);
+    BResult ReceiveSubscription(uint32_t serverPid, std::array<int32_t, NOTIFY_SHM_MAX_FDS> &fds, uint16_t &fdCount,
+                                NotifyShmHandshake &handshake);
     BResult MapQueues(const std::array<int32_t, NOTIFY_SHM_MAX_FDS> &fds, uint16_t fdCount,
-        const NotifyShmHandshake &handshake);
+                      const NotifyShmHandshake &handshake);
     BResult StartWorkers(const NotifyShmHandshake &handshake);
     void StopLocked();
     void WorkerMain(uint16_t workerIndex, uint16_t cpuId);
@@ -50,11 +49,11 @@ private:
     std::vector<int32_t> mEventFds;
     std::vector<NotifyShmQueue> mQueues;
     bool mBusyPolling = true;
-    std::atomic<bool> mRunning {false};
-    std::atomic<bool> mStopping {false};
+    std::atomic<bool> mRunning{false};
+    std::atomic<bool> mStopping{false};
 };
 
-}
-}
+} // namespace mms
+} // namespace ock
 
 #endif

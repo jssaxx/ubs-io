@@ -79,6 +79,6 @@ static void CacheWriteUnLock(struct RwLockStatus *status)
     __atomic_and_fetch(&status->state, ~RW_W_LOCKED, __ATOMIC_RELEASE);
 }
 
-}
-}
-#endif  // MMS_CACHE_LOCK_H
+} // namespace mms
+} // namespace ock
+#endif // MMS_CACHE_LOCK_H

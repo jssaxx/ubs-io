@@ -224,7 +224,9 @@ void MmsSequence::NegoSeqNoHandle(NegoQueue *queue, uint64_t seqNo, uint64_t neg
         break;
     }
 
-    if (queue->commitSeqNo < seqNo) { queue->commitSeqNo = seqNo; }
+    if (queue->commitSeqNo < seqNo) {
+        queue->commitSeqNo = seqNo;
+    }
     return;
 }
 
@@ -279,5 +281,5 @@ BResult MmsSequence::GetSeqNoData2Slv(uint32_t lev1Id, uint32_t lev2Id, uint64_t
     queue->lock.UnLock();
     return MMS_NOT_EXISTS;
 }
-}
-}
+} // namespace mms
+} // namespace ock

@@ -40,8 +40,7 @@ namespace mms {
 #endif
 
 #define KB_UNIT (1024)
-}
-}
+} // namespace mms
+} // namespace ock
 
 #endif // MMSCORE_MMS_DEF_H
-

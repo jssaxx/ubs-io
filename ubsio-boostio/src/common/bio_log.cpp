@@ -11,14 +11,14 @@
  */
 
 #include "bio_log.h"
+#include <sys/stat.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 #include <cstdio>
 #include <ctime>
 #include <iomanip>
 #include <iostream>
 #include <new>
-#include <sys/stat.h>
-#include <sys/syscall.h>
-#include <unistd.h>
 #include "bio_tracepoint_helper.h"
 
 namespace ock {
@@ -115,8 +115,10 @@ const char *Logger::LevelToString(int level)
 
 std::string Logger::FormatLogLine(int level, const std::string &message)
 {
-    struct timeval tv {};
-    struct tm timeInfo {};
+    struct timeval tv {
+    };
+    struct tm timeInfo {
+    };
     char strTime[32] = {0};
 
     gettimeofday(&tv, nullptr);
@@ -138,7 +140,8 @@ std::string Logger::GetRotatedFileName(uint32_t index) const
 
 bool Logger::NeedRotate() const
 {
-    struct stat st {};
+    struct stat st {
+    };
     if (stat(mOptions.path.c_str(), &st) != 0) {
         return false;
     }

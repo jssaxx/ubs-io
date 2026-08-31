@@ -12,7 +12,6 @@
 
 #include "test_config.h"
 
-
 using namespace ock::mms;
 
 bool TestConfig::gSetup = false;
@@ -30,4 +29,3 @@ void TestConfig::TearDown()
 {
     return;
 }
-

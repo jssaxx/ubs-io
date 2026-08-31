@@ -13,21 +13,21 @@
 #ifndef MMS_SEQUENCE_H
 #define MMS_SEQUENCE_H
 
-#include <vector>
 #include <stdint.h>
 #include <sys/types.h>
-#include "securec.h"
+#include <vector>
 #include "mms_err.h"
-#include "mms_ref.h"
-#include "mms_types.h"
 #include "mms_lock.h"
 #include "mms_monotonic.h"
+#include "mms_ref.h"
+#include "mms_types.h"
+#include "securec.h"
 
 namespace ock {
 namespace mms {
 
 struct SeqCursor {
-    uint64_t left = 0; // 代表：当前协商淘汰的SEQNO
+    uint64_t left = 0;  // 代表：当前协商淘汰的SEQNO
     uint64_t right = 0; // 代表：当前已分配的SEQNO
 };
 
@@ -108,6 +108,6 @@ private:
 
     DEFINE_REF_COUNT_VARIABLE;
 };
-}
-}
+} // namespace mms
+} // namespace ock
 #endif

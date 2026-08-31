@@ -10,30 +10,30 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <mockcpp/mockcpp.hpp>
+#include "test_cluster.h"
 #include <cstring>
-#include "gtest/gtest.h"
-#include "mms_types.h"
+#include <mockcpp/mockcpp.hpp>
+#include "client/cm_client_event.h"
+#include "client/cm_client_init.h"
+#include "client/cm_client_local.h"
+#include "client/cm_client_schedule.h"
 #include "cm.h"
-#include "securec.h"
-#include "zookeeper/zookeeper.h"
-#include "cm_zkadapter.h"
 #include "cm_config.h"
 #include "cm_threadpool.h"
+#include "cm_zkadapter.h"
 #include "common/cm_inner.h"
 #include "common/cm_module.h"
 #include "common/cm_thread.h"
 #include "common/cm_threadpool.h"
-#include "client/cm_client_init.h"
-#include "client/cm_client_local.h"
-#include "client/cm_client_event.h"
-#include "client/cm_client_schedule.h"
+#include "gtest/gtest.h"
+#include "mms_types.h"
+#include "securec.h"
+#include "server/cm_server_init.h"
+#include "server/cm_server_monitor.h"
+#include "server/cm_server_view.h"
 #include "server/pt/cm_pt_calc_fixed_state.h"
 #include "server/pt/cm_pt_store.h"
-#include "server/cm_server_init.h"
-#include "server/cm_server_view.h"
-#include "server/cm_server_monitor.h"
-#include "test_cluster.h"
+#include "zookeeper/zookeeper.h"
 
 using namespace ock::mms;
 bool TestCluster::gSetup = false;
@@ -52,7 +52,7 @@ void TestCluster::TearDown()
     return;
 }
 
-static LocalNodeQueryOpHandle gLocalQuery = { nullptr, nullptr, nullptr };
+static LocalNodeQueryOpHandle gLocalQuery = {nullptr, nullptr, nullptr};
 
 static int32_t CM_RegLocalNodeQueryOpHandle_Stub(uint16_t poolId, LocalNodeQueryOpHandle *handle)
 {
@@ -62,7 +62,7 @@ static int32_t CM_RegLocalNodeQueryOpHandle_Stub(uint16_t poolId, LocalNodeQuery
     return CM_OK;
 }
 
-static NodeListChangeOpHandle gNodeChange = { nullptr, nullptr };
+static NodeListChangeOpHandle gNodeChange = {nullptr, nullptr};
 
 static int32_t CM_RegNodeListChangeNotifyHandle_Stub(uint16_t poolId, NodeListChangeOpHandle *handle)
 {
@@ -71,7 +71,7 @@ static int32_t CM_RegNodeListChangeNotifyHandle_Stub(uint16_t poolId, NodeListCh
     return CM_OK;
 }
 
-static PtViewChangeOpHandle gPtChange = { nullptr, nullptr };
+static PtViewChangeOpHandle gPtChange = {nullptr, nullptr};
 
 static int32_t CM_RegPtViewChangeOpHandle_Stub(uint16_t poolId, PtViewChangeOpHandle *handle)
 {
@@ -159,8 +159,8 @@ static int32_t CM_Init_Stub(ConfigRole role, PoolInfo *pools, uint16_t num, cons
 
 static void ZooSetDebugLevelMock(ZooLogLevel level) {}
 
-static zhandle_t *ZookeeperInitMock(const char *host, watcher_fn fn, int recvTimeout,
-    const clientid_t *clientid, void *context, int flags)
+static zhandle_t *ZookeeperInitMock(const char *host, watcher_fn fn, int recvTimeout, const clientid_t *clientid,
+                                    void *context, int flags)
 {
     return (zhandle_t *)"zHandle";
 }
@@ -176,7 +176,7 @@ static int ZooRecvTimeoutMock(zhandle_t *zh)
 }
 
 static int ZooCreateMock(zhandle_t *zh, const char *path, const char *value, int valuelen, const struct ACL_vector *acl,
-    int mode, char *pathBuffer, int pathBufferLen)
+                         int mode, char *pathBuffer, int pathBufferLen)
 {
     return ZOK;
 }
@@ -232,11 +232,11 @@ static int ZooSetMock(zhandle_t *zh, const char *path, const char *buffer, int b
     return ZOK;
 }
 
-static int ZooWgetMock(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx, char *buffer, int *bufferLen,
-    struct Stat *stat)
+static int ZooWgetMock(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx, char *buffer,
+                       int *bufferLen, struct Stat *stat)
 {
     char *result = nullptr;
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int ret = strcpy_s(zkPath, CM_ZNODE_PATH_LEN, path);
     if (ret != 0) {
         return ZOK;
@@ -284,7 +284,7 @@ static int ZooDeleteMock(zhandle_t *zh, const char *path, int version)
 
 static std::vector<std::string> gZkGetChildrenFirst;
 static int ZooWgetChildrenMock(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx,
-    struct String_vector *strings)
+                               struct String_vector *strings)
 {
     auto it = std::find(gZkGetChildrenFirst.begin(), gZkGetChildrenFirst.end(), path);
     if (it != gZkGetChildrenFirst.end()) {
@@ -395,7 +395,6 @@ static int32_t CmServerMonitorLoadPoolStub()
 {
     return CM_OK;
 }
-
 
 void TestCluster::CancelNodeStub()
 {
@@ -755,7 +754,7 @@ int32_t cm_module_test(void)
 TEST_F(TestCluster, test_cm_init_modules)
 {
     LOG_INFO("test_cm_init_modules");
-    MODULE_DEFINE_S modules[] = {{ "cm_module_test", cm_module_test, cm_module_test_exit }};
+    MODULE_DEFINE_S modules[] = {{"cm_module_test", cm_module_test, cm_module_test_exit}};
     int32_t steps = 0;
 
     auto ret = initModules(modules, steps);
@@ -792,7 +791,7 @@ TEST_F(TestCluster, test_cm_thread_pool_create)
 TEST_F(TestCluster, test_cm_thread_pool_add)
 {
     LOG_INFO("test_cm_thread_pool_add");
-    CM_THREAD_POOL_S *scheduleThread[1] = { NULL };
+    CM_THREAD_POOL_S *scheduleThread[1] = {NULL};
 
     auto ret = CmThreadPoolAdd(scheduleThread[0], TestThreadFunc, nullptr);
     EXPECT_EQ(ret, RETURN_ERROR);
@@ -801,7 +800,7 @@ TEST_F(TestCluster, test_cm_thread_pool_add)
 TEST_F(TestCluster, test_cm_thread_pool_destroy)
 {
     LOG_INFO("test_cm_thread_pool_destroy");
-    CM_THREAD_POOL_S *scheduleThread[1] = { NULL };
+    CM_THREAD_POOL_S *scheduleThread[1] = {NULL};
 
     auto ret = CmThreadPoolDestroy(scheduleThread[0], THREAD_POOL_EXIT_IMMEDIATELY);
     EXPECT_EQ(ret, RETURN_ERROR);
@@ -950,8 +949,8 @@ TEST_F(TestCluster, test_cm_client_zk_record_pt_event)
 TEST_F(TestCluster, test_cm_client_zk_pt_entry_is_same)
 {
     LOG_INFO("test_cm_client_zk_pt_entry_is_same");
-    PtEntry elem1 {};
-    PtEntry elem2 {};
+    PtEntry elem1{};
+    PtEntry elem2{};
 
     elem1.ptId = 1;
     elem1.state = 0;
@@ -1067,7 +1066,7 @@ TEST_F(TestCluster, test_cm_server_zk_record_node_list)
 TEST_F(TestCluster, test_cm_server_zk_record_state_list)
 {
     LOG_INFO("test_cm_server_zk_record_state_list");
-    NodeStateList *nodeStateList = (NodeStateList*)malloc(sizeof(NodeStateList) + sizeof(NodeStateInfo) * NO_3);
+    NodeStateList *nodeStateList = (NodeStateList *)malloc(sizeof(NodeStateList) + sizeof(NodeStateInfo) * NO_3);
     nodeStateList->poolId = 0;
     nodeStateList->nodeNum = NO_3;
     nodeStateList->masterNodeId = 0;
@@ -1094,7 +1093,7 @@ TEST_F(TestCluster, test_cm_server_zk_get_node_list)
 TEST_F(TestCluster, test_cm_server_zk_get_state_list)
 {
     LOG_INFO("test_cm_server_zk_get_state_list");
-    NodeStateList *nodeStateList = (NodeStateList*)malloc(sizeof(NodeStateList) + sizeof(NodeStateInfo) * NO_3);
+    NodeStateList *nodeStateList = (NodeStateList *)malloc(sizeof(NodeStateList) + sizeof(NodeStateInfo) * NO_3);
 
     auto ret = CmServerZkGetStateList(nodeStateList);
     EXPECT_EQ(ret, CM_OK);
@@ -1118,7 +1117,6 @@ TEST_F(TestCluster, test_cm_server_zk_get_node_info)
     auto ret = CmServerZkGetNodeInfo(poolId, &nodeInfo);
     EXPECT_EQ(ret, CM_OK);
 }
-
 
 TEST_F(TestCluster, test_cm_server_zk_init)
 {

@@ -10,10 +10,10 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "net_connector.h"
 #include "mms_execution.h"
 #include "mms_ref.h"
 #include "net_engine.h"
-#include "net_connector.h"
 
 namespace ock {
 namespace mms {
@@ -42,14 +42,16 @@ BResult ConnectTask::DoConnect()
         if ((ret = mEngine->GetChannelMgr()->GetChannel(mConnectInfo.peerId, channel, groupIndex)) == MMS_NOT_EXISTS) {
             ret = mEngine->ConnectToPeer(mode, mConnectInfo, groupIndex, channel);
             if (ret != MMS_OK) {
-                NET_LOG_ERROR("Failed to connect to peer, dstNid:" << mConnectInfo.peerId.nid <<
-                    ", pid:" << mConnectInfo.peerId.pid << ", groupIndex:" << groupIndex << ".");
+                NET_LOG_ERROR("Failed to connect to peer, dstNid:" << mConnectInfo.peerId.nid
+                                                                   << ", pid:" << mConnectInfo.peerId.pid
+                                                                   << ", groupIndex:" << groupIndex << ".");
                 return MMS_ERR;
             }
             mEngine->GetChannelMgr()->AddChannel(mConnectInfo.peerId, channel, groupIndex);
         } else {
-            NET_LOG_INFO("Exist connect by target node id " << mConnectInfo.peerId.nid << ", pid:" <<
-                mConnectInfo.peerId.pid << ", groupIndex:" << groupIndex << ".");
+            NET_LOG_INFO("Exist connect by target node id " << mConnectInfo.peerId.nid
+                                                            << ", pid:" << mConnectInfo.peerId.pid
+                                                            << ", groupIndex:" << groupIndex << ".");
         }
     }
 
@@ -163,5 +165,5 @@ BResult NetConnector::SyncConnect(ConnectInfo &info)
 
     return task->Wait();
 }
-}
-}
+} // namespace mms
+} // namespace ock

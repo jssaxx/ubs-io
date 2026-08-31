@@ -35,7 +35,7 @@ private:
         uint64_t memorySize = 0;
         std::vector<int32_t> eventFds;
         std::vector<NotifyShmQueue> queues;
-        std::atomic<uint32_t> nextQueueIndex {0};
+        std::atomic<uint32_t> nextQueueIndex{0};
         uint32_t queueDepth = 0;
         bool busyPolling = true;
         uint32_t clientPid = 0;
@@ -51,14 +51,14 @@ private:
     void StopListener();
     void AcceptLoop();
     BResult HandleClient(int32_t clientFd, uint32_t clientPid);
-    BResult CreateSubscription(uint32_t clientPid, std::array<int32_t, NOTIFY_SHM_MAX_FDS> &fds,
-        uint16_t &fdCount, NotifyShmHandshake &handshake);
-    BResult SendSubscription(int32_t clientFd, const std::array<int32_t, NOTIFY_SHM_MAX_FDS> &fds,
-        uint16_t fdCount, const NotifyShmHandshake &handshake);
+    BResult CreateSubscription(uint32_t clientPid, std::array<int32_t, NOTIFY_SHM_MAX_FDS> &fds, uint16_t &fdCount,
+                               NotifyShmHandshake &handshake);
+    BResult SendSubscription(int32_t clientFd, const std::array<int32_t, NOTIFY_SHM_MAX_FDS> &fds, uint16_t fdCount,
+                             const NotifyShmHandshake &handshake);
     void ActivateSubscription();
     void CloseSubscription();
-    NotifyShmResult EnqueueBatch(Session &session, ProducerState &producerState,
-        const NotifyShmPublishItem *items, uint32_t itemNum, uint64_t enqueueTimeNs);
+    NotifyShmResult EnqueueBatch(Session &session, ProducerState &producerState, const NotifyShmPublishItem *items,
+                                 uint32_t itemNum, uint64_t enqueueTimeNs);
     uint16_t SelectQueue(Session &session, ProducerState &producerState);
     void CloseQueues(Session &session);
     bool IsClientAlive(const Session &session) const;
@@ -69,13 +69,13 @@ private:
     std::mutex mLifecycleLock;
     std::vector<std::unique_ptr<Session>> mSessions;
     Session *mPendingSession = nullptr;
-    std::atomic<Session *> mActiveSession {nullptr};
-    std::atomic<bool> mStopping {false};
+    std::atomic<Session *> mActiveSession{nullptr};
+    std::atomic<bool> mStopping{false};
     std::thread mAcceptThread;
     int32_t mListenFd = -1;
 };
 
-}
-}
+} // namespace mms
+} // namespace ock
 
 #endif

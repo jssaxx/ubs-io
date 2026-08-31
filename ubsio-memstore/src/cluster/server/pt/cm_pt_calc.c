@@ -10,10 +10,10 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "cm_pt_calc.h"
 #include "cm_log.h"
 #include "cm_pt_calc_fixed.h"
 #include "cm_pt_calc_fixed_state.h"
-#include "cm_pt_calc.h"
 
 static CalcOps g_calcOps[PT_NUM_LIMIT_BUTT];
 
@@ -47,4 +47,3 @@ CalcOps *CmPtCalcOpsGet(PtNumLimitMode numLimit)
 
     return &g_calcOps[numLimit];
 }
-

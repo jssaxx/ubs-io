@@ -20,4 +20,3 @@
 #endif
 
 #endif // MMSCORE_MMS_MOCK_H
-

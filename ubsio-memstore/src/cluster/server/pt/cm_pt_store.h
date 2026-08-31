@@ -38,4 +38,3 @@ int32_t ViewStorePtEntryIsSame(PtEntry *elem1, PtEntry *elem2);
 #endif
 
 #endif
-

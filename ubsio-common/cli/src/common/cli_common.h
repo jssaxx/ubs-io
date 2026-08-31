@@ -30,7 +30,8 @@ extern "C" {
 #define CLI_MAX_ARGS 128
 #define CLI_INVALID_ID 0u
 
-typedef enum {
+typedef enum
+{
     CLI_FRAME_HELLO_CLIENT = 1,
     CLI_FRAME_HELLO_AGENT = 2,
     CLI_FRAME_CONTROL = 3,
@@ -63,10 +64,8 @@ typedef struct {
 
 int cli_open_server(uint16_t port);
 int cli_connect_server(uint16_t port);
-int cli_send_frame(int fd, uint16_t type, uint32_t client_id, uint32_t agent_id,
-                   const void *data, uint32_t length);
-int cli_send_text(int fd, uint16_t type, uint32_t client_id, uint32_t agent_id,
-                  const char *text);
+int cli_send_frame(int fd, uint16_t type, uint32_t client_id, uint32_t agent_id, const void *data, uint32_t length);
+int cli_send_text(int fd, uint16_t type, uint32_t client_id, uint32_t agent_id, const char *text);
 int cli_recv_frame(int fd, CliFrame *frame);
 int cli_split_args(char *line, CliArgs *args);
 void cli_lower(char *s);

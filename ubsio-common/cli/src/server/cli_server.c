@@ -102,8 +102,7 @@ static CliConn *find_agent(uint32_t id)
 static void drop_duplicate_agent(CliConn *self, uint32_t id)
 {
     for (int i = 0; i < CLI_SERVER_MAX_CONN; i++) {
-        if (&g_conn[i] != self && g_conn[i].fd >= 0 && g_conn[i].kind == CONN_AGENT &&
-            g_conn[i].id == id) {
+        if (&g_conn[i] != self && g_conn[i].fd >= 0 && g_conn[i].kind == CONN_AGENT && g_conn[i].id == id) {
             conn_reset(&g_conn[i]);
         }
     }
@@ -129,8 +128,7 @@ static void handle_ls(CliConn *client)
     for (int i = 0; i < CLI_SERVER_MAX_CONN; i++) {
         if (g_conn[i].fd >= 0 && g_conn[i].kind == CONN_AGENT) {
             char line[160];
-            format_text(line, sizeof(line), " %-16u %-16s %s\n",
-                        g_conn[i].id, "online", g_conn[i].name);
+            format_text(line, sizeof(line), " %-16u %-16s %s\n", g_conn[i].id, "online", g_conn[i].name);
             send_client_text(client, line);
         }
     }
@@ -139,11 +137,10 @@ static void handle_ls(CliConn *client)
 
 static void handle_server_help(CliConn *client)
 {
-    send_client_text(client,
-        "<command>        <description>\n"
-        " ls              list registered Apps\n"
-        " attach          attach to AppId, use attach 0 to detach\n"
-        " help            show server help, or agent help after attach\n");
+    send_client_text(client, "<command>        <description>\n"
+                             " ls              list registered Apps\n"
+                             " attach          attach to AppId, use attach 0 to detach\n"
+                             " help            show server help, or agent help after attach\n");
     send_done(client);
 }
 
@@ -163,7 +160,8 @@ static void handle_attach(CliConn *client, CliArgs *args)
     }
 
     if (id != CLI_INVALID_ID && find_agent(id) == NULL) {
-        send_client_text(client,
+        send_client_text(
+            client,
             "Error attach: beyond domanial argument.\nUsage: attach AppId.\nTry `ls` to find available AppId.\n");
         send_done(client);
         return;
@@ -191,16 +189,15 @@ static void forward_to_agent(CliConn *client, const CliFrame *frame)
     CliConn *agent = find_agent(client->attached_id);
     if (agent == NULL) {
         char line[128];
-        format_text(line, sizeof(line),
-                    "Can't find attached AppId<%u>. make sure the agent is alive, and try again.\n",
+        format_text(line, sizeof(line), "Can't find attached AppId<%u>. make sure the agent is alive, and try again.\n",
                     client->attached_id);
         send_client_text(client, line);
         send_done(client);
         return;
     }
 
-    if (cli_send_frame(agent->fd, frame->header.type, client->id, agent->id,
-                       frame->data, frame->header.length) != RETURN_OK) {
+    if (cli_send_frame(agent->fd, frame->header.type, client->id, agent->id, frame->data, frame->header.length) !=
+        RETURN_OK) {
         send_client_text(client, "Socket send failed\n");
         send_done(client);
     }
@@ -248,8 +245,8 @@ static void forward_to_client(const CliFrame *frame)
     if (client == NULL) {
         return;
     }
-    if (cli_send_frame(client->fd, frame->header.type, client->id, frame->header.agent_id,
-                       frame->data, frame->header.length) != RETURN_OK) {
+    if (cli_send_frame(client->fd, frame->header.type, client->id, frame->header.agent_id, frame->data,
+                       frame->header.length) != RETURN_OK) {
         return;
     }
 }

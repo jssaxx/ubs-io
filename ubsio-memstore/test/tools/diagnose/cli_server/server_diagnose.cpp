@@ -10,26 +10,26 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <chrono>
-#include <iostream>
-#include <memory>
-#include <csignal>
+#include "server_diagnose.h"
 #include <sys/resource.h>
 #include <time.h>
-#include <unordered_map>
-#include <fstream>
-#include <sstream>
-#include <mutex>
-#include <ctime>
 #include <atomic>
-#include "tracer.h"
+#include <chrono>
+#include <csignal>
+#include <ctime>
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <mutex>
+#include <sstream>
+#include <unordered_map>
 #include "cli.h"
 #include "mms_config_instance.h"
+#include "mms_crc_util.h"
+#include "mms_functions.h"
 #include "mms_log.h"
 #include "mms_server.h"
-#include "mms_functions.h"
-#include "mms_crc_util.h"
-#include "server_diagnose.h"
+#include "tracer.h"
 
 using namespace ock::mms;
 
@@ -45,7 +45,7 @@ static void InitRandom()
 static void FillRandomData(char *value, size_t length)
 {
     for (size_t i = 0; i < length; i++) {
-        value[i] = (char)(rand() % 256);  // 填充随机字节 (0~255)
+        value[i] = (char)(rand() % 256); // 填充随机字节 (0~255)
     }
 }
 
@@ -103,7 +103,7 @@ public:
         DiagLogger::instance().write(msgStream.str());
     }
 
-    template<typename T>
+    template <typename T>
     LogStream &operator<<(const T &value)
     {
         msgStream << value;
@@ -317,8 +317,8 @@ static void HandleGet(std::vector<std::string> cmds)
     if (ret != RET_MMS_OK) {
         cli_print_buffer("Failed to get a value, result:%d.\n", ret);
     } else {
-        cli_print_buffer("Get value success, key:%s, offset:%llu, length:%llu, realLen:%llu.\n",
-            key, offset, length, realLen);
+        cli_print_buffer("Get value success, key:%s, offset:%llu, length:%llu, realLen:%llu.\n", key, offset, length,
+                         realLen);
         if (fwrite(value, sizeof(char), realLen, fp) != realLen) {
             cli_print_buffer("fwrite value to file failed, errno:%d.\n", errno);
         }
@@ -727,7 +727,7 @@ static void *PerfTestMixesImpl(void *param)
         int32_t randnum = rand();
         if (randnum % 10 >= readRate) {
             for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            FillPerfKey(getParam, putList[i].key, keyIndex.load());
+                FillPerfKey(getParam, putList[i].key, keyIndex.load());
                 keyIndex++;
             }
             RefreshKeyLen(putList, getParam->batchNum);
@@ -738,7 +738,7 @@ static void *PerfTestMixesImpl(void *param)
             }
         } else {
             for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            FillPerfKey(getParam, getList[i].key, randnum % keyIndex.load());
+                FillPerfKey(getParam, getList[i].key, randnum % keyIndex.load());
             }
             RefreshKeyLen(getList, getParam->batchNum);
             auto ret = MmsGet(getList, getParam->batchNum);
@@ -773,7 +773,7 @@ int WriteToFile(const char *path, const char *value, size_t length)
         return -1;
     }
 
-    FILE *fp = fopen(path, "wb");  // 若文件不存在则创建
+    FILE *fp = fopen(path, "wb"); // 若文件不存在则创建
     if (!fp) {
         cli_print_buffer("Failed to open file:%s, error:%s\n", path, strerror(errno));
         return -1;
@@ -1002,8 +1002,8 @@ static void HandlePerf(std::vector<std::string> cmds)
         return;
     }
 
-    cli_print_buffer("Perf test start, operate:%s, bs:%u, ioDepth:%u, batchNum:%u, size:%u, count:%u.\n", rw, bs, ioDepth,
-                 batchNum, size, count);
+    cli_print_buffer("Perf test start, operate:%s, bs:%u, ioDepth:%u, batchNum:%u, size:%u, count:%u.\n", rw, bs,
+                     ioDepth, batchNum, size, count);
     pthread_t *th = (pthread_t *)malloc(sizeof(pthread_t) * ioDepth);
     PerfTestParam *param = (PerfTestParam *)malloc(sizeof(PerfTestParam) * ioDepth);
     if (th == nullptr || param == nullptr) {
@@ -1046,7 +1046,7 @@ static void HandlePerf(std::vector<std::string> cmds)
         if (pthread_setname_np(th[i], threadName.c_str()) != 0) {
             cli_print_buffer("Failed to set name of BoostIO thread.\n");
         }
-        
+
         cpu_set_t cpuSet;
         CPU_ZERO(&cpuSet);
         CPU_SET(param[i].cpu, &cpuSet);
@@ -1083,7 +1083,7 @@ static void HandlePerf(std::vector<std::string> cmds)
     float cost_sec = stopT.tv_sec - startT.tv_sec;
     float cost_usec = stopT.tv_usec - startT.tv_usec;
     float time_use = cost_sec * 1000000U + cost_usec;
-    auto totalCount = static_cast<double>(count * ioDepth) ;
+    auto totalCount = static_cast<double>(count * ioDepth);
     auto totalSize = static_cast<double>(count * bs);
     double dataPerf = static_cast<double>(((totalSize / 1048576U) * 1000000U / time_use) * ioDepth);
     double iops = static_cast<double>(totalCount * 1000000U) / time_use;
@@ -1091,7 +1091,8 @@ static void HandlePerf(std::vector<std::string> cmds)
 
     time_t rawtime;
     struct tm *timeinfo = nullptr;
-    struct tm timebuf{};
+    struct tm timebuf {
+    };
     rawtime = time(nullptr);
     timeinfo = localtime_r(&rawtime, &timebuf);
     cli_print_buffer("Perf Test Result: @ %s\n", asctime(timeinfo));
@@ -1138,10 +1139,10 @@ static bool HandlePerfCheckImpl(std::vector<std::string> cmds, std::unordered_ma
     }
 
     cli_print_buffer("Perf check test start, operate:%s, bs:%u, ioDepth:%u, batchNum:%u, size:%u, count:%u.\n", rw, bs,
-                 ioDepth, batchNum, size, count);
+                     ioDepth, batchNum, size, count);
     pthread_t *th = (pthread_t *)malloc(sizeof(pthread_t) * ioDepth);
     PerfTestParam *param = (PerfTestParam *)malloc(sizeof(PerfTestParam) * ioDepth);
-    CheckPara *checkParas = (CheckPara *) malloc(sizeof(CheckPara) * ioDepth);
+    CheckPara *checkParas = (CheckPara *)malloc(sizeof(CheckPara) * ioDepth);
     if (th == nullptr || param == nullptr || checkParas == nullptr) {
         cli_print_buffer("Malloc memory failed.\n");
         return false;
@@ -1261,12 +1262,11 @@ static bool PerfCheckLocalWrite(std::vector<std::string> &cmds)
         return false;
     }
 
-    for (auto &item: dataCrcPut) {
-        LOG_FILE("key:" << item.first << ", put crc:" << item.second << ", get crc:" <<
-                 dataCrcGet[item.first] << ".");
+    for (auto &item : dataCrcPut) {
+        LOG_FILE("key:" << item.first << ", put crc:" << item.second << ", get crc:" << dataCrcGet[item.first] << ".");
         if (item.second != dataCrcGet[item.first]) {
             cli_print_buffer("Check crc failed, key:%s, put crc:%u, get crc:%u\n", item.first.c_str(), item.second,
-                         dataCrcGet[item.first]);
+                             dataCrcGet[item.first]);
             return false;
         }
     }
@@ -1277,7 +1277,7 @@ static bool PerfCheckLocalWrite(std::vector<std::string> &cmds)
 
 static bool PerfCheckRemoteWrite(std::vector<std::string> &cmds)
 {
-    std::string filePath =  cmds[2];
+    std::string filePath = cmds[2];
     std::unordered_map<std::string, uint32_t> baseDataCrc;
     bool ret = GetCrcFromFile(filePath, baseDataCrc);
     if (!ret) {
@@ -1293,10 +1293,10 @@ static bool PerfCheckRemoteWrite(std::vector<std::string> &cmds)
         return false;
     }
 
-    for (auto &item: baseDataCrc) {
+    for (auto &item : baseDataCrc) {
         if (item.second != dataCrcGet[item.first]) {
             cli_print_buffer("Check crc failed, key:%s, put crc:%u, get crc:%u\n", item.first.c_str(), item.second,
-                         dataCrcGet[item.first]);
+                             dataCrcGet[item.first]);
             return false;
         }
     }
@@ -1333,19 +1333,21 @@ static void MmsServerHandleShow(std::vector<std::string> cmds)
             cli_print_buffer("Input parameters failed!, num:%u.\n", cmds.size());
             return;
         }
-        std::string protoStr[4U] = { "RDMA", "TCP", "UDS", "SHM" };
-        std::string modeStr[2U] = { "BUSY_POLLING", "EVENT_POLLING" };
+        std::string protoStr[4U] = {"RDMA", "TCP", "UDS", "SHM"};
+        std::string modeStr[2U] = {"BUSY_POLLING", "EVENT_POLLING"};
         uint32_t executorNum = 0;
         NetOptions rpcOption;
         NetOptions ipcOption;
         MmsServer::Instance()->GetNetEngine()->Show(executorNum, rpcOption, ipcOption);
         cli_print_buffer("mms rpc info: \n");
-        cli_print_buffer("  ip: %s:%u, protocol:%s, mode:%s, connect_count:%u, worker groups:%s, worker groups cpuset:%s\n",
+        cli_print_buffer(
+            "  ip: %s:%u, protocol:%s, mode:%s, connect_count:%u, worker groups:%s, worker groups cpuset:%s\n",
             rpcOption.ipMask.c_str(), rpcOption.port, protoStr[rpcOption.protocol].c_str(),
             (rpcOption.isBusyPolling) ? modeStr[0].c_str() : modeStr[1].c_str(), rpcOption.connCount,
             rpcOption.workerGroups.c_str(), rpcOption.workerGroupsCpuSet.c_str());
         cli_print_buffer("mms ipc info: \n");
-        cli_print_buffer("  ip: %s:%u, protocol:%s, mode:%s, connect_count:%u, worker groups:%s, worker groups cpuset:%s\n",
+        cli_print_buffer(
+            "  ip: %s:%u, protocol:%s, mode:%s, connect_count:%u, worker groups:%s, worker groups cpuset:%s\n",
             ipcOption.ipMask.c_str(), ipcOption.port, protoStr[ipcOption.protocol].c_str(),
             (ipcOption.isBusyPolling) ? modeStr[0].c_str() : modeStr[1].c_str(), ipcOption.connCount,
             ipcOption.workerGroups.c_str(), ipcOption.workerGroupsCpuSet.c_str());
@@ -1420,9 +1422,10 @@ static void MmsServerDebugHelp(char *command, int detail) noexcept
     cli_print_buffer("\ttrace: mms trace [open/close/show/clear]\n");
     cli_print_buffer("\tnotify: mms notify [open/close]\n");
     cli_print_buffer("\tperf: mms perf [put/get/update/replace/delete/mixes] [bs(Kb)] [ioDepth] [batchNum] [size(Mb)] "
-                 "[userId] [numaNum] [cpuNum] [cpuStart] [readRate]\n");
-    cli_print_buffer("\tperf: mms perfcheck [lwrite/rwrite] [filePath] [bs(Kb)] [ioDepth] [batchNum] [size(Mb)] [userId] "
-                 "[numaNum] [cpuNum] [cpuStart]\n");
+                     "[userId] [numaNum] [cpuNum] [cpuStart] [readRate]\n");
+    cli_print_buffer(
+        "\tperf: mms perfcheck [lwrite/rwrite] [filePath] [bs(Kb)] [ioDepth] [batchNum] [size(Mb)] [userId] "
+        "[numaNum] [cpuNum] [cpuStart]\n");
     cli_print_buffer("\texit: exit console\n");
 }
 

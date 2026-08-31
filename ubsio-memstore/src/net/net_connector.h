@@ -14,8 +14,8 @@
 
 #include <condition_variable>
 
-#include "net_common.h"
 #include "mms_execution.h"
+#include "net_common.h"
 
 namespace ock {
 namespace mms {
@@ -112,6 +112,6 @@ private:
 };
 
 using NetConnectorPtr = Ref<NetConnector>;
-}
-}
+} // namespace mms
+} // namespace ock
 #endif // NET_CONNECTOR_H

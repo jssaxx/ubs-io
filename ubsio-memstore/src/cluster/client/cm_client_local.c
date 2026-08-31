@@ -11,20 +11,20 @@
  */
 
 #include "cm_client_local.h"
-#include "cm_zkadapter.h"
 #include "cm_config.h"
 #include "cm_log.h"
+#include "cm_zkadapter.h"
 #include "securec.h"
 
 static char g_mrBuff[NODE_META_BUFF_LEN];
 
-static LocalNodeQueryOpHandle g_localOp[MAX_POOL_NUM] = { 0 };
+static LocalNodeQueryOpHandle g_localOp[MAX_POOL_NUM] = {0};
 
-static NodeInfo g_localNodeInfo[MAX_POOL_NUM] = { 0 };
+static NodeInfo g_localNodeInfo[MAX_POOL_NUM] = {0};
 
-static NodeListChangeOpHandle g_subNodeChange[MAX_POOL_NUM] = { 0 };
+static NodeListChangeOpHandle g_subNodeChange[MAX_POOL_NUM] = {0};
 
-static PtViewChangeOpHandle g_subPtChange[MAX_POOL_NUM] = { 0 };
+static PtViewChangeOpHandle g_subPtChange[MAX_POOL_NUM] = {0};
 
 DATA_INIT CmClientInitLocalOp(void)
 {
@@ -150,7 +150,7 @@ int32_t CM_WriteDataInfo(uint16_t poolId, const char *key, void *value, uint32_t
 }
 
 int32_t CM_RegDataInfoHandle(uint16_t poolId, const char *key, void *value, uint32_t valLen,
-    DataInfoChangeOpHandle *handle)
+                             DataInfoChangeOpHandle *handle)
 {
     if (poolId >= MAX_POOL_NUM || key == NULL || handle == NULL) {
         CM_LOGERROR("Invalid poolId(%u).", poolId);
@@ -215,7 +215,7 @@ int32_t CmClientLocalGetNode(uint16_t poolId, NodeInfo *nodeInfo)
 
     if (nodeInfo->diskList.num > MAX_DISK_NUM || nodeInfo->netList.num > MAX_NET_NUM) {
         CM_LOGERROR("Invalid nodeInfo, poolId(%u) disk num(%d) net num(%d).", poolId, nodeInfo->diskList.num,
-            nodeInfo->netList.num);
+                    nodeInfo->netList.num);
         return CM_ERR;
     }
 
@@ -268,7 +268,7 @@ static int32_t CmClientLocalCheckNode(uint16_t poolId, PoolInfo *poolInfo, NodeI
 
     if (ret == CM_NOT_EXIST) {
         CM_LOGINFO("First register, poolId(%u) ipv4AddrStr(%s) port(%u).", poolId, nodeInfo->ipv4AddrStr,
-            nodeInfo->port);
+                   nodeInfo->port);
         return CM_OK; // no needed.
     }
 
@@ -402,7 +402,7 @@ static int32_t CmClientNodeListChangeFp(NodeStateList *changeList)
     for (index = 0; index < changeList->nodeNum; index++) {
         NodeStateInfo *changeInfo = &changeList->nodeList[index];
         CM_LOGINFO("NodeChange: poolId(%u) nodeId(%u) state(%s-%s) session(%lu).", poolId, changeInfo->nodeId,
-            nstate[changeInfo->state], cstate[changeInfo->clusterState], changeInfo->sessionId);
+                   nstate[changeInfo->state], cstate[changeInfo->clusterState], changeInfo->sessionId);
     }
 
     if (g_subNodeChange[poolId].notifyNodeListChange != NULL) {
@@ -415,12 +415,7 @@ static int32_t CmClientNodeListChangeFp(NodeStateList *changeList)
 static int32_t CmClientPtListChangeFp(PtEntryList *changeList)
 {
     static const char *ptstate[PT_STATE_BUTT + 1] = {
-        "init",
-        "norm",
-        "loss1",
-        "loss2",
-        "fault",
-        "butt",
+        "init", "norm", "loss1", "loss2", "fault", "butt",
     };
 
     uint16_t poolId = changeList->poolId;
@@ -435,7 +430,7 @@ static int32_t CmClientPtListChangeFp(PtEntryList *changeList)
     for (index = 0; index < changeList->ptNum; index++) {
         PtEntry *ptEntry = &changeList->ptEntryList[index];
         CM_LOGDEBUG("ptChange: poolId(%u) ptId(%u) state(%s) version(%lu).", poolId, ptEntry->ptId,
-            ptstate[ptEntry->state], ptEntry->birthVersion);
+                    ptstate[ptEntry->state], ptEntry->birthVersion);
     }
 
     if (g_subPtChange[poolId].notifyPtListChange != NULL) {
@@ -511,4 +506,3 @@ void CmClientLocalExit(void)
 {
     return;
 }
-

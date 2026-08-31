@@ -4,24 +4,24 @@
 
 #include "mms_notify_shm_server.h"
 
+#include <fcntl.h>
+#include <linux/memfd.h>
+#include <poll.h>
+#include <pthread.h>
+#include <sched.h>
+#include <signal.h>
+#include <sys/eventfd.h>
+#include <sys/mman.h>
+#include <sys/socket.h>
+#include <sys/syscall.h>
+#include <sys/un.h>
+#include <unistd.h>
 #include <algorithm>
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
 #include <exception>
-#include <fcntl.h>
-#include <linux/memfd.h>
 #include <new>
-#include <poll.h>
-#include <pthread.h>
-#include <sched.h>
-#include <signal.h>
-#include <sys/socket.h>
-#include <sys/eventfd.h>
-#include <sys/mman.h>
-#include <sys/syscall.h>
-#include <sys/un.h>
-#include <unistd.h>
 
 #include "mms_log.h"
 #include "mms_monotonic.h"
@@ -123,8 +123,8 @@ void MmsNotifyShmPublisher::AcceptLoop()
     CPU_SET(mConfig.workerCpuIds.front(), &cpuSet);
     ret = pthread_setaffinity_np(pthread_self(), sizeof(cpuSet), &cpuSet);
     if (ret != 0) {
-        LOG_WARN("Bind notify shm accept thread failed, cpu:" << mConfig.workerCpuIds.front() <<
-            ", ret:" << ret << ".");
+        LOG_WARN("Bind notify shm accept thread failed, cpu:" << mConfig.workerCpuIds.front() << ", ret:" << ret
+                                                              << ".");
     }
 
     while (!mStopping.load(std::memory_order_acquire)) {
@@ -168,8 +168,8 @@ BResult MmsNotifyShmPublisher::HandleClient(int32_t clientFd, uint32_t clientPid
     return MMS_OK;
 }
 
-BResult MmsNotifyShmPublisher::CreateSubscription(uint32_t clientPid,
-    std::array<int32_t, NOTIFY_SHM_MAX_FDS> &fds, uint16_t &fdCount, NotifyShmHandshake &handshake)
+BResult MmsNotifyShmPublisher::CreateSubscription(uint32_t clientPid, std::array<int32_t, NOTIFY_SHM_MAX_FDS> &fds,
+                                                  uint16_t &fdCount, NotifyShmHandshake &handshake)
 {
     std::lock_guard<std::mutex> lock(mLifecycleLock);
     if (mPendingSession != nullptr) {
@@ -180,8 +180,8 @@ BResult MmsNotifyShmPublisher::CreateSubscription(uint32_t clientPid,
     uint16_t queueNum = mConfig.workerNum;
     uint32_t queueDepth = NotifyShmQueue::CalculateShardDepth(mConfig.queueDepth, queueNum);
     if (queueDepth == 0) {
-        LOG_ERROR("Calculate notify shm shard depth failed, total depth:" << mConfig.queueDepth <<
-            ", queue num:" << queueNum << ".");
+        LOG_ERROR("Calculate notify shm shard depth failed, total depth:" << mConfig.queueDepth
+                                                                          << ", queue num:" << queueNum << ".");
         return MMS_INVALID_PARAM;
     }
     uint64_t memorySize = NotifyShmQueue::GetMemorySize(queueDepth, queueNum);
@@ -220,8 +220,7 @@ BResult MmsNotifyShmPublisher::CreateSubscription(uint32_t clientPid,
     session->queues.resize(queueNum);
     for (uint16_t queueIndex = 0; queueIndex < queueNum; ++queueIndex) {
         int32_t eventFd = eventfd(0, EFD_CLOEXEC | EFD_SEMAPHORE);
-        if (eventFd < 0 ||
-            !session->queues[queueIndex].Attach(address, memorySize, queueDepth, queueIndex)) {
+        if (eventFd < 0 || !session->queues[queueIndex].Attach(address, memorySize, queueDepth, queueIndex)) {
             LOG_ERROR("Create notify shm shard failed, shard:" << queueIndex << ", errno:" << errno << ".");
             if (eventFd >= 0) {
                 close(eventFd);
@@ -260,8 +259,8 @@ BResult MmsNotifyShmPublisher::CreateSubscription(uint32_t clientPid,
     return MMS_OK;
 }
 
-BResult MmsNotifyShmPublisher::SendSubscription(int32_t clientFd,
-    const std::array<int32_t, NOTIFY_SHM_MAX_FDS> &fds, uint16_t fdCount, const NotifyShmHandshake &handshake)
+BResult MmsNotifyShmPublisher::SendSubscription(int32_t clientFd, const std::array<int32_t, NOTIFY_SHM_MAX_FDS> &fds,
+                                                uint16_t fdCount, const NotifyShmHandshake &handshake)
 {
     iovec ioVec{};
     ioVec.iov_base = const_cast<NotifyShmHandshake *>(&handshake);
@@ -357,19 +356,19 @@ bool MmsNotifyShmPublisher::PublishBatch(const NotifyShmPublishItem *items, uint
     return true;
 }
 
-NotifyShmResult MmsNotifyShmPublisher::EnqueueBatch(
-    Session &session, ProducerState &producerState,
-    const NotifyShmPublishItem *items, uint32_t itemNum, uint64_t enqueueTimeNs)
+NotifyShmResult MmsNotifyShmPublisher::EnqueueBatch(Session &session, ProducerState &producerState,
+                                                    const NotifyShmPublishItem *items, uint32_t itemNum,
+                                                    uint64_t enqueueTimeNs)
 {
     uint32_t retryCount = 0;
     uint64_t waitStartNs = 0;
     while (true) {
-        auto result = session.queues[producerState.queueIndex].TryEnqueueBatch(
-            items, itemNum, enqueueTimeNs, producerState.queueContext);
+        auto result = session.queues[producerState.queueIndex].TryEnqueueBatch(items, itemNum, enqueueTimeNs,
+                                                                               producerState.queueContext);
         if (result != NotifyShmResult::FULL) {
             if (waitStartNs != 0) {
                 MMS_TRACE_ASYNC_END(SERVER_TRACE_NOTIFY_SHM_QUEUE_WAIT,
-                    result == NotifyShmResult::OK ? MMS_OK : MMS_ERR, waitStartNs);
+                                    result == NotifyShmResult::OK ? MMS_OK : MMS_ERR, waitStartNs);
             }
             return result;
         }
@@ -443,5 +442,5 @@ void MmsNotifyShmPublisher::ReleaseSessions()
     mSessions.clear();
 }
 
-}
-}
+} // namespace mms
+} // namespace ock

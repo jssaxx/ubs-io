@@ -15,8 +15,8 @@
 
 #include <condition_variable>
 
-#include "net_common.h"
 #include "mms_execution.h"
+#include "net_common.h"
 
 namespace ock {
 namespace mms {
@@ -70,13 +70,13 @@ private:
     }
 
 private:
-    NetMulticastEngine *mMultiEngine = nullptr; /* engine, use raw pointer to avoid include files dead-locks */
-    SubscriptionInfo mConnectInfo{}; /* connect info */
-    BResult mResult = MMS_OK; /* connect result */
-    bool mSyncConnect = false; /* connect type */
-    bool mFinish = false; /* for sync connect */
-    std::mutex mMutex; /* for sync connect */
-    std::condition_variable mCV; /* for sync connect */
+    NetMulticastEngine *mMultiEngine = nullptr;    /* engine, use raw pointer to avoid include files dead-locks */
+    SubscriptionInfo mConnectInfo{};               /* connect info */
+    BResult mResult = MMS_OK;                      /* connect result */
+    bool mSyncConnect = false;                     /* connect type */
+    bool mFinish = false;                          /* for sync connect */
+    std::mutex mMutex;                             /* for sync connect */
+    std::condition_variable mCV;                   /* for sync connect */
     MulticastAsyncHandler mAsyncHandler = nullptr; /* for async connect */
 
     friend class MultiNetConnector;
@@ -106,6 +106,6 @@ private:
 };
 
 using MultiNetConnectorPtr = Ref<MultiNetConnector>;
-}
-}
+} // namespace mms
+} // namespace ock
 #endif // MMSCORE_MULTICAST_CONNECTOR_H

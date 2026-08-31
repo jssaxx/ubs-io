@@ -11,13 +11,13 @@
  */
 
 #include "cm_client_event.h"
-#include "cm_client_schedule.h"
 #include "cm_client_local.h"
-#include "cm_zkadapter.h"
-#include "cm_thread.h"
-#include "cm_config.h"
+#include "cm_client_schedule.h"
 #include "cm_comm.h"
+#include "cm_config.h"
 #include "cm_log.h"
+#include "cm_thread.h"
+#include "cm_zkadapter.h"
 
 #define REPORT_TRY_DELAY_TIME (5000)
 
@@ -82,7 +82,7 @@ static void *CmClientPtEventHandle(void *arg)
 }
 
 static int32_t CmClientPtEventReport(uint16_t poolId, uint16_t nodeId, uint16_t eventType, uint16_t ptNum,
-    PtFinish *eventList)
+                                     PtFinish *eventList)
 {
     CmPtEvent *ptEvent = (CmPtEvent *)malloc(sizeof(CmPtEvent) + sizeof(CmPtFinish) * ptNum);
     if (ptEvent == NULL) {
@@ -156,7 +156,7 @@ int32_t CM_SetDiskStatus(uint16_t poolId, uint16_t diskId, DiskState state)
     }
 
     CM_LOGINFO("Setdisk, poolId(%u) nodeId(%u) diskId(%u) state(%s).", poolId, nodeInfo.nodeId, diskId,
-        CM_DISK_STATE(state));
+               CM_DISK_STATE(state));
 
     ret = CmClientZkRecordNodeInfo(poolId, &nodeInfo);
     if (ret != CM_OK) {
@@ -196,4 +196,3 @@ void CmClientEventExit(void)
 {
     return;
 }
-

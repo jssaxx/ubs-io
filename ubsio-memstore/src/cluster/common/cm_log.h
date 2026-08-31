@@ -13,10 +13,10 @@
 #ifndef CM_LOG_H
 #define CM_LOG_H
 
-#include <string.h>
 #include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "securec.h"
 
@@ -133,7 +133,8 @@ extern "C" {
 #define CM_LOG_FILENAME (strrchr(__FILE__, '/') ? (strrchr(__FILE__, '/') + 1) : __FILE__)
 #endif
 
-typedef enum CmLogLevel {
+typedef enum CmLogLevel
+{
     CM_LOG_TRACE = 0,
     CM_LOG_DEBUG,
     CM_LOG_INFO,
@@ -169,4 +170,3 @@ void CmLogFunc(int logLevel, const char *funcName, int line, const char *fileNam
 }
 #endif
 #endif
-

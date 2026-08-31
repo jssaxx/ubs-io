@@ -15,14 +15,14 @@
 
 #include <semaphore.h>
 #include <atomic>
-#include "net_engine.h"
-#include "mms_ref.h"
-#include "mms_lock.h"
-#include "mms_message.h"
-#include "mms_cache.h"
-#include "mms_mem_mgr.h"
-#include "mms_mem_allocator.h"
 #include "mms.h"
+#include "mms_cache.h"
+#include "mms_lock.h"
+#include "mms_mem_allocator.h"
+#include "mms_mem_mgr.h"
+#include "mms_message.h"
+#include "mms_ref.h"
+#include "net_engine.h"
 
 namespace ock {
 namespace mms {
@@ -48,8 +48,7 @@ public:
 
     BResult SendSingleReq(IoCtrlRequest &req);
 
-    BResult HandleSendReqs(uint16_t numaId, MmsOpCode opCode, std::vector<IOCtxItem> &ctxItems,
-                           bool freeBlocks = true);
+    BResult HandleSendReqs(uint16_t numaId, MmsOpCode opCode, std::vector<IOCtxItem> &ctxItems, bool freeBlocks = true);
 
     BResult MmsPut(PutItems *itemList, uint32_t itemNum);
 
@@ -68,20 +67,21 @@ private:
     void FreeBlocks(std::vector<IOCtxItem> &ctxItems);
     void HandleUpdatePtVersion(uint64_t ptVersion);
     BResult UpdateClientPtVersion();
+
 private:
     uint32_t mIoTimeOut = NO_60;
-    std::atomic<uint64_t> mPtVersion {NO_1};
+    std::atomic<uint64_t> mPtVersion{NO_1};
     uint32_t mMaxMsgBuffSize;
-    bool mEnableCrc { false };
+    bool mEnableCrc{false};
 
-    CachePtr mCache{ nullptr };
-    NetEnginePtr mNetEngine{ nullptr };
-    MmsMemMgrPtr mMemMgr{ nullptr };
-    MmsMemAllocatorPtr mMemAllocator{ nullptr };
+    CachePtr mCache{nullptr};
+    NetEnginePtr mNetEngine{nullptr};
+    MmsMemMgrPtr mMemMgr{nullptr};
+    MmsMemAllocatorPtr mMemAllocator{nullptr};
     AllocFunc allocFunc = nullptr;
 
     DEFINE_REF_COUNT_VARIABLE;
 };
-}
-}
+} // namespace mms
+} // namespace ock
 #endif

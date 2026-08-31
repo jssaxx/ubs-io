@@ -23,9 +23,9 @@ public:
     static void Destroy() noexcept;
 };
 
-}
-}
-}
+} // namespace diagnose
+} // namespace mms
+} // namespace ock
 
 #ifdef __cplusplus
 extern "C" {

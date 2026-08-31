@@ -21,13 +21,15 @@ constexpr uint32_t NOTIFY_SHM_CACHE_LINE_SIZE = 64;
 constexpr uint32_t NOTIFY_SHM_SOCKET_NAME_SIZE = 64;
 constexpr uint16_t NOTIFY_SHM_MAX_FDS = NOTIFY_SHM_MAX_WORKERS + 1;
 
-enum class NotifyShmState : uint32_t {
+enum class NotifyShmState : uint32_t
+{
     INIT = 0,
     ACTIVE,
     CLOSED,
 };
 
-enum class NotifyShmResult : uint8_t {
+enum class NotifyShmResult : uint8_t
+{
     OK = 0,
     EMPTY,
     FULL,
@@ -97,17 +99,15 @@ public:
     bool IsValid() const;
     void Close();
     void Reset();
-    NotifyShmResult TryEnqueueBatch(const NotifyShmPublishItem *items, uint32_t itemNum,
-        uint64_t enqueueTimeNs, NotifyShmProducerContext &producerContext);
+    NotifyShmResult TryEnqueueBatch(const NotifyShmPublishItem *items, uint32_t itemNum, uint64_t enqueueTimeNs,
+                                    NotifyShmProducerContext &producerContext);
     NotifyShmResult DequeueSingleConsumer(NotifyShmEvent &event);
     static void CpuRelax();
 
 private:
     static uint64_t GetShardMemorySize(uint32_t queueDepth);
-    NotifyShmResult ReserveSlots(
-        uint32_t itemNum, uint64_t &pos, NotifyShmProducerContext &producerContext);
-    void PublishSlots(
-        uint64_t pos, const NotifyShmPublishItem *items, uint32_t itemNum, uint64_t enqueueTimeNs);
+    NotifyShmResult ReserveSlots(uint32_t itemNum, uint64_t &pos, NotifyShmProducerContext &producerContext);
+    void PublishSlots(uint64_t pos, const NotifyShmPublishItem *items, uint32_t itemNum, uint64_t enqueueTimeNs);
     bool CopyEvent(const NotifyShmEvent &source, NotifyShmEvent &target) const;
     void ReleaseSlot(NotifyShmSlot &slot, uint64_t pos);
 
@@ -116,7 +116,7 @@ private:
     NotifyShmSlot *mSlots = nullptr;
 };
 
-}
-}
+} // namespace mms
+} // namespace ock
 
 #endif

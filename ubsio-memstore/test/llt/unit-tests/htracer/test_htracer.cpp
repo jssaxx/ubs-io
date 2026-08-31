@@ -10,10 +10,10 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <string>
-#include "tracer.h"
-#include "mms_log.h"
 #include "test_htracer.h"
+#include <string>
+#include "mms_log.h"
+#include "tracer.h"
 
 using namespace ock::mms;
 
@@ -34,9 +34,7 @@ void TestHtracer::TearDown()
     ock::tracemark::TraceMark::ClearTrace();
 }
 
-void TestHtracer::Stub() noexcept
-{
-}
+void TestHtracer::Stub() noexcept {}
 
 TEST_F(TestHtracer, test_get_trace_info_ok)
 {

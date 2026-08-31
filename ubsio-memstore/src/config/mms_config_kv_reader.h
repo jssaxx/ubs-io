@@ -18,12 +18,12 @@
 #include <map>
 #include <mutex>
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 #include "mms_def.h"
-#include "mms_str_util.h"
 #include "mms_file_util.h"
+#include "mms_str_util.h"
 
 namespace ock {
 namespace mms {
@@ -38,9 +38,9 @@ public:
     ~KVReader();
 
     KVReader(const KVReader &) = delete;
-    KVReader &operator = (const KVReader &) = delete;
+    KVReader &operator=(const KVReader &) = delete;
     KVReader(const KVReader &&) = delete;
-    KVReader &operator = (const KVReader &&) = delete;
+    KVReader &operator=(const KVReader &&) = delete;
 
     bool FromFile(const std::string &filePath);
 
@@ -189,6 +189,6 @@ inline void KVReader::Dump()
         printf("%s = %s\n", p->name.c_str(), p->value.c_str());
     }
 }
-}
-}
+} // namespace mms
+} // namespace ock
 #endif // HDAGGER_DG_KV_H

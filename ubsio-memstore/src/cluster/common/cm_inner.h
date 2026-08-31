@@ -19,7 +19,8 @@
 extern "C" {
 #endif
 
-typedef enum {
+typedef enum
+{
     CM_OK = 0,
     CM_ERR = -1,
     CM_PARAM_INVALID = -1100,
@@ -28,8 +29,8 @@ typedef enum {
     CM_BUSY = -1103,
 } CmReturnCode;
 
-#define MAX_COPY_NUM (8)                          /* 副本最大数量 */
-#define MAX_PT_NUM (1024)                         /* 分区最大数量 */
+#define MAX_COPY_NUM (8)  /* 副本最大数量 */
+#define MAX_PT_NUM (1024) /* 分区最大数量 */
 
 #define MAX_POOL_NUM (512)  /* POOL数量上限 */
 #define MAX_NODE_NUM (1024) /* 节点最大数量 */
@@ -44,13 +45,15 @@ typedef enum {
 #define NODE_ID_INVALID (0xFFFF)
 #define DISK_ID_INVALID (0xFFFF)
 
-typedef enum {
+typedef enum
+{
     CONFIG_ROLE_CMM = 1,
     CONFIG_ROLE_DATA = 2,
     CONFIG_ROLE_TOGETHER = 3,
 } ConfigRole;
 
-typedef enum {
+typedef enum
+{
     PT_STATE_INIT = 0,          // init
     PT_STATE_NORMAL = 1,        // OK
     PT_STATE_DEGRADE_LOSS1 = 2, // degrade 1
@@ -59,7 +62,8 @@ typedef enum {
     PT_STATE_BUTT
 } PtState;
 
-typedef enum {
+typedef enum
+{
     PT_COPY_STATE_INIT = 0,
     PT_COPY_STATE_RUNNING = 1,
     PT_COPY_STATE_DOWN = 2,
@@ -69,20 +73,20 @@ typedef enum {
 } PtCopyState;
 
 typedef struct {
-    uint16_t nodeId;    /* pt副本所在node的nodeId */
-    uint16_t diskId;    /* pt副本所在node上对应的diskId */
-    uint16_t state;     /* pt中副本的状态，见 PtCopyState         */
-    uint16_t resv;      /* 预留对齐 */
+    uint16_t nodeId; /* pt副本所在node的nodeId */
+    uint16_t diskId; /* pt副本所在node上对应的diskId */
+    uint16_t state;  /* pt中副本的状态，见 PtCopyState         */
+    uint16_t resv;   /* 预留对齐 */
 } PtEntryCopy;
 
 typedef struct {
-    uint64_t birthVersion;  /* pt版本号 */
-    uint16_t ptId;          /* pt id */
-    uint16_t state;         /* PT状态，见 PtState     */
-    uint16_t masterNodeId;  /* 分区主node id */
-    uint16_t masterDiskId;  /* 分区主disk Id */
-    uint16_t resv[3L];      /* 预留对齐 */
-    uint16_t copyNum;       /* 实际副本数量 */
+    uint64_t birthVersion; /* pt版本号 */
+    uint16_t ptId;         /* pt id */
+    uint16_t state;        /* PT状态，见 PtState     */
+    uint16_t masterNodeId; /* 分区主node id */
+    uint16_t masterDiskId; /* 分区主disk Id */
+    uint16_t resv[3L];     /* 预留对齐 */
+    uint16_t copyNum;      /* 实际副本数量 */
     PtEntryCopy copyList[MAX_COPY_NUM];
 } PtEntry;
 
@@ -101,26 +105,30 @@ typedef struct {
     uint16_t resv[3L];
 } PtFinish;
 
-typedef enum {
+typedef enum
+{
     NODE_STATUS_OK = 0,
     NODE_STATUS_UNOK = 1,
 } NodeStatus;
 
-typedef enum {
+typedef enum
+{
     NODE_STATE_INVALID = 0,
     NODE_STATE_UP = 1,
     NODE_STATE_DOWN = 2,
     NODE_STATE_BUTT
 } NodeState;
 
-typedef enum {
+typedef enum
+{
     NODE_CLUSTER_STATE_INVALID = 0,
     NODE_CLUSTER_STATE_OUT = 1,
     NODE_CLUSTER_STATE_IN = 2,
     NODE_CLUSTER_STATE_BUTT
 } NodeClusterState;
 
-typedef enum {
+typedef enum
+{
     NET_STATE_NORMAL = 0,
     NET_STATE_FAULT = 1,
     NET_STATE_BUTT
@@ -132,20 +140,23 @@ typedef struct {
     uint16_t state; // 见 NetState
 } NetInfo;
 
-typedef enum {
+typedef enum
+{
     DISK_TYPE_DRAM = 0,
     DISK_TYPE_SCM = 1,
     DISK_TYPE_SSD = 2,
     DISK_TYPE_BUTT
 } DiskType;
 
-typedef enum {
+typedef enum
+{
     DISK_STATE_NORMAL = 0,
     DISK_STATE_FAULT = 1,
     DISK_STATE_BUTT
 } DiskState;
 
-typedef enum {
+typedef enum
+{
     DISK_CLUSTER_STATE_INVALID = 0,
     DISK_CLUSTER_STATE_OUT = 1,
     DISK_CLUSTER_STATE_IN = 2,
@@ -217,7 +228,7 @@ typedef struct {
     char poolName[POOL_NAME_LEN];
     uint16_t poolId;
     uint16_t diskType; // 见 DiskType
-    uint16_t diskNum; // 校验盘数量
+    uint16_t diskNum;  // 校验盘数量
     uint16_t redundanceNum;
     uint16_t initialNodeNum;
     uint16_t maxNodeNum;
@@ -342,7 +353,7 @@ int32_t CM_WriteDataInfo(uint16_t poolId, const char *key, void *value, uint32_t
  * 返回值：0表示成功，非0表示失败
  */
 int32_t CM_RegDataInfoHandle(uint16_t poolId, const char *key, void *value, uint32_t valLen,
-    DataInfoChangeOpHandle *handle);
+                             DataInfoChangeOpHandle *handle);
 
 /*
  * 功能描述：CM模块注销函数
@@ -356,4 +367,3 @@ void CM_Exit(void);
 #endif
 
 #endif
-

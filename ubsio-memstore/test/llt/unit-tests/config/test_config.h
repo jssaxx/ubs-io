@@ -25,8 +25,7 @@ class TestConfig : public testing::Test {
 private:
     static bool gSetup;
 };
-}  // namespace mms
-}  // namespace ock
+} // namespace mms
+} // namespace ock
 
-#endif  // MMS_TEST_CONFIG_H
-
+#endif // MMS_TEST_CONFIG_H

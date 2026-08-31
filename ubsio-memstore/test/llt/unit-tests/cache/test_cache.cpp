@@ -12,7 +12,6 @@
 
 #include "test_cache.h"
 
-
 using namespace ock::mms;
 
 bool TestCache::gSetup = false;
@@ -30,4 +29,3 @@ void TestCache::TearDown()
 {
     return;
 }
-

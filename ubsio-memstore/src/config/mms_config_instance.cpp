@@ -10,9 +10,9 @@
  * See the Mulan PSL v2 for more details.
  */
 #include "mms_config_instance.h"
-#include "mms_log.h"
-#include "mms_ip_util.h"
 #include "mms_comm.h"
+#include "mms_ip_util.h"
+#include "mms_log.h"
 
 namespace ock {
 namespace mms {
@@ -22,8 +22,7 @@ constexpr long MAX_MEM_NUMA_SIZE_GB = 4096;
 static constexpr ValidatorTag COMMON_VALIDATOR_TAG = NO_0;
 static constexpr ValidatorTag INTER_NODE_VALIDATOR_TAG = NO_1;
 
-static BResult ParseCpuRange(const std::string &cpuRange, uint32_t maxCpuNo,
-                             std::pair<uint32_t, uint32_t> &range)
+static BResult ParseCpuRange(const std::string &cpuRange, uint32_t maxCpuNo, std::pair<uint32_t, uint32_t> &range)
 {
     if (!StrUtil::StrToUint32Pair(cpuRange, range)) {
         LOG_ERROR("Invalid cpu range:" << cpuRange << ".");
@@ -102,10 +101,8 @@ void MmsConfig::LoadDefaultConf()
 
     LoadDefaultSecurityConf();
     LoadDefaultBasicConf();
-    AddIntConf(NOTIFY_SHM_QUEUE_DEPTH,
-        VIntRange::Create(NOTIFY_SHM_QUEUE_DEPTH.first, NO_1024, NO_1048576));
-    AddIntConf(NOTIFY_SHM_WORKER_NUM,
-        VIntRange::Create(NOTIFY_SHM_WORKER_NUM.first, NO_1, NOTIFY_SHM_MAX_WORKERS));
+    AddIntConf(NOTIFY_SHM_QUEUE_DEPTH, VIntRange::Create(NOTIFY_SHM_QUEUE_DEPTH.first, NO_1024, NO_1048576));
+    AddIntConf(NOTIFY_SHM_WORKER_NUM, VIntRange::Create(NOTIFY_SHM_WORKER_NUM.first, NO_1, NOTIFY_SHM_MAX_WORKERS));
     AddStrConf(NOTIFY_SHM_WORKER_CPUSET, VStrNotNull::Create(NOTIFY_SHM_WORKER_CPUSET.first));
     AddStrConf(NOTIFY_SHM_BUSY_POLLING, VStrBoolRange::Create(NOTIFY_SHM_BUSY_POLLING.first));
     AddStrConf(CRB_SEND_CPUSET, VStrNotNull::Create(CRB_SEND_CPUSET.first), INTER_NODE_VALIDATOR_TAG);
@@ -124,8 +121,7 @@ void MmsConfig::LoadDefaultNetConf()
                INTER_NODE_VALIDATOR_TAG);
     AddIntConf(NET_RPC_CONNECT_COUNT, VIntRange::Create(NET_RPC_CONNECT_COUNT.first, NO_1, NO_16),
                INTER_NODE_VALIDATOR_TAG);
-    AddStrConf(NET_RPC_BUSY_POLL_MODE, VStrBoolRange::Create(NET_RPC_BUSY_POLL_MODE.first),
-               INTER_NODE_VALIDATOR_TAG);
+    AddStrConf(NET_RPC_BUSY_POLL_MODE, VStrBoolRange::Create(NET_RPC_BUSY_POLL_MODE.first), INTER_NODE_VALIDATOR_TAG);
     AddStrConf(NET_RPC_WORKER_GROUPS, VStrNotNull::Create(NET_RPC_WORKER_GROUPS.first), INTER_NODE_VALIDATOR_TAG);
     AddStrConf(NET_RPC_WORKER_GROUPS_CPUSET, VStrNotNull::Create(NET_RPC_WORKER_GROUPS_CPUSET.first),
                INTER_NODE_VALIDATOR_TAG);
@@ -142,9 +138,10 @@ void MmsConfig::LoadDefaultNetConf()
     AddStrConf(NET_IPC_WORKER_GROUPS_CPUSET, VStrNotNull::Create(NET_IPC_WORKER_GROUPS_CPUSET.first));
 
     AddIntConf(NET_RECV_REQUEST_HANDLE_THREAD_NUM,
-        VIntRange::Create(NET_RECV_REQUEST_HANDLE_THREAD_NUM.first, NO_8, NO_256), INTER_NODE_VALIDATOR_TAG);
+               VIntRange::Create(NET_RECV_REQUEST_HANDLE_THREAD_NUM.first, NO_8, NO_256), INTER_NODE_VALIDATOR_TAG);
     AddIntConf(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE,
-        VIntRange::Create(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE.first, NO_1024, NO_65535), INTER_NODE_VALIDATOR_TAG);
+               VIntRange::Create(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE.first, NO_1024, NO_65535),
+               INTER_NODE_VALIDATOR_TAG);
 }
 
 void MmsConfig::LoadDefaultSecurityConf()
@@ -227,7 +224,7 @@ BResult MmsConfig::AutoConfigNotifyShm(const ConfigurationPtr &conf)
     mNotifyShmConfig.workerNum = workerNum;
     mNotifyShmConfig.workerCpuIds.clear();
     for (uint32_t cpuId = cpuRange.first; cpuId <= cpuRange.second && mNotifyShmConfig.workerCpuIds.size() < workerNum;
-        ++cpuId) {
+         ++cpuId) {
         mNotifyShmConfig.workerCpuIds.emplace_back(static_cast<uint16_t>(cpuId));
     }
     mNotifyShmConfig.busyPolling = conf->GetStr(NOTIFY_SHM_BUSY_POLLING.first) == "true";
@@ -237,8 +234,8 @@ BResult MmsConfig::AutoConfigNotifyShm(const ConfigurationPtr &conf)
 BResult MmsConfig::AutoConfigCrb(const ConfigurationPtr &conf)
 {
     std::vector<uint16_t> sendCpuIds{};
-    auto ret = ParseCpuRangeToIds(
-        CRB_SEND_CPUSET.first, conf->GetStr(CRB_SEND_CPUSET.first), GetDeviceCpuNum(), sendCpuIds);
+    auto ret =
+        ParseCpuRangeToIds(CRB_SEND_CPUSET.first, conf->GetStr(CRB_SEND_CPUSET.first), GetDeviceCpuNum(), sendCpuIds);
     if (ret != MMS_OK) {
         return ret;
     }
@@ -330,8 +327,8 @@ BResult MmsConfig::AutoConfigNetMulticast(const ConfigurationPtr &conf)
     long subscriberCpuEnd = mNetConfig.subscriberWorkerCpuSet.second;
     long maxCpuNoLong = static_cast<long>(maxCpuNo);
 
-    if (UNLIKELY((subscriberCpuStart > subscriberCpuEnd) || (subscriberCpuStart < NO_0) ||
-                 (subscriberCpuEnd < NO_0) || (subscriberCpuEnd >= maxCpuNoLong))) {
+    if (UNLIKELY((subscriberCpuStart > subscriberCpuEnd) || (subscriberCpuStart < NO_0) || (subscriberCpuEnd < NO_0) ||
+                 (subscriberCpuEnd >= maxCpuNoLong))) {
         LOG_ERROR("Invalid cpu range:" << subscriberWorkerCpuStr << ".");
         return MMS_INVALID_PARAM;
     }
@@ -586,5 +583,5 @@ void MmsConfig::DumpToLog()
     }
     return;
 }
-}
-}
+} // namespace mms
+} // namespace ock
