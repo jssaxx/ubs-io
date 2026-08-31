@@ -590,6 +590,7 @@ int main(int argc, char *argv[])
         }
         if (g_log_file != NULL) {
             fclose(g_log_file);
+            g_log_file = NULL;
         }
         for (int i = 0; i < history.count; i++) {
             free(history.items[i]);
@@ -602,6 +603,7 @@ int main(int argc, char *argv[])
     }
     if (g_log_file != NULL) {
         fclose(g_log_file);
+        g_log_file = NULL;
     }
     for (int i = 0; i < history.count; i++) {
         free(history.items[i]);
