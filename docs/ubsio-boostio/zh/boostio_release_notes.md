@@ -1,4 +1,4 @@
-# 版本配套说明
+# UBSIO-BoostIO 版本说明
 
 ## 产品版本信息
 
@@ -136,28 +136,28 @@
   </tr></thead>
 <tbody>
   <tr>
-    <td>《[版本说明书](../zh/release_notes.md)》</td>
-    <td>本文档提供UBS IO的版本发布信息。</td>
+    <td>《<a href="boostio_release_notes.md">UBSIO-BoostIO 版本说明</a>》</td>
+    <td>本文档提供 UBSIO-BoostIO 的版本发布信息。</td>
     <td>开源仓</td>
   </tr>
   <tr>
-    <td>《[用户指南](../zh/user_guide.md)》</td>
-    <td>本文档提供UBS IO特性介绍、安装部署及使用指导。</td>
+    <td>《<a href="boostio_user_guide.md">UBSIO-BoostIO 用户指南</a>》</td>
+    <td>本文档提供 UBSIO-BoostIO 特性介绍、安装部署及使用指导。</td>
     <td>开源仓</td>
   </tr>
-    <tr>
-    <td>《[API参考](../zh/api_reference.md)》</td>
-    <td>本文档提供UBS IO API接口说明。</td>
+  <tr>
+    <td>《<a href="boostio_api_reference.md">UBSIO-BoostIO API 参考</a>》</td>
+    <td>本文档提供 UBSIO-BoostIO API 接口说明。</td>
     <td>开源仓</td>
   </tr>
-    <tr>
-    <td>《[源码构建指南](../zh/code_bulid.md)》</td>
-    <td>本文档提供UBS IO的源码构建说明。</td>
+  <tr>
+    <td>《<a href="boostio_security_management.md">UBSIO-BoostIO 安全指南</a>》</td>
+    <td>本文档提供 UBSIO-BoostIO 的安全配置和加固说明。</td>
     <td>开源仓</td>
   </tr>
-    <tr>
-    <td>《[安全指南](../zh/security_management.md)》</td>
-    <td>本文档提供UBS IO的源码构建说明。</td>
+  <tr>
+    <td>《<a href="boostio_security_note.md">UBSIO-BoostIO 安全说明</a>》</td>
+    <td>本文档提供 UBSIO-BoostIO 的通信矩阵、运行用户和文件权限建议。</td>
     <td>开源仓</td>
   </tr>
 </tbody>

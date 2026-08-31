@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2048" height="768" viewBox="0 0 2048 768" role="img" aria-labelledby="title desc">
+  <title id="title">UBSIO</title>
+  <desc id="desc">UBSIO green speed wordmark for the project homepage.</desc>
+  <defs>
+    <linearGradient id="word" x1="620" y1="214" x2="1760" y2="584" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#63d70e"/>
+      <stop offset="0.44" stop-color="#15a334"/>
+      <stop offset="1" stop-color="#006f3f"/>
+    </linearGradient>
+    <linearGradient id="trail" x1="86" y1="384" x2="760" y2="384" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.28" stop-color="#b7ec37" stop-opacity="0.22"/>
+      <stop offset="0.78" stop-color="#6bd11c" stop-opacity="0.58"/>
+      <stop offset="1" stop-color="#10913f" stop-opacity="0.76"/>
+    </linearGradient>
+    <linearGradient id="arcTop" x1="280" y1="240" x2="1130" y2="240" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.42" stop-color="#b8ec2b" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#65d70d"/>
+    </linearGradient>
+    <linearGradient id="arcBottom" x1="1160" y1="548" x2="1910" y2="548" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#85de12"/>
+      <stop offset="0.54" stop-color="#28b227"/>
+      <stop offset="1" stop-color="#006f3f"/>
+    </linearGradient>
+    <filter id="soft" x="-4%" y="-8%" width="108%" height="116%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#0b6f39" flood-opacity="0.16"/>
+    </filter>
+  </defs>
+
+  <g opacity="0.98">
+    <path d="M288 298 C590 152 928 126 1102 238 L1016 248 C852 178 574 206 288 298 Z" fill="url(#arcTop)" opacity="0.95"/>
+    <path d="M116 384 C362 326 560 292 720 294 L668 348 C492 352 304 378 116 428 Z" fill="url(#trail)" opacity="0.76"/>
+    <path d="M84 460 C310 416 516 392 668 398 L622 446 C454 454 276 470 84 498 Z" fill="url(#trail)" opacity="0.56"/>
+    <path d="M190 532 C364 506 510 492 628 498 L590 538 C462 548 340 548 190 532 Z" fill="url(#trail)" opacity="0.46"/>
+    <path d="M1168 536 C1398 624 1714 596 1902 496 C1698 640 1362 648 1156 538 Z" fill="url(#arcBottom)" opacity="0.96"/>
+  </g>
+
+  <g filter="url(#soft)" transform="translate(512 0) skewX(-10)">
+    <text x="0" y="507" fill="url(#word)" font-family="Arial Black, Impact, Helvetica, Arial, sans-serif" font-size="320" font-weight="900" font-style="italic" letter-spacing="-26">UBSIO</text>
+  </g>
+</svg>
