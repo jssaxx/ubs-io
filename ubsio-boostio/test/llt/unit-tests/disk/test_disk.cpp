@@ -624,6 +624,40 @@ TEST_F(TestDisk, test_force_new_disk_skips_old_allocator_recovery)
     EXPECT_EQ(BdmDestroy(bdmId), BDM_CODE_OK);
 }
 
+TEST_F(TestDisk, test_bdm_create_rejects_disabled_object_slot)
+{
+    constexpr uint32_t bdmId = 709;
+    TempBdmFile diskFile(bdmId);
+    int fd = open(diskFile.path.c_str(), O_CREAT | O_RDWR, 0600);
+    ASSERT_GE(fd, 0);
+    ASSERT_EQ(ftruncate(fd, TEST_BDM_META_DISK_LEN), 0);
+    close(fd);
+
+    BdmCreatePara para = {0};
+    ASSERT_EQ(strncpy_s(para.name, BDM_NAME_LEN, diskFile.path.c_str(), diskFile.path.size()), BDM_CODE_OK);
+    ASSERT_GE(sprintf_s(para.sn, BDM_SN_LEN, "%s_%u", "meta", bdmId), 0);
+    para.length = TEST_BDM_META_DISK_LEN;
+    para.bdmId = bdmId;
+    para.pad = BuildVirtualPad(0, 1);
+    para.minChunkSize = NO_4194304;
+    para.maxChunkSize = NO_4194304;
+
+    uint32_t createdBdmId = BDM_INVALID_ID;
+    BdmDiskSetForceNew(1);
+    int32_t ret = BdmCreate(&para, &createdBdmId);
+    BdmDiskSetForceNew(0);
+    ASSERT_EQ(ret, BDM_CODE_OK);
+    ASSERT_EQ(createdBdmId, bdmId);
+
+    BdmSetDiskUsedStatus(bdmId, false);
+    uint32_t duplicateBdmId = BDM_INVALID_ID;
+    EXPECT_EQ(BdmCreate(&para, &duplicateBdmId), BDM_CODE_CACHELIST_FULL);
+    EXPECT_EQ(duplicateBdmId, BDM_INVALID_ID);
+
+    BdmSetDiskUsedStatus(bdmId, true);
+    EXPECT_EQ(BdmDestroy(bdmId), BDM_CODE_OK);
+}
+
 TEST_F(TestDisk, test_bdm_calculate_virtual_region)
 {
     uint64_t offset = 0;

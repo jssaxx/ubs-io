@@ -1009,12 +1009,55 @@ BResult BioServer::AddStandaloneOldDisk(const std::string &diskPath, uint16_t di
 
     if (BdmGetDiskStatus(diskId) != BDM_DISK_STATE_NORMAL) {
         ret = BioDiskReset(diskId);
+        if (ret == BDM_CODE_NOT_EXIST) {
+            uint64_t diskCapacity = 0;
+            int32_t bdmRet = BdmAttachDiskAt(const_cast<char *>(diskPath.c_str()), daemonConfig.segment,
+                static_cast<uint64_t>(physicalCapacity), diskId, &diskCapacity);
+            if (UNLIKELY(bdmRet != BDM_CODE_OK)) {
+                LOG_ERROR("Attach missing standalone BDM object failed, diskId:" << diskId << ", diskPath:" <<
+                    diskPath << ", ret:" << bdmRet << ".");
+                return BIO_ERR;
+            }
+            ret = BIO_OK;
+        }
         if (UNLIKELY(ret != BIO_OK)) {
             // BioDiskReset marks the slot used before rebuilding the
             // allocator; restore the fault state so a failed reset does not
             // look like a healthy empty disk on retry.
             BdmSetDiskUsedStatus(diskId, false);
             return ret;
+        }
+    }
+
+    if (daemonConfig.standaloneDeviceCount != 0) {
+        uint64_t totalCapacity = 0;
+        uint64_t usedCapacity = 0;
+        int32_t bdmRet = BdmGetCapacity(diskId, &totalCapacity, &usedCapacity);
+        if (UNLIKELY(bdmRet != BDM_CODE_OK ||
+            totalCapacity > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))) {
+            BdmSetDiskUsedStatus(diskId, false);
+            LOG_ERROR("Get rejoined standalone BDM capacity failed, diskId:" << diskId << ", ret:" << bdmRet << ".");
+            return BIO_ERR;
+        }
+
+        int64_t previousCapacity = daemonConfig.diskCaps[diskId];
+        ret = mConfig->UpdateStandaloneDiskCapacity(diskId, static_cast<int64_t>(totalCapacity));
+        if (UNLIKELY(ret != BIO_OK)) {
+            BdmSetDiskUsedStatus(diskId, false);
+            return ret;
+        }
+        if (previousCapacity != static_cast<int64_t>(totalCapacity)) {
+            // A startup-failed virtual disk still carries its physical
+            // capacity in the config snapshot. Rebuild from the published
+            // views so PT weights use the newly created BDM data capacity.
+            nextNodeView = currentNodeView;
+            nextPtView = currentPtView;
+            ret = mStandaloneView.RejoinDisk(diskId, daemonConfig.diskCaps, mLocalNid, nextNodeView, nextPtView,
+                changedPts);
+            if (UNLIKELY(ret != BIO_OK)) {
+                BdmSetDiskUsedStatus(diskId, false);
+                return ret;
+            }
         }
     }
 
