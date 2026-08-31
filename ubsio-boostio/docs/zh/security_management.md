@@ -180,10 +180,6 @@ echo 2 >/proc/sys/kernel/randomize_va_space
     <td>该网址为zookeeper开源头文件的声明issue网址，无安全风险。</td>
   </tr>
   <tr>
-    <td>https://gitcode.com/GitHub_Trending/sp/spdlog.git</td>
-    <td>该网址为引入的三方库spdlog的地址，无安全风险。</td>
-  </tr>
-  <tr>
     <td>https://gitcode.com/gh_mirrors/pr/prometheus-cpp.git</td>
     <td>该网址为引入的三方库prometheus的地址，无安全风险。</td>
   </tr>

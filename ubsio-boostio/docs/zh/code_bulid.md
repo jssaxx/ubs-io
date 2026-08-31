@@ -184,7 +184,6 @@
 |[Hadoop](https://github.com/apache/hadoop.git)|branch-3.3.1|
 |[Ceph](https://github.com/ceph/ceph/releases/tag/v12.2.8)|12.2.8|
 |[RDMA](https://github.com/linux-rdma/rdma-core)|v42.0|
-|[spdlog](https://github.com/gabime/spdlog.git)|v1.12.0|
 |[ZooKeeper](https://github.com/apache/zookeeper.git)|release-3.8.1|
 |[googletest](https://github.com/google/googletest.git)|release-1.8.1|
 
@@ -198,7 +197,6 @@
 2. 将UBS IO依赖的开源软件放置到编译机路径布局指定的位置。
 
     ```cmd
-    cp -r code-download-path/spdlog-1.12.0/*  /usr1/workspace/boost-io/3rdparty/spdlog/spdlog-1.12.0
     cp -r code-download-path/zookeeper-release-3.8.1/*  /usr1/workspace/boost-io/3rdparty/zookeeper/zookeeper-3.8.1
     cp -r code-download-path/hadoop-branch-3.3.1/*  /usr1/workspace/boost-io/3rdparty/hadoop/hadoop-3.3.1
     cp -r code-download-path/ceph-12.2.8/*  /usr1/workspace/boost-io/3rdparty/ceph/ceph-12.2.8
@@ -211,7 +209,6 @@
     |开源软件名称|路径布局|
     |--|--|
     |ZooKeeper|/usr1/workspace/boost-io/3rdparty/zookeeper/zookeeper-3.8.1|
-    |spdlog|/usr1/workspace/boost-io/3rdparty/spdlog/spdlog-1.12.0|
     |Hadoop|/usr1/workspace/boost-io/3rdparty/hadoop/hadoop-3.3.1|
     |Ceph|/usr1/workspace/boost-io/3rdparty/ceph/ceph-12.2.8|
 

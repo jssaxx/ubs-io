@@ -16,6 +16,7 @@
 #include <sys/time.h>
 #include <cstdint>
 #include <cstdio>
+#include <functional>
 #include <iostream>
 #include <sstream>
 #include <string>

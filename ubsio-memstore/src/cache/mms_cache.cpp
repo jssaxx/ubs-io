@@ -1,0 +1,887 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+ *
+ * ubs-io is licensed under the Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *      http://license.coscl.org.cn/MulanPSL2
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PSL v2 for more details.
+ */
+
+#include "mms_cache.h"
+#include <cstring>
+#include "mms_trace.h"
+#include "securec.h"
+
+namespace ock {
+namespace mms {
+
+static constexpr uint64_t INVALID_BLOCK_OFFSET = UINT64_MAX;
+constexpr uint16_t DATA_ALIVE = 0;
+constexpr uint16_t DATA_DELETED = 1;
+constexpr uint32_t FNV_OFFSET_BASIS = 2166136261U;
+constexpr uint32_t FNV_PRIME = 16777619U;
+constexpr uint32_t BUCKET_SLOT_HASH_MIX_1 = 0x7FEB352DU;
+constexpr uint32_t BUCKET_SLOT_HASH_MIX_2 = 0x846CA68BU;
+constexpr uint32_t BUCKET_SLOT_HASH_SHIFT_1 = 16;
+constexpr uint32_t BUCKET_SLOT_HASH_SHIFT_2 = 15;
+
+static inline uint32_t MixBucketSlotHash(uint32_t hashCode)
+{
+    hashCode ^= hashCode >> BUCKET_SLOT_HASH_SHIFT_1;
+    hashCode *= BUCKET_SLOT_HASH_MIX_1;
+    hashCode ^= hashCode >> BUCKET_SLOT_HASH_SHIFT_2;
+    hashCode *= BUCKET_SLOT_HASH_MIX_2;
+    hashCode ^= hashCode >> BUCKET_SLOT_HASH_SHIFT_1;
+    return hashCode;
+}
+
+static inline IndexNode *GetBucketSlot(BucketNode *bucketNode, uint32_t hashCode)
+{
+    return &bucketNode->slots[MixBucketSlotHash(hashCode) & (BUCKET_INLINE_SLOT_NUM - NO_1)];
+}
+
+BResult Cache::Init(uint64_t bucketMemAddr, uint64_t bucketMemSize, CacheLogFunc func, bool server,
+                    std::pair<uint64_t, uint64_t> blockSize)
+{
+    CacheLog::Instance()->SetLogFuncFunc(func);
+
+    mBaseAddr = bucketMemAddr;
+    mTotalBucketCount = 0;
+    mShards.clear();
+
+    mMemMgr = MmsMemMgr::Instance();
+
+    if (!server) {
+        uint16_t numaIds[MAX_NUMAS_NUM];
+        uint64_t sizes[MAX_NUMAS_NUM];
+        uint64_t addrs[MAX_NUMAS_NUM];
+        uint16_t count = 0;
+        if (mMemMgr->GetAreaMemDesc(MMAP_AREA_BUCKET, numaIds, sizes, addrs, count) != MMS_OK || count == 0) {
+            if (UNLIKELY(bucketMemSize <= BUCKET_NODE_BASE_OFFSET)) {
+                CACHE_LOG_ERROR("Invalid bucket area size:" << bucketMemSize << ".");
+                return MMS_ERR;
+            }
+            uint32_t bucketCount = static_cast<uint32_t>((bucketMemSize - BUCKET_NODE_BASE_OFFSET) / BUCKET_NODE_SIZE);
+            mShards.push_back({0, bucketMemAddr, bucketMemSize, bucketCount});
+            mTotalBucketCount = bucketCount;
+            return MMS_OK;
+        }
+        for (uint16_t index = 0; index < count; ++index) {
+            if (sizes[index] <= BUCKET_NODE_BASE_OFFSET) {
+                continue;
+            }
+            uint32_t bucketCount = static_cast<uint32_t>((sizes[index] - BUCKET_NODE_BASE_OFFSET) / BUCKET_NODE_SIZE);
+            if (bucketCount == 0) {
+                continue;
+            }
+            mShards.push_back({numaIds[index], addrs[index], sizes[index], bucketCount});
+            mTotalBucketCount += bucketCount;
+        }
+        if (mShards.empty() && bucketMemSize > BUCKET_NODE_BASE_OFFSET) {
+            uint32_t bucketCount = static_cast<uint32_t>((bucketMemSize - BUCKET_NODE_BASE_OFFSET) / BUCKET_NODE_SIZE);
+            mShards.push_back({0, bucketMemAddr, bucketMemSize, bucketCount});
+            mTotalBucketCount = bucketCount;
+        }
+        if (UNLIKELY(mShards.empty())) {
+            CACHE_LOG_ERROR("Invalid bucket area desc, count:" << count << ".");
+            return MMS_ERR;
+        }
+        return MMS_OK;
+    }
+
+    mIndexMemAllocator = MmsMemAllocator::Instance(MMAP_AREA_INDEX);
+    mValueAllocator = MmsMemAllocator::Instance(MMAP_AREA_VALUE);
+
+    uint16_t numaIds[MAX_NUMAS_NUM];
+    uint64_t sizes[MAX_NUMAS_NUM];
+    uint64_t addrs[MAX_NUMAS_NUM];
+    uint16_t count = 0;
+    BResult ret = mMemMgr->GetAreaMemDesc(MMAP_AREA_BUCKET, numaIds, sizes, addrs, count);
+    if (UNLIKELY(ret != MMS_OK || count == 0)) {
+        CACHE_LOG_ERROR("Get bucket area desc failed, ret:" << ret << ", count:" << count << ".");
+        return MMS_ERR;
+    }
+
+    for (uint16_t index = 0; index < count; ++index) {
+        if (UNLIKELY(sizes[index] <= BUCKET_NODE_BASE_OFFSET)) {
+            CACHE_LOG_ERROR("Invalid bucket area size:" << sizes[index] << ", numa id:" << numaIds[index] << ".");
+            return MMS_ERR;
+        }
+        CacheShard shard{numaIds[index], addrs[index], sizes[index],
+                         static_cast<uint32_t>((sizes[index] - BUCKET_NODE_BASE_OFFSET) / BUCKET_NODE_SIZE)};
+        if (UNLIKELY(shard.bucketCount == 0)) {
+            CACHE_LOG_ERROR("Invalid bucket count, numa id:" << shard.numaId << ".");
+            return MMS_ERR;
+        }
+        PutBucketCount(shard, shard.bucketCount);
+        for (uint32_t bucketIndex = 0; bucketIndex < shard.bucketCount; bucketIndex++) {
+            uint64_t bucketAddr = GetBucketAddr(shard, bucketIndex);
+            BucketNode *bucketNode = reinterpret_cast<BucketNode *>(bucketAddr);
+            bucketNode->status.state = 0;
+            for (uint32_t slotIndex = 0; slotIndex < BUCKET_INLINE_SLOT_NUM; slotIndex++) {
+                bucketNode->slots[slotIndex].valid = FLAG_INVALID;
+            }
+        }
+        mTotalBucketCount += shard.bucketCount;
+        mShards.push_back(shard);
+    }
+    if (UNLIKELY(mTotalBucketCount == 0)) {
+        CACHE_LOG_ERROR("Invalid total bucket count.");
+        return MMS_ERR;
+    }
+
+    CACHE_LOG_INFO("Init cache success, bucketCount:" << mTotalBucketCount << ", shard count:" << mShards.size()
+                                                      << ", value base block size:" << blockSize.first << ".");
+    return MMS_OK;
+}
+
+uint32_t Cache::GetBucketCount() const
+{
+    return mTotalBucketCount;
+}
+
+uint64_t Cache::GetBucketAddr(uint32_t bucketIndex)
+{
+    uint32_t remainIndex = bucketIndex;
+    for (const auto &shard : mShards) {
+        if (remainIndex < shard.bucketCount) {
+            return GetBucketAddr(shard, remainIndex);
+        }
+        remainIndex -= shard.bucketCount;
+    }
+    return 0;
+}
+
+void Cache::PutBucketCount(CacheShard &shard, uint32_t value)
+{
+    *reinterpret_cast<uint32_t *>(shard.bucketBaseAddr + BUCKET_COUNT_OFFSET) = value;
+}
+
+CacheShard &Cache::SelectShard(uint32_t hashCode)
+{
+    return mShards[hashCode % mShards.size()];
+}
+
+uint64_t Cache::GetBucketAddr(const CacheShard &shard, uint32_t bucketIndex) const
+{
+    return shard.bucketBaseAddr + BUCKET_NODE_BASE_OFFSET + static_cast<uint64_t>(bucketIndex) * BUCKET_NODE_SIZE;
+}
+
+void Cache::Exit() {}
+
+void FreeValueBlock(IndexValue *indexValue, MmsMemMgrPtr memMgr, MmsMemAllocatorPtr valueAllocator)
+{
+    if (indexValue->blockOffset == INVALID_BLOCK_OFFSET) {
+        return;
+    }
+
+    uint64_t blockAddr;
+    memMgr->Trans2Addr(MMAP_AREA_VALUE, indexValue->blockOffset, blockAddr);
+
+    MMS_TRACE_START(CACHE_FREE_BLOCK);
+    valueAllocator->MmsFree(blockAddr);
+    MMS_TRACE_END(CACHE_FREE_BLOCK, MMS_OK);
+}
+
+static uint32_t HashKey(const char *key, uint16_t keyLen)
+{
+    uint32_t hashCode = FNV_OFFSET_BASIS;
+    for (uint16_t index = 0; index < keyLen; index++) {
+        hashCode ^= static_cast<uint8_t>(key[index]);
+        hashCode *= FNV_PRIME;
+    }
+    return hashCode;
+}
+
+static bool IsSameKey(const IndexValue *indexValue, const char *key, uint16_t keyLen)
+{
+    return indexValue->keyLen == keyLen && memcmp(indexValue->key, key, keyLen) == 0;
+}
+
+static BResult CopyIndexKey(IndexValue *indexValue, const char *key, uint16_t keyLen)
+{
+    BResult ret = memcpy_s(indexValue->key, MAX_KEY_SIZE, key, keyLen);
+    if (UNLIKELY(ret != EOK)) {
+        return MMS_ERR;
+    }
+    indexValue->key[keyLen] = '\0';
+    indexValue->keyLen = keyLen;
+    return MMS_OK;
+}
+
+BResult Cache::AllocDataBlock(uint64_t remainLen, uint16_t preferNumaId, uint16_t &numaId, uint64_t &curBlockAddr,
+                              uint64_t &curBuffSize)
+{
+    if (UNLIKELY(remainLen > UINT64_MAX - DATA_HEADER_SIZE)) {
+        CACHE_LOG_ERROR("Invalid value block size, remainLen:" << remainLen << ".");
+        return MMS_INVALID_PARAM;
+    }
+
+    uint64_t allocSize = remainLen + DATA_HEADER_SIZE;
+    MMS_TRACE_START(CACHE_ALLOC_BLOCK);
+    BResult ret = mValueAllocator->MmsAllocPreferNuma(allocSize, preferNumaId, numaId, curBlockAddr);
+    MMS_TRACE_END(CACHE_ALLOC_BLOCK, ret);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Alloc value block failed, size:" << allocSize << ", ret:" << ret << ".");
+        return MMS_ALLOC_FAIL;
+    }
+
+    uint64_t blockSize = mValueAllocator->GetBlockSize(curBlockAddr);
+    if (UNLIKELY(blockSize <= DATA_HEADER_SIZE)) {
+        mValueAllocator->MmsFree(curBlockAddr);
+        CACHE_LOG_ERROR("Invalid value block size:" << blockSize << ".");
+        return MMS_ALLOC_FAIL;
+    }
+
+    curBuffSize = blockSize - DATA_HEADER_SIZE;
+    return MMS_OK;
+}
+
+BResult Cache::PutDataIntoBlock(IndexValue *indexValue, const char *data, uint64_t dataLen, uint16_t preferNumaId)
+{
+    if (UNLIKELY(indexValue == nullptr || data == nullptr || dataLen == 0)) {
+        CACHE_LOG_ERROR("Invalid para.");
+        return MMS_INVALID_PARAM;
+    }
+
+    uint64_t curBlockAddr;
+    uint64_t curBuffSize;
+    uint16_t numaId;
+    BResult ret = AllocDataBlock(dataLen, preferNumaId, numaId, curBlockAddr, curBuffSize);
+    if (UNLIKELY(ret != MMS_OK)) {
+        return ret;
+    }
+
+    auto header = reinterpret_cast<DataHeader *>(curBlockAddr);
+    header->blockSize = curBuffSize;
+    ret = memcpy_s(header->data, curBuffSize, data, dataLen);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Memory copy failed, ret:" << ret << ".");
+        mValueAllocator->MmsFree(curBlockAddr);
+        return MMS_INNER_ERR;
+    }
+
+    mMemMgr->Trans2Offset(MMAP_AREA_VALUE, curBlockAddr, indexValue->blockOffset);
+    indexValue->totalDataLen += dataLen;
+    return MMS_OK;
+}
+
+uint64_t Cache::GetDataFromBlock(IndexValue *indexValue, char *data, uint64_t offset, uint64_t dataLen)
+{
+    if (UNLIKELY(indexValue == nullptr || data == nullptr || dataLen == 0 || (offset >= indexValue->totalDataLen))) {
+        CACHE_LOG_ERROR("Invalid para.");
+        return 0;
+    }
+
+    uint64_t currentBlockAddr;
+    mMemMgr->Trans2Addr(MMAP_AREA_VALUE, indexValue->blockOffset, currentBlockAddr);
+    auto header = reinterpret_cast<DataHeader *>(currentBlockAddr);
+    uint64_t realLen = std::min(indexValue->totalDataLen - offset, dataLen);
+    if (UNLIKELY(offset > header->blockSize || realLen > header->blockSize - offset)) {
+        CACHE_LOG_ERROR("Block data out of range.");
+        return 0;
+    }
+    int ret = memcpy_s(data, dataLen, header->data + offset, realLen);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Memory copy failed, ret:" << ret << ".");
+        return 0;
+    }
+    return realLen;
+}
+
+uint64_t Cache::GetDataAddrFromBlock(IndexValue *indexValue, char **data, uint64_t offset, uint64_t dataLen)
+{
+    if (UNLIKELY(indexValue == nullptr || data == nullptr || dataLen == 0 || (offset >= indexValue->totalDataLen))) {
+        CACHE_LOG_ERROR("Invalid para.");
+        return 0;
+    }
+
+    uint64_t currentBlockAddr;
+    mMemMgr->Trans2Addr(MMAP_AREA_VALUE, indexValue->blockOffset, currentBlockAddr);
+    auto header = reinterpret_cast<DataHeader *>(currentBlockAddr);
+    uint64_t realLen = std::min(indexValue->totalDataLen - offset, dataLen);
+    if (UNLIKELY(offset > header->blockSize || realLen > header->blockSize - offset)) {
+        CACHE_LOG_ERROR("Block data out of range.");
+        return 0;
+    }
+
+    *data = header->data + offset;
+    return realLen;
+}
+
+static IndexNode *FindExistingNode(BucketNode *bucketNode, const char *key, uint16_t keyLen, uint32_t hashCode)
+{
+    IndexNode *node = GetBucketSlot(bucketNode, hashCode);
+    while (node->valid == FLAG_VALID) {
+        IndexValue *currentValue = reinterpret_cast<IndexValue *>(node->indexValueAddr);
+        if (node->hashCode == hashCode && IsSameKey(currentValue, key, keyLen)) {
+            return node;
+        }
+        node = &currentValue->next;
+    }
+
+    return nullptr;
+}
+
+BResult Cache::HandlePutExistingNode(const ExistingPutPara &para)
+{
+    IndexValue *currentValue = reinterpret_cast<IndexValue *>(para.existingNode->indexValueAddr);
+    if (currentValue->totalDataLen != para.length) {
+        CACHE_LOG_ERROR("Conflict put, key:" << std::string(para.key, para.keyLen) << ".");
+        return MMS_INNER_ERR;
+    }
+
+    char *cacheValue = new (std::nothrow) char[para.length];
+    if (UNLIKELY(cacheValue == nullptr)) {
+        CACHE_LOG_ERROR("Memory alloc failed.");
+        return MMS_ALLOC_FAIL;
+    }
+
+    uint64_t realLen = GetDataFromBlock(currentValue, cacheValue, 0, para.length);
+    if (realLen == 0 || realLen != para.length) {
+        CACHE_LOG_ERROR("Get data from cache failed, key:" << std::string(para.key, para.keyLen) << ".");
+        delete[] cacheValue;
+        return MMS_INNER_ERR;
+    }
+
+    if (memcmp(cacheValue, para.value, para.length) == 0) {
+        if (para.valueAddr != nullptr) {
+            uint64_t realLen = GetDataAddrFromBlock(currentValue, para.valueAddr, 0, para.length);
+            if (UNLIKELY(realLen != para.length)) {
+                CACHE_LOG_ERROR("Get data address from cache failed, key:" << std::string(para.key, para.keyLen)
+                                                                           << ".");
+                delete[] cacheValue;
+                return MMS_INNER_ERR;
+            }
+        }
+        CACHE_LOG_INFO("Repeat put, key:" << std::string(para.key, para.keyLen) << ".");
+        delete[] cacheValue;
+        return MMS_PUT_REPEAT;
+    }
+
+    CACHE_LOG_ERROR("Conflict put, key:" << std::string(para.key, para.keyLen) << ".");
+    delete[] cacheValue;
+    return MMS_INNER_ERR;
+}
+
+BResult Cache::CreatePutIndexValue(const PutPara &para, uint16_t preferNumaId, IndexValueCtx &ctx)
+{
+    BResult ret = mIndexMemAllocator->MmsAllocPreferNuma(INDEX_VALUE_SIZE, preferNumaId, ctx.numaId, ctx.addr);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Alloc indexValue block failed, ret:" << ret << ".");
+        return MMS_ALLOC_FAIL;
+    }
+
+    mMemMgr->Trans2Offset(MMAP_AREA_INDEX, ctx.addr, ctx.numaOffset);
+    ctx.value = reinterpret_cast<IndexValue *>(ctx.addr);
+    ctx.value->totalDataLen = 0;
+    ctx.value->version = para.version;
+    ctx.value->ptId = para.ptId;
+    ctx.value->isDelete = DATA_ALIVE;
+    ctx.value->blockOffset = INVALID_BLOCK_OFFSET;
+
+    ret = CopyIndexKey(ctx.value, para.key, para.keyLen);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Copy key failed, ret:" << ret << ", key:" << std::string(para.key, para.keyLen) << ".");
+        mIndexMemAllocator->MmsFree(ctx.addr);
+        return ret;
+    }
+
+    ret = PutDataIntoBlock(ctx.value, para.value, para.length, preferNumaId);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Put data into cache failed, ret:" << ret << ".");
+        mIndexMemAllocator->MmsFree(ctx.addr);
+        return ret;
+    }
+
+    return MMS_OK;
+}
+
+void Cache::FreeIndexValue(const IndexValueCtx &ctx)
+{
+    FreeValueBlock(ctx.value, mMemMgr, mValueAllocator);
+    mIndexMemAllocator->MmsFree(ctx.addr);
+}
+
+void Cache::FillPutValueAddr(IndexValue *indexValue, char **valueAddr)
+{
+    if (UNLIKELY(valueAddr == nullptr)) {
+        return;
+    }
+
+    uint64_t curValueBlockAddr;
+    mMemMgr->Trans2Addr(MMAP_AREA_VALUE, indexValue->blockOffset, curValueBlockAddr);
+    auto header = reinterpret_cast<DataHeader *>(curValueBlockAddr);
+    *valueAddr = header->data;
+}
+
+void Cache::InsertPutIndexValue(BucketNode *bucketNode, uint32_t hashCode, const IndexValueCtx &ctx)
+{
+    IndexNode *slot = GetBucketSlot(bucketNode, hashCode);
+    ctx.value->next = *slot;
+    *slot = {hashCode, FLAG_VALID, ctx.numaId, ctx.numaOffset, ctx.addr};
+}
+
+BResult Cache::Put(const PutPara &para)
+{
+    uint32_t hashCode = HashKey(para.key, para.keyLen);
+    CacheShard &shard = SelectShard(hashCode);
+    uint32_t bucketIndex = hashCode % shard.bucketCount;
+    uint64_t bucketAddr = GetBucketAddr(shard, bucketIndex);
+    BucketNode *bucketNode = reinterpret_cast<BucketNode *>(bucketAddr);
+    IndexValueCtx ctx = {};
+    BResult ret = CreatePutIndexValue(para, shard.numaId, ctx);
+    if (UNLIKELY(ret != MMS_OK)) {
+        return ret;
+    }
+
+    CacheWriteLock(&bucketNode->status);
+    IndexNode *existingNode = FindExistingNode(bucketNode, para.key, para.keyLen, hashCode);
+    if (existingNode != nullptr) {
+        ret = HandlePutExistingNode({existingNode, para.key, para.keyLen, para.value, para.length, para.valueAddr});
+        CacheWriteUnLock(&bucketNode->status);
+        FreeIndexValue(ctx);
+        return ret;
+    }
+
+    FillPutValueAddr(ctx.value, para.valueAddr);
+    InsertPutIndexValue(bucketNode, hashCode, ctx);
+    CacheWriteUnLock(&bucketNode->status);
+    CACHE_LOG_DEBUG("Put success, key:" << std::string(para.key, para.keyLen) << ", length:" << para.length
+                                        << ", ptId:" << para.ptId << ", version:" << para.version << ".");
+    return MMS_OK;
+}
+
+BResult Cache::Get(const GetPara &para)
+{
+    uint32_t hashCode = HashKey(para.key, para.keyLen);
+    CacheShard &shard = SelectShard(hashCode);
+    uint32_t bucketIndex = hashCode % shard.bucketCount;
+    uint64_t bucketAddr = GetBucketAddr(shard, bucketIndex);
+    BucketNode *bucketNode = reinterpret_cast<BucketNode *>(bucketAddr);
+
+    CacheReadLock(&bucketNode->status);
+    IndexNode *node = GetBucketSlot(bucketNode, hashCode);
+    while (node->valid == FLAG_VALID) {
+        uint64_t indexAddr;
+        mMemMgr->Trans2Addr(MMAP_AREA_INDEX, node->numaOffset, indexAddr);
+        IndexValue *indexValue = reinterpret_cast<IndexValue *>(indexAddr);
+        if (node->hashCode != hashCode || !IsSameKey(indexValue, para.key, para.keyLen)) {
+            node = &indexValue->next;
+            continue;
+        }
+
+        uint64_t realLen;
+        if (*para.value == nullptr) {
+            realLen = GetDataAddrFromBlock(indexValue, para.value, 0, indexValue->totalDataLen);
+        } else {
+            if (indexValue->totalDataLen <= para.offset) {
+                CACHE_LOG_ERROR("Out of bounds, key:" << std::string(para.key, para.keyLen)
+                                                      << ", offset:" << para.offset
+                                                      << ", total len:" << indexValue->totalDataLen << ".");
+                CacheReadUnLock(&bucketNode->status);
+                return MMS_ERR;
+            }
+            uint64_t readLen = std::min(indexValue->totalDataLen - para.offset, para.length);
+            realLen = GetDataFromBlock(indexValue, *para.value, para.offset, readLen);
+        }
+        if (UNLIKELY(realLen == 0)) {
+            CacheReadUnLock(&bucketNode->status);
+            CACHE_LOG_ERROR("Get data failed.");
+            return MMS_INNER_ERR;
+        }
+
+        *para.realLength = realLen;
+        CacheReadUnLock(&bucketNode->status);
+        CACHE_LOG_DEBUG("Get success, key:" << std::string(para.key, para.keyLen) << ", offset:" << para.offset
+                                            << ", real length:" << realLen << ".");
+        return MMS_OK;
+    }
+
+    CacheReadUnLock(&bucketNode->status);
+    *para.realLength = 0;
+    return MMS_NOT_EXISTS;
+}
+
+BResult Cache::ReviveDataBlock(IndexValue *indexValue, const char *data, uint64_t offset, uint64_t dataLen,
+                               uint16_t preferNumaId)
+{
+    if (UNLIKELY(offset != 0)) {
+        CACHE_LOG_ERROR("Cannot update empty data with nonzero offset, offset:" << offset << ".");
+        return MMS_INNER_ERR;
+    }
+
+    // 复活墓碑数据
+    BResult ret = PutDataIntoBlock(indexValue, data, dataLen, preferNumaId);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Put data into cache failed, ret:" << ret << ", key:" << indexValue->key << ".");
+        return ret;
+    }
+    return MMS_OK;
+}
+
+BResult Cache::UpdateDataInCurrentBlock(IndexValue *indexValue, DataHeader *header, const char *data, uint64_t offset,
+                                        uint64_t dataLen)
+{
+    BResult ret = memcpy_s(header->data + offset, header->blockSize - offset, data, dataLen);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Memory copy failed, ret:" << ret << ".");
+        return MMS_INNER_ERR;
+    }
+    indexValue->totalDataLen = std::max(indexValue->totalDataLen, offset + dataLen);
+    return MMS_OK;
+}
+
+BResult Cache::ExpandAndUpdateDataBlock(IndexValue *indexValue, const char *data, uint64_t offset, uint64_t dataLen,
+                                        uint64_t curBlockAddr, uint16_t preferNumaId)
+{
+    auto header = reinterpret_cast<DataHeader *>(curBlockAddr);
+    uint64_t newDataLen = std::max(indexValue->totalDataLen, offset + dataLen);
+    uint64_t newBlockAddr;
+    uint64_t newBuffSize;
+    uint16_t numaId;
+    BResult ret = AllocDataBlock(newDataLen, preferNumaId, numaId, newBlockAddr, newBuffSize);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Alloc value block failed, ret:" << ret << ".");
+        return ret;
+    }
+
+    auto newHeader = reinterpret_cast<DataHeader *>(newBlockAddr);
+    newHeader->blockSize = newBuffSize;
+    ret = memcpy_s(newHeader->data, newBuffSize, header->data, indexValue->totalDataLen);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Memory copy failed, ret:" << ret << ".");
+        mValueAllocator->MmsFree(newBlockAddr);
+        return MMS_INNER_ERR;
+    }
+
+    ret = memcpy_s(newHeader->data + offset, newBuffSize - offset, data, dataLen);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Memory copy failed, ret:" << ret << ".");
+        mValueAllocator->MmsFree(newBlockAddr);
+        return MMS_INNER_ERR;
+    }
+
+    mMemMgr->Trans2Offset(MMAP_AREA_VALUE, newBlockAddr, indexValue->blockOffset);
+    indexValue->totalDataLen = newDataLen;
+    mValueAllocator->MmsFree(curBlockAddr);
+    return MMS_OK;
+}
+
+BResult Cache::UpdateDataBlock(IndexValue *indexValue, const char *data, uint64_t offset, uint64_t dataLen,
+                               uint16_t preferNumaId)
+{
+    if (UNLIKELY(indexValue == nullptr || data == nullptr)) {
+        CACHE_LOG_ERROR("Invalid para.");
+        return MMS_INVALID_PARAM;
+    }
+
+    if (offset > indexValue->totalDataLen) { // 不允许本次更新与老数据之间有空洞
+        CACHE_LOG_ERROR("Out of bounds, data end:" << indexValue->totalDataLen << ", offset" << offset << ".");
+        return MMS_INNER_ERR;
+    }
+
+    uint64_t curBlockOffset = indexValue->blockOffset;
+    if (UNLIKELY(curBlockOffset == INVALID_BLOCK_OFFSET)) {
+        return ReviveDataBlock(indexValue, data, offset, dataLen, preferNumaId);
+    }
+
+    if (UNLIKELY(dataLen > UINT64_MAX - offset)) {
+        CACHE_LOG_ERROR("Invalid update range, offset:" << offset << ", length:" << dataLen << ".");
+        return MMS_INVALID_PARAM;
+    }
+
+    uint64_t curBlockAddr;
+    uint64_t newDataLen = std::max(indexValue->totalDataLen, offset + dataLen);
+    mMemMgr->Trans2Addr(MMAP_AREA_VALUE, curBlockOffset, curBlockAddr);
+    auto header = reinterpret_cast<DataHeader *>(curBlockAddr);
+    if (LIKELY(newDataLen <= header->blockSize)) {
+        return UpdateDataInCurrentBlock(indexValue, header, data, offset, dataLen);
+    }
+
+    return ExpandAndUpdateDataBlock(indexValue, data, offset, dataLen, curBlockAddr, preferNumaId);
+}
+
+BResult Cache::Update(const UpdatePara &para)
+{
+    uint32_t hashCode = HashKey(para.key, para.keyLen);
+    CacheShard &shard = SelectShard(hashCode);
+    uint32_t bucketIndex = hashCode % shard.bucketCount;
+    uint64_t bucketAddr = GetBucketAddr(shard, bucketIndex);
+    BucketNode *bucketNode = reinterpret_cast<BucketNode *>(bucketAddr);
+
+    CacheWriteLock(&bucketNode->status);
+    IndexNode *node = GetBucketSlot(bucketNode, hashCode);
+    while (node->valid == FLAG_VALID) {
+        IndexValue *indexValue = reinterpret_cast<IndexValue *>(node->indexValueAddr);
+        if (node->hashCode != hashCode || !IsSameKey(indexValue, para.key, para.keyLen)) {
+            node = &indexValue->next;
+            continue;
+        }
+
+        BResult ret = UpdateDataBlock(indexValue, para.value, para.offset, para.length, shard.numaId);
+        if (UNLIKELY(ret != MMS_OK)) {
+            CacheWriteUnLock(&bucketNode->status);
+            CACHE_LOG_ERROR("Update data block failed, key:" << std::string(para.key, para.keyLen) << ", ret:" << ret
+                                                             << ".");
+            return MMS_ERR;
+        }
+
+        CACHE_LOG_DEBUG("Update success, key:" << std::string(para.key, para.keyLen) << ", offset:" << para.offset
+                                               << ", length:" << para.length << ", new length:"
+                                               << indexValue->totalDataLen << ", old version:" << indexValue->version
+                                               << ", new version:" << para.version << ".");
+        indexValue->version = para.version;
+        CacheWriteUnLock(&bucketNode->status);
+        return MMS_OK;
+    }
+
+    CacheWriteUnLock(&bucketNode->status);
+    return MMS_NOT_EXISTS;
+}
+
+BResult Cache::HandleDeleteExistingNode(BucketNode *bucketNode, IndexNode *node, uint32_t version)
+{
+    IndexValue *indexValue = reinterpret_cast<IndexValue *>(node->indexValueAddr);
+    if (mIsRecovering.load(std::memory_order_acquire)) {
+        indexValue->isDelete = DATA_DELETED;
+        indexValue->version = version;
+        CacheWriteUnLock(&bucketNode->status);
+        return MMS_OK;
+    }
+
+    FreeValueBlock(indexValue, mMemMgr, mValueAllocator);
+    uint64_t indexValueAddr = node->indexValueAddr;
+    *node = indexValue->next;
+    CacheWriteUnLock(&bucketNode->status);
+    mIndexMemAllocator->MmsFree(indexValueAddr);
+    return MMS_OK;
+}
+
+BResult Cache::HandleDeleteMissingNode(BucketNode *bucketNode, uint32_t hashCode, uint16_t preferNumaId,
+                                       const char *key, uint16_t keyLen, uint32_t version)
+{
+    if (!mIsRecovering.load(std::memory_order_acquire)) {
+        CacheWriteUnLock(&bucketNode->status);
+        CACHE_LOG_DEBUG("Key not found, skipping deletion, key:" << std::string(key, keyLen) << ".");
+        return MMS_KEY_NOT_EXISTS;
+    }
+
+    BResult ret = InsertTombEntry(bucketNode, hashCode, version, preferNumaId, key, keyLen);
+    CacheWriteUnLock(&bucketNode->status);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Insert a tomb entry failed, ret:" << ret << ", key:" << std::string(key, keyLen) << ".");
+        return ret;
+    }
+
+    CACHE_LOG_DEBUG("Key not found, insert tomb entry success, key:" << std::string(key, keyLen) << ".");
+    return MMS_KEY_NOT_EXISTS;
+}
+
+BResult Cache::InsertTombEntry(BucketNode *bucketNode, uint32_t hashCode, uint32_t version, uint16_t preferNumaId,
+                               const char *key, uint16_t keyLen)
+{
+    uint64_t indexValueAddr;
+    uint16_t numaId;
+    // 申请indexValue内存
+    BResult ret = mIndexMemAllocator->MmsAllocPreferNuma(INDEX_VALUE_SIZE, preferNumaId, numaId, indexValueAddr);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Alloc indexValue block failed, ret:" << ret << ".");
+        return MMS_ALLOC_FAIL;
+    }
+
+    uint64_t indexNumaOffset;
+    mMemMgr->Trans2Offset(MMAP_AREA_INDEX, indexValueAddr, indexNumaOffset);
+    IndexValue *indexValue = reinterpret_cast<IndexValue *>(indexValueAddr);
+    indexValue->totalDataLen = 0;
+    indexValue->version = version;
+    indexValue->isDelete = DATA_DELETED;
+    indexValue->blockOffset = INVALID_BLOCK_OFFSET;
+
+    ret = CopyIndexKey(indexValue, key, keyLen);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Copy key failed, ret:" << ret << ", key:" << std::string(key, keyLen) << ".");
+        mIndexMemAllocator->MmsFree(indexValueAddr);
+        return ret;
+    }
+
+    IndexNode *slot = GetBucketSlot(bucketNode, hashCode);
+    indexValue->next = *slot;
+    *slot = {hashCode, FLAG_VALID, numaId, indexNumaOffset, indexValueAddr};
+
+    return MMS_OK;
+}
+
+BResult Cache::Delete(const char *key, uint16_t keyLen, uint32_t version)
+{
+    uint32_t hashCode = HashKey(key, keyLen);
+    CacheShard &shard = SelectShard(hashCode);
+    uint32_t bucketIndex = hashCode % shard.bucketCount;
+    uint64_t bucketAddr = GetBucketAddr(shard, bucketIndex);
+    BucketNode *bucketNode = reinterpret_cast<BucketNode *>(bucketAddr);
+
+    CacheWriteLock(&bucketNode->status);
+    IndexNode *node = GetBucketSlot(bucketNode, hashCode);
+    while (node->valid == FLAG_VALID) {
+        IndexValue *indexValue = reinterpret_cast<IndexValue *>(node->indexValueAddr);
+        if (node->hashCode != hashCode || !IsSameKey(indexValue, key, keyLen)) {
+            node = &indexValue->next;
+            continue;
+        }
+
+        BResult ret = HandleDeleteExistingNode(bucketNode, node, version);
+        if (UNLIKELY(ret != MMS_OK)) {
+            CACHE_LOG_ERROR("Delete existing node failed, ret:" << ret << ", key:" << std::string(key, keyLen) << ".");
+            return ret;
+        }
+        CACHE_LOG_DEBUG("Delete success, key:" << std::string(key, keyLen) << ".");
+        return MMS_OK;
+    }
+
+    return HandleDeleteMissingNode(bucketNode, hashCode, shard.numaId, key, keyLen, version);
+}
+
+BResult Cache::HandleReplacePut(IndexNode &curNode, const char *key, uint16_t keyLen, const char *value,
+                                uint64_t length, uint16_t preferNumaId)
+{
+    BResult ret;
+    uint64_t indexValueAddr;
+    uint16_t numaId;
+    // 申请indexValue内存
+    ret = mIndexMemAllocator->MmsAllocPreferNuma(INDEX_VALUE_SIZE, preferNumaId, numaId, indexValueAddr);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Alloc indexValue block failed, ret:" << ret << ".");
+        return MMS_ALLOC_FAIL;
+    }
+
+    uint64_t indexNumaOffset;
+    mMemMgr->Trans2Offset(MMAP_AREA_INDEX, indexValueAddr, indexNumaOffset);
+    IndexValue *indexValue = reinterpret_cast<IndexValue *>(indexValueAddr);
+    indexValue->totalDataLen = 0;
+    indexValue->blockOffset = INVALID_BLOCK_OFFSET;
+
+    ret = CopyIndexKey(indexValue, key, keyLen);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Copy key failed, ret:" << ret << ", key:" << std::string(key, keyLen) << ".");
+        mIndexMemAllocator->MmsFree(indexValueAddr);
+        return ret;
+    }
+    // 拷贝数据到cache
+    ret = PutDataIntoBlock(indexValue, value, length, preferNumaId);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Put data into cache failed, ret:" << ret << ".");
+        mIndexMemAllocator->MmsFree(indexValueAddr);
+        return ret;
+    }
+
+    curNode.numaId = numaId;
+    curNode.numaOffset = indexNumaOffset;
+    curNode.indexValueAddr = indexValueAddr;
+    return MMS_OK;
+}
+
+BResult Cache::ReplaceExistingNode(IndexNode *existingNode, const ReplacePara &para, uint16_t preferNumaId)
+{
+    IndexValue *indexValue = reinterpret_cast<IndexValue *>(existingNode->indexValueAddr);
+    if (para.version < indexValue->version) {
+        CACHE_LOG_DEBUG("Data version is lower, key:" << std::string(para.key, para.keyLen)
+                                                      << ", new version:" << para.version
+                                                      << ", old version:" << indexValue->version << ".");
+        return MMS_OK;
+    }
+
+    BResult ret = UpdateDataBlock(indexValue, para.value, para.offset, para.length, preferNumaId);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Update data block failed, key:" << std::string(para.key, para.keyLen) << ", ret:" << ret
+                                                         << ".");
+        return MMS_ERR;
+    }
+
+    CACHE_LOG_DEBUG("Update success, key:" << std::string(para.key, para.keyLen) << ", offset:" << para.offset
+                                           << ", length:" << para.length << ", new length:" << indexValue->totalDataLen
+                                           << ", old version:" << indexValue->version
+                                           << ", new version:" << para.version << ".");
+    indexValue->version = para.version;
+    indexValue->isDelete = DATA_ALIVE;
+    return MMS_OK;
+}
+
+BResult Cache::InsertReplaceNode(BucketNode *bucketNode, uint32_t hashCode, const ReplacePara &para,
+                                 uint16_t preferNumaId)
+{
+    IndexNode curNode;
+    curNode.hashCode = hashCode;
+    curNode.valid = FLAG_VALID;
+    BResult ret = HandleReplacePut(curNode, para.key, para.keyLen, para.value, para.length, preferNumaId);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Put data into cache failed, ret:" << ret << ".");
+        return ret;
+    }
+
+    IndexValue *indexValue = reinterpret_cast<IndexValue *>(curNode.indexValueAddr);
+    IndexNode *slot = GetBucketSlot(bucketNode, hashCode);
+    indexValue->next = *slot;
+    indexValue->ptId = para.ptId;
+    indexValue->isDelete = DATA_ALIVE;
+    indexValue->version = para.version;
+    *slot = curNode;
+    CACHE_LOG_DEBUG("Put success, key:" << std::string(para.key, para.keyLen) << ", length:" << para.length
+                                        << ", ptId:" << para.ptId << ", version:" << para.version << ".");
+    return MMS_OK;
+}
+
+BResult Cache::Replace(const ReplacePara &para)
+{
+    uint32_t hashCode = HashKey(para.key, para.keyLen);
+    CacheShard &shard = SelectShard(hashCode);
+    uint32_t bucketIndex = hashCode % shard.bucketCount;
+    uint64_t bucketAddr = GetBucketAddr(shard, bucketIndex);
+    BucketNode *bucketNode = reinterpret_cast<BucketNode *>(bucketAddr);
+
+    CacheWriteLock(&bucketNode->status);
+    IndexNode *existingNode = FindExistingNode(bucketNode, para.key, para.keyLen, hashCode);
+    BResult ret = existingNode == nullptr ? InsertReplaceNode(bucketNode, hashCode, para, shard.numaId) :
+                                            ReplaceExistingNode(existingNode, para, shard.numaId);
+    CacheWriteUnLock(&bucketNode->status);
+    return ret;
+}
+
+void Cache::ClearDeletedData()
+{
+    for (const auto &shard : mShards) {
+        for (uint32_t bucketIndex = 0; bucketIndex < shard.bucketCount; bucketIndex++) {
+            uint64_t bucketAddr = GetBucketAddr(shard, bucketIndex);
+            BucketNode *bucketNode = reinterpret_cast<BucketNode *>(bucketAddr);
+
+            CacheWriteLock(&bucketNode->status);
+            for (uint32_t slotIndex = 0; slotIndex < BUCKET_INLINE_SLOT_NUM; slotIndex++) {
+                IndexNode *node = &bucketNode->slots[slotIndex];
+                while (node->valid == FLAG_VALID) {
+                    IndexValue *indexValue = reinterpret_cast<IndexValue *>(node->indexValueAddr);
+                    if (indexValue->isDelete != DATA_DELETED) {
+                        node = &indexValue->next;
+                        continue;
+                    }
+
+                    FreeValueBlock(indexValue, mMemMgr, mValueAllocator);
+
+                    uint64_t indexValueAddr = node->indexValueAddr;
+                    *node = indexValue->next;
+
+                    CACHE_LOG_DEBUG("Delete success, key:" << indexValue->key << ".");
+                    mIndexMemAllocator->MmsFree(indexValueAddr);
+                }
+            }
+
+            CacheWriteUnLock(&bucketNode->status);
+        }
+    }
+
+    CACHE_LOG_INFO("Clear deleted data done.");
+}
+
+} // namespace mms
+} // namespace ock

@@ -46,7 +46,6 @@
 | 依赖三方库      | `https://gitcode.com/Ascend/mockcpp.git`      | CMakeLists.txt         | `https://gitcode.com/Ascend/mockcpp.git`      | 单元测试框架依赖    |
 | 依赖三方库      | `https://gitcode.com/openeuler/libboundscheck.git` | CMakeLists.txt         | `https://gitcode.com/openeuler/libboundscheck.git` | 安全边界检查库依赖  |
 | 依赖三方库      | `https://gitcode.com/openeuler/ubs-comm.git`  | CMakeLists.txt         | `https://gitcode.com/openeuler/ubs-comm.git`  | 通信库依赖      |
-| 依赖三方库      | `https://gitcode.com/GitHub_Trending/sp/spdlog.git` | CMakeLists.txt         | `https://gitcode.com/GitHub_Trending/sp/spdlog.git` | 日志框架依赖      |
 | 依赖三方库      | `https://gitcode.com/gh_mirrors/pr/prometheus-cpp.git` | CMakeLists.txt         | `https://gitcode.com/gh_mirrors/pr/prometheus-cpp.git` | 监控指标库依赖    |
 | 依赖三方库      | `https://codehub.devcloud.cn-north-4.huaweicloud.com/aca5f619a7a34d3fb99b76a842fda236/googletest.git` | install_test_tools.sh  | `https://codehub.devcloud.cn-north-4.huaweicloud.com/aca5f619a7a34d3fb99b76a842fda236/googletest.git` | 单元测试框架依赖    |
 | license 地址 | 不涉及                                         | LICENSE                | `http://license.coscl.org.cn/MulanPSL2`       | licensefile   |

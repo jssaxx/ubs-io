@@ -13,6 +13,7 @@
 #ifndef NET_CONNECTOR_H
 #define NET_CONNECTOR_H
 
+#include <condition_variable>
 #include "bio_execution.h"
 #include "net_common.h"
 

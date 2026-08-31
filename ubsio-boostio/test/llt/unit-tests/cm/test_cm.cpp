@@ -27,7 +27,7 @@
 #include "server/cm_server_view.h"
 #include "server/pt/cm_pt_calc_fixed_state.h"
 #include "server/pt/cm_pt_store.h"
-#include "zookeeper.h"
+#include "zookeeper/zookeeper.h"
 
 using namespace ock::bio;
 bool TestCm::gSetup = false;
