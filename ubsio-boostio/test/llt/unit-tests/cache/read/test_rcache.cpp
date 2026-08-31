@@ -10,18 +10,18 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <mockcpp/mockcpp.hpp>
-#include <cstdint>
-#include "underfs.h"
-#include "bio_server.h"
-#include "bio_mock.h"
-#include "bio_config_instance.h"
-#include "cache_slice_operator.h"
-#include "rcache_manager.h"
-#include "bdm_core.h"
-#include "tracepoint.h"
-#include "flow_manager.h"
 #include "test_rcache.h"
+#include <cstdint>
+#include <mockcpp/mockcpp.hpp>
+#include "bdm_core.h"
+#include "bio_config_instance.h"
+#include "bio_mock.h"
+#include "bio_server.h"
+#include "cache_slice_operator.h"
+#include "flow_manager.h"
+#include "rcache_manager.h"
+#include "tracepoint.h"
+#include "underfs.h"
 
 using namespace ock::bio;
 
@@ -260,7 +260,7 @@ TEST_F(TestRCache, test_rcache_slice)
 {
     LOG_INFO("test_rcache_slice");
     uint64_t length = NO_1024;
-    char *buffer = static_cast<char*>(malloc(length));
+    char *buffer = static_cast<char *>(malloc(length));
     FlowAddr flowAddr;
     flowAddr.chunkId = reinterpret_cast<uint64_t>(buffer);
     flowAddr.chunkOffset = 0;
@@ -277,7 +277,7 @@ TEST_F(TestRCache, test_rcache_slice)
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
 
     uint64_t outLength = 0;
-    char* sliceBuf = static_cast<char *>(malloc(length));
+    char *sliceBuf = static_cast<char *>(malloc(length));
     ret = readSlicePtr->Serialize(sliceBuf, length, outLength);
     EXPECT_EQ(ret, BIO_OK);
 
@@ -294,7 +294,7 @@ TEST_F(TestRCache, test_wcache_slice)
 {
     LOG_INFO("test_wcache_slice");
     uint64_t length = NO_1024;
-    char *buffer = static_cast<char*>(malloc(length));
+    char *buffer = static_cast<char *>(malloc(length));
     FlowAddr flowAddr;
     flowAddr.chunkId = reinterpret_cast<uint64_t>(buffer);
     flowAddr.chunkOffset = 0;
@@ -309,7 +309,7 @@ TEST_F(TestRCache, test_wcache_slice)
     ret = wcacheSlice->Deserialize(nullptr, length);
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
 
-    char* sliceBuf = static_cast<char *>(malloc(length));
+    char *sliceBuf = static_cast<char *>(malloc(length));
     ret = wcacheSlice->Deserialize(sliceBuf, 0);
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
     free(sliceBuf);
@@ -348,7 +348,7 @@ TEST_F(TestRCache, test_cache_slice_operator_ok)
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
 
     // disk slice
-    char *buffer = static_cast<char*>(malloc(NO_1024));
+    char *buffer = static_cast<char *>(malloc(NO_1024));
     FlowAddr flowAddr;
     flowAddr.chunkId = reinterpret_cast<uint64_t>(buffer);
     flowAddr.chunkOffset = 0;
@@ -358,7 +358,7 @@ TEST_F(TestRCache, test_cache_slice_operator_ok)
     SlicePtr slice = MakeRef<Slice>(NO_1024, addrVec, FLOW_DISK);
 
     // memory slice
-    char *buffer1 = static_cast<char*>(malloc(NO_1024));
+    char *buffer1 = static_cast<char *>(malloc(NO_1024));
     FlowAddr flowAddr1;
     flowAddr1.chunkId = reinterpret_cast<uint64_t>(buffer1);
     flowAddr1.chunkOffset = 0;
@@ -368,7 +368,7 @@ TEST_F(TestRCache, test_cache_slice_operator_ok)
     SlicePtr slice1 = MakeRef<Slice>(NO_1024, addrVec1, FLOW_MEMORY);
 
     // memory slice
-    char *buffer2 = static_cast<char*>(malloc(NO_1024));
+    char *buffer2 = static_cast<char *>(malloc(NO_1024));
     FlowAddr flowAddr2;
     flowAddr2.chunkId = reinterpret_cast<uint64_t>(buffer1);
     flowAddr2.chunkOffset = 0;
@@ -489,4 +489,3 @@ TEST_F(TestRCache, test_rcache_recover_return_err2)
     BioHvsDeactiveTracePoint(0, "FLOW_SEAL_OK");
     BioHvsDeactiveTracePoint(0, "FLOW_DESTROY_OBJECT_ERR");
 }
-

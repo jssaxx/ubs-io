@@ -10,19 +10,19 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <time.h>
 #include <fcntl.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <string.h>
-#include <pthread.h>
 #include <malloc.h>
+#include <pthread.h>
 #include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "dpax_list.h"
-#include "tracepoint_common.h"
 #include "tracepoint.h"
+#include "tracepoint_common.h"
 #include "tracepoint_pub.h"
 
 MODULE_ID(PID_DEBUG);
@@ -36,11 +36,10 @@ MODULE_ID(PID_DEBUG);
 #endif
 
 #ifndef MSEC_PER_SEC
-#define MSEC_PER_SEC    1000UL
+#define MSEC_PER_SEC 1000UL
 #endif
 
-
-#define TRACEPOINT_PRINT_LIMIT_INTERVAL (60*HZ)
+#define TRACEPOINT_PRINT_LIMIT_INTERVAL (60 * HZ)
 #define TRACEPOINT_PRINT_LIMIT_COUNT (3)
 
 #define BIO_TP_LOGID (0L)
@@ -78,10 +77,10 @@ static uint32_t BioHvsGetHashAddr(uint32_t key1, uint64_t key2, uint32_t bits)
 
     stKey.unKey64.ull64bits = key2;
     stKey.unKey64.ui32bits[1] = key1;
-    uint64_t ullTmp = *((uint64_t *) (&stKey));
+    uint64_t ullTmp = *((uint64_t *)(&stKey));
     ullTmp *= BIO_GOLDEN_RATIO_PRIME;
 
-    return (uint32_t) (ullTmp >> (BIO_MAX_HT_BITS - bits));
+    return (uint32_t)(ullTmp >> (BIO_MAX_HT_BITS - bits));
 }
 
 static int32_t BioHvsStrToHashKey(const char *str, uint32_t maxLen, uint64_t *key)
@@ -95,14 +94,14 @@ static int32_t BioHvsStrToHashKey(const char *str, uint32_t maxLen, uint64_t *ke
         return RETURN_ERROR;
     }
 
-    len = (uint32_t) strnlen(str, (size_t) maxLen);
+    len = (uint32_t)strnlen(str, (size_t)maxLen);
     if (UNLIKELY(0 == len || len >= maxLen)) {
         BIO_LOG_INFO(BIO_TP_LOGID, "Length of str is zero or beyond the max length.");
         return RETURN_ERROR;
     }
 
     for (i = 0; i < len; ++i) {
-        keyTemp = BIO_STR_TO_KEY_BASE_NUM * keyTemp + (uint8_t) str[i];
+        keyTemp = BIO_STR_TO_KEY_BASE_NUM * keyTemp + (uint8_t)str[i];
     }
 
     *key = keyTemp;
@@ -120,14 +119,14 @@ int32_t BioHvsCreateHashTable(uint32_t uiHashSize, uint32_t uiBits, BioHtS **pps
         return RETURN_ERROR;
     }
 
-    pstHash = (BioHtS *) malloc((uint32_t) sizeof(BioHtS));
+    pstHash = (BioHtS *)malloc((uint32_t)sizeof(BioHtS));
     if (NULL == pstHash) {
         BIO_LOG_INFO(BIO_TP_LOGID, "malloc BioHtS fail.");
         *ppstHashTable = NULL;
         return RETURN_ERROR;
     }
 
-    pstHash->pstHashElem = (BioHashListS *) malloc((uint32_t) (uiHashSize * sizeof(BioHashListS)));
+    pstHash->pstHashElem = (BioHashListS *)malloc((uint32_t)(uiHashSize * sizeof(BioHashListS)));
     if (NULL == pstHash->pstHashElem) {
         BIO_LOG_INFO(BIO_TP_LOGID, "malloc hashtable array fail");
         free(pstHash);
@@ -167,9 +166,9 @@ int32_t BioHvsInsertHashItem(BioHtS *pstHashTable, BioHashItemS *tPstData)
     bool multipleRegistration = false;
 
     if ((NULL == pstHashTable) || (NULL == tPstData)) {
-        PRINT_LIMIT(BIO_LOG_INFO, (long) BIO_LOGID_BUTT, TRACEPOINT_PRINT_LIMIT_INTERVAL, TRACEPOINT_PRINT_LIMIT_COUNT,
+        PRINT_LIMIT(BIO_LOG_INFO, (long)BIO_LOGID_BUTT, TRACEPOINT_PRINT_LIMIT_INTERVAL, TRACEPOINT_PRINT_LIMIT_COUNT,
                     validParam);
-        if (true == (int) validParam) {
+        if (true == (int)validParam) {
             BIO_LOG_INFO(BIO_TP_LOGID, "Parameter is NULL.");
         }
         return RETURN_ERROR;
@@ -179,15 +178,16 @@ int32_t BioHvsInsertHashItem(BioHtS *pstHashTable, BioHashItemS *tPstData)
     pstElem = &(pstHashTable->pstHashElem[uiAddr]);
 
     pthread_spin_lock(&g_TPHtLock);
-    DPAX_LIST_FOR_EACH(pstPos, &pstElem->stBucketList) {
+    DPAX_LIST_FOR_EACH(pstPos, &pstElem->stBucketList)
+    {
         /* lint -e718 -e746 -e40 */
         pstData = DPAX_LIST_ENTRY(pstPos, BioHashItemS, stConflictList);
         /* lint +e718 +e746 +e40 */
         if ((pstData->uiKey1 == tPstData->uiKey1) && (pstData->ullKey2 == tPstData->ullKey2)) {
             pthread_spin_unlock(&g_TPHtLock);
-            PRINT_LIMIT(BIO_LOG_INFO, (long) BIO_LOGID_BUTT, TRACEPOINT_PRINT_LIMIT_INTERVAL,
+            PRINT_LIMIT(BIO_LOG_INFO, (long)BIO_LOGID_BUTT, TRACEPOINT_PRINT_LIMIT_INTERVAL,
                         TRACEPOINT_PRINT_LIMIT_COUNT, multipleRegistration);
-            if (true == (int) multipleRegistration) {
+            if (true == (int)multipleRegistration) {
                 BIO_LOG_INFO(BIO_TP_LOGID, "Hash item already exists.");
             }
             return RETURN_ERROR;
@@ -214,7 +214,8 @@ int32_t BioHvsRemoveHashItem(BioHtS *pstHashTable, uint32_t key1, uint64_t key2)
     pstElem = &(pstHashTable->pstHashElem[uiAddr]);
 
     pthread_spin_lock(&g_TPHtLock);
-    DPAX_LIST_FOR_EACH(pstPos, &pstElem->stBucketList) {
+    DPAX_LIST_FOR_EACH(pstPos, &pstElem->stBucketList)
+    {
         pstData = DPAX_LIST_ENTRY(pstPos, BioHashItemS, stConflictList);
         if ((key1 == pstData->uiKey1) && (key2 == pstData->ullKey2)) {
             DpaxListDelInit(&pstData->stConflictList);
@@ -242,7 +243,8 @@ int32_t BioHvsSearchHashItem(BioHtS *pstHashTable, uint32_t key1, uint64_t key2,
     pstElem = &(pstHashTable->pstHashElem[uiAddr]);
 
     pthread_spin_lock(&g_TPHtLock);
-    DPAX_LIST_FOR_EACH(pstPos, &pstElem->stBucketList) {
+    DPAX_LIST_FOR_EACH(pstPos, &pstElem->stBucketList)
+    {
         pstData = DPAX_LIST_ENTRY(pstPos, BioHashItemS, stConflictList);
         if ((key1 == pstData->uiKey1) && (key2 == pstData->ullKey2)) {
             *ppstData = pstData;
@@ -272,7 +274,8 @@ int32_t BioHvsTravelHashTable(BioHtS *pstHashTable, void (*fn)(BioHashItemS *, v
     for (i = 0; i < pstHashTable->uiTableSize; ++i) {
         pstElem = &(pstHashTable->pstHashElem[i]);
         pthread_spin_lock(&g_TPHtLock);
-        DPAX_LIST_FOR_EACH(pstPos, &pstElem->stBucketList) {
+        DPAX_LIST_FOR_EACH(pstPos, &pstElem->stBucketList)
+        {
             /*lint -e40*/
             pstData = DPAX_LIST_ENTRY(pstPos, BioHashItemS, stConflictList);
             /*lint +e40*/
@@ -297,12 +300,12 @@ void BioHvsDeactiveForTravel(BioHashItemS *hashdata, void *param)
         return;
     }
 
-    hashTPData = (BioTpHashS *) (void *) hashdata;
+    hashTPData = (BioTpHashS *)(void *)hashdata;
     hashTPData->stTP.iActive = BIO_TRACEP_STAT_DEACTIVE;
     hashTPData->stTP.type = BIO_TP_TYPE_BUTT;
     hashTPData->stTP.timeAlive = 0;
     hashTPData->stTP.timeCalled = 0;
-    memset(&(hashTPData->stTP.stParam.tpParamData[0]), 0, (size_t) BIO_TRACEP_PARAM_SIZE);
+    memset(&(hashTPData->stTP.stParam.tpParamData[0]), 0, (size_t)BIO_TRACEP_PARAM_SIZE);
 }
 
 static BioTpType BioGetTpType(const char *type)
@@ -409,7 +412,6 @@ void BioHvsParseConfigFile(const char *fileName)
 
         (void)close(fd);
     }
-
 }
 
 void BioHvsInitTracePoint(void)
@@ -478,8 +480,8 @@ int32_t BioHvsGetTracePoint(uint32_t pid, const char *name, BioTracepointNews **
 
     ret = BioHvsSearchHashItem(g_TPHt, pid, key, &hashData);
     if (RETURN_OK != ret) {
-        PRINT_LIMIT(BIO_LOG_INFO, (long)BIO_LOGID_BUTT, TRACEPOINT_PRINT_LIMIT_INTERVAL,
-            TRACEPOINT_PRINT_LIMIT_COUNT, bcan);
+        PRINT_LIMIT(BIO_LOG_INFO, (long)BIO_LOGID_BUTT, TRACEPOINT_PRINT_LIMIT_INTERVAL, TRACEPOINT_PRINT_LIMIT_COUNT,
+                    bcan);
         if (true == (int)bcan) {
             BIO_LOG_INFO(BIO_TP_LOGID, "Search tracepoint(%s) failed.", name);
         }
@@ -563,8 +565,8 @@ int32_t BioHvsRegTracePoint(uint32_t pid, const char *name, const char *desc, Fu
     hashData->stTP.fnHook = fnHook;
 
     if (RETURN_OK != BioHvsInsertHashItem(g_TPHt, (BioHashItemS *)(void *)hashData)) {
-        PRINT_LIMIT(BIO_LOG_INFO, (long)BIO_LOGID_BUTT, TRACEPOINT_PRINT_LIMIT_INTERVAL,
-            TRACEPOINT_PRINT_LIMIT_COUNT, bcan);
+        PRINT_LIMIT(BIO_LOG_INFO, (long)BIO_LOGID_BUTT, TRACEPOINT_PRINT_LIMIT_INTERVAL, TRACEPOINT_PRINT_LIMIT_COUNT,
+                    bcan);
         if (true == (int)bcan) {
             BIO_LOG_INFO(BIO_TP_LOGID, "Insert tracepoint(%s) to hash table failed.", name);
         }
@@ -595,8 +597,8 @@ int32_t BioHvsUnregTracePoint(uint32_t pid, const char *name)
     }
 
     if (RETURN_OK != BioHvsSearchHashItem(g_TPHt, key1, key2, &hashData)) {
-        PRINT_LIMIT(BIO_LOG_INFO, (long)BIO_LOGID_BUTT, TRACEPOINT_PRINT_LIMIT_INTERVAL,
-            TRACEPOINT_PRINT_LIMIT_COUNT, bcan);
+        PRINT_LIMIT(BIO_LOG_INFO, (long)BIO_LOGID_BUTT, TRACEPOINT_PRINT_LIMIT_INTERVAL, TRACEPOINT_PRINT_LIMIT_COUNT,
+                    bcan);
         if (true == (int)bcan) {
             BIO_LOG_INFO(BIO_TP_LOGID, "Search tracepoint(%s) failed.", name);
         }
@@ -612,7 +614,7 @@ int32_t BioHvsUnregTracePoint(uint32_t pid, const char *name)
 EXPORT_SYMBOL(BioHvsUnregTracePoint);
 
 int32_t BioHvsActiveTracePoint(uint32_t pid, const char *name, int32_t type, uint32_t time,
-    BioTracepointParam userParam)
+                               BioTracepointParam userParam)
 {
     int32_t ret = RETURN_ERROR;
     BioTracepointNews *tracepoint = NULL;
@@ -634,8 +636,7 @@ int32_t BioHvsActiveTracePoint(uint32_t pid, const char *name, int32_t type, uin
     }
 
     if (BIO_TP_TYPE_CALLBACK == type && NULL == tracepoint->fnHook) {
-        BIO_LOG_INFO(BIO_TP_LOGID,
-            "Callback function of tracepoint(%s) is NULL, cannot active callback type.", name);
+        BIO_LOG_INFO(BIO_TP_LOGID, "Callback function of tracepoint(%s) is NULL, cannot active callback type.", name);
         return BIO_TP_RETURN_CALLBACK_NULL;
     }
 
@@ -771,8 +772,7 @@ BioTracepoints *BioGetFreeTracePoint(void)
     return NULL;
 }
 
-void BioRegTracePoint(TpUint32 uiPid, const TpChar *szName, const TpChar *szDesc, TpInt32 iInitState,
-                        TpInt32 iDbgOnly)
+void BioRegTracePoint(TpUint32 uiPid, const TpChar *szName, const TpChar *szDesc, TpInt32 iInitState, TpInt32 iDbgOnly)
 {
     BioTracepoints *pstTp = NULL;
     size_t len_name;
@@ -796,14 +796,14 @@ void BioRegTracePoint(TpUint32 uiPid, const TpChar *szName, const TpChar *szDesc
     pstTp = BioFindTracePoint(uiPid, szName);
     if (NULL != pstTp) {
         BIO_LOG_INFO(BIO_TP_LOGID, "Repeat register tracepoint Module: (%s), TracePoint: (%s).",
-                    BIO_GET_PID_NAME(uiPid), szName);
+                     BIO_GET_PID_NAME(uiPid), szName);
         return;
     }
 
     pstTp = BioGetFreeTracePoint();
     if (NULL == pstTp) {
         BIO_LOG_INFO(BIO_TP_LOGID, "Reach max tracepoint, register fail Module: (%s), TracePoint: (%s).",
-                    BIO_GET_PID_NAME(uiPid), szName);
+                     BIO_GET_PID_NAME(uiPid), szName);
         return;
     }
 
@@ -881,8 +881,8 @@ BioTracepointHook *BioGetFreeTraceHook(BioTracepoints *pstTp)
     return NULL;
 }
 
-void BioAddTracePointHook(TpUint32 uiPid, const TpChar *szName, const TpChar *szHookName,
-    FuncTracepointCommon fnHook, const TpChar *szDesc, TpInt32 iInitState, TpInt32 iDbgOnly)
+void BioAddTracePointHook(TpUint32 uiPid, const TpChar *szName, const TpChar *szHookName, FuncTracepointCommon fnHook,
+                          const TpChar *szDesc, TpInt32 iInitState, TpInt32 iDbgOnly)
 {
     BioTracepoints *pstTp = NULL;
     BioTracepointHook *pstHook = NULL;
@@ -890,38 +890,37 @@ void BioAddTracePointHook(TpUint32 uiPid, const TpChar *szName, const TpChar *sz
     size_t lenDesc;
 
     if ((NULL == szName) || (NULL == szHookName) || (NULL == fnHook) || (NULL == szDesc)) {
-        BIO_LOG_INFO(BIO_TP_LOGID, "some argument is NULL, szName(%p), szHookName(%p), fnHook(%p), szDesc(%p).",
-                     szName, szHookName, fnHook, szDesc);
+        BIO_LOG_INFO(BIO_TP_LOGID, "some argument is NULL, szName(%p), szHookName(%p), fnHook(%p), szDesc(%p).", szName,
+                     szHookName, fnHook, szDesc);
         return;
     }
 
     lenName = strlen(szHookName);
     lenDesc = strlen(szDesc);
     if ((lenName >= MAX_NAME_LEN) || (lenDesc >= MAX_DESC_LEN)) {
-        BIO_LOG_INFO(BIO_TP_LOGID,
-                    "the length of szHookName or szDesc is too long, szHookName(%u), szDesc(%u).", lenName,
-                    lenDesc);
+        BIO_LOG_INFO(BIO_TP_LOGID, "the length of szHookName or szDesc is too long, szHookName(%u), szDesc(%u).",
+                     lenName, lenDesc);
         return;
     }
 
     pstTp = BioFindTracePoint(uiPid, szName);
     if (NULL == pstTp) {
         BIO_LOG_INFO(BIO_TP_LOGID, "Can not find tracepoint Module: (%s), TracePoint: (%s).", BIO_GET_PID_NAME(uiPid),
-                    szName);
+                     szName);
         return;
     }
 
     pstHook = BioFindTraceHook(pstTp, szHookName);
     if (NULL != pstHook) {
         BIO_LOG_INFO(BIO_TP_LOGID, "Repeat register tracepoint hook Module: (%s), TracePoint: (%s), Hook: (%s).",
-                    BIO_GET_PID_NAME(uiPid), szName, szHookName);
+                     BIO_GET_PID_NAME(uiPid), szName, szHookName);
         return;
     }
 
     pstHook = BioGetFreeTraceHook(pstTp);
     if (NULL == pstHook) {
         BIO_LOG_INFO(BIO_TP_LOGID, "Reach max tracepoint, register fail Module: (%s), TracePoint: (%s), Hook: (%s).",
-                    BIO_GET_PID_NAME(uiPid), szName, szHookName);
+                     BIO_GET_PID_NAME(uiPid), szName, szHookName);
         return;
     }
 
@@ -959,7 +958,7 @@ void BioDelTracePointHook(TpUint32 uiPid, const TpChar *szName, const TpChar *sz
     pstHook = BioFindTraceHook(pstTp, szHookName);
     if (NULL == pstHook) {
         BIO_LOG_INFO(BIO_TP_LOGID, "Can not find tracepoint hook Module: (%s), TracePoint: (%s), Hook: (%s).",
-                    BIO_GET_PID_NAME(uiPid), szName, szHookName);
+                     BIO_GET_PID_NAME(uiPid), szName, szHookName);
         return;
     }
 
@@ -1077,4 +1076,3 @@ int32_t BioTpShowTpAll(BioHtS *pstHashTable, void (*showTp)(BioHashItemS *, void
 
     return RETURN_OK;
 }
-

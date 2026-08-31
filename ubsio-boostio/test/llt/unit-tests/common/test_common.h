@@ -25,8 +25,7 @@ class TestCommon : public testing::Test {
 private:
     static bool gSetup;
 };
-}
-}
-
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_TEST_COMMON_H

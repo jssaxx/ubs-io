@@ -12,7 +12,7 @@
 
 #ifndef BIO_TRACEPOINT_H
 #define BIO_TRACEPOINT_H
-#ifdef __aarch64__
+#if defined(__aarch64__) || defined(DEBUG_UT)
 #include "tracepoint.h"
 #endif
 
@@ -28,8 +28,8 @@ private:
     static int RegisterAllPoints() noexcept;
     static void RemoveAllPoints() noexcept;
 };
-}
-}
-}
+} // namespace tp
+} // namespace bio
+} // namespace ock
 
 #endif // BIO_TRACEPOINT_H

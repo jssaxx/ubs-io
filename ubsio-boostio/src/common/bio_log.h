@@ -13,13 +13,13 @@
 #ifndef BOOSTIO_BIO_LOG_H
 #define BOOSTIO_BIO_LOG_H
 
+#include <sys/time.h>
 #include <cstdint>
 #include <cstring>
 #include <fstream>
 #include <mutex>
 #include <sstream>
 #include <string>
-#include <sys/time.h>
 #include <utility>
 
 namespace ock {
@@ -142,7 +142,7 @@ private:
     static std::mutex gMutex;
     static bool gInited;
 };
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_BIO_LOG_H

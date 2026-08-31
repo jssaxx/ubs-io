@@ -13,8 +13,8 @@
 #ifndef BOOSTIO_WCACHE_STATISTIC_H
 #define BOOSTIO_WCACHE_STATISTIC_H
 
-#include <cstdint>
 #include <atomic>
+#include <cstdint>
 
 namespace ock {
 namespace bio {
@@ -82,13 +82,14 @@ public:
 
 private:
     WCacheStatistic() : totalCount(0), hitCount(0), hitMemCount(0), hitDiskCount(0) {}
+
 private:
     std::atomic<uint64_t> totalCount;
     std::atomic<uint64_t> hitCount;
     std::atomic<uint64_t> hitMemCount;
     std::atomic<uint64_t> hitDiskCount;
 };
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_WCACHE_STATISTIC_H

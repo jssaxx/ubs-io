@@ -25,6 +25,6 @@ class TestBioServer : public testing::Test {
 private:
     static bool gSetup;
 };
-}
-}
+} // namespace bio
+} // namespace ock
 #endif // BOOSTIO_TEST_BIOSERVER_H

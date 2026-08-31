@@ -13,16 +13,16 @@
 #ifndef BOOST_IO_INTERCEPTOR_FD_H
 #define BOOST_IO_INTERCEPTOR_FD_H
 
-#include <bitset>
-#include <string>
 #include <unistd.h>
-#include <memory>
-#include <unordered_map>
-#include <functional>
-#include <vector>
-#include <utility>
-#include <list>
 #include <atomic>
+#include <bitset>
+#include <functional>
+#include <list>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 #include "bio_lock.h"
 
 namespace ock {
@@ -56,7 +56,7 @@ public:
 
     OpenFileMap(const OpenFileMap &) = delete;
 
-    OpenFileMap &operator = (const OpenFileMap &) = delete;
+    OpenFileMap &operator=(const OpenFileMap &) = delete;
 
     bool Exist(int fd);
 
@@ -70,6 +70,6 @@ private:
     ReadWriteLock filesMtx;
     std::unordered_map<int, std::shared_ptr<OpenFile>> files;
 };
-}
-}
+} // namespace bio
+} // namespace ock
 #endif // BOOST_IO_INTERCEPTOR_FD_H

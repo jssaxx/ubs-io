@@ -10,8 +10,8 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <cerrno>
 #include "bio_tp_common.h"
+#include <cerrno>
 
 using namespace ock::bio;
 
@@ -56,13 +56,13 @@ void tp::CommonTp::BoolValueCallback(BioTracepointParam *user, bool *value, bool
 void tp::CommonTp::NoProcessCallback(BioTracepointParam *user) noexcept {}
 
 void *g_bak = nullptr;
-void tp::CommonTp::PointerValueCallback(BioTracepointParam *user, void** value, void* set) noexcept
+void tp::CommonTp::PointerValueCallback(BioTracepointParam *user, void **value, void *set) noexcept
 {
     g_bak = std::move(*value);
     *value = set;
 }
 
-void tp::CommonTp::PointerValueResetCallback(BioTracepointParam *user, void** value) noexcept
+void tp::CommonTp::PointerValueResetCallback(BioTracepointParam *user, void **value) noexcept
 {
     *value = g_bak;
 }

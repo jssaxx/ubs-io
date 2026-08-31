@@ -18,12 +18,12 @@
 #include <map>
 #include <mutex>
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 #include "bio_def.h"
-#include "bio_str_util.h"
 #include "bio_file_util.h"
+#include "bio_str_util.h"
 
 namespace ock {
 namespace bio {
@@ -38,9 +38,9 @@ public:
     ~KVReader();
 
     KVReader(const KVReader &) = delete;
-    KVReader &operator = (const KVReader &) = delete;
+    KVReader &operator=(const KVReader &) = delete;
     KVReader(const KVReader &&) = delete;
-    KVReader &operator = (const KVReader &&) = delete;
+    KVReader &operator=(const KVReader &&) = delete;
 
     bool FromFile(const std::string &filePath);
 
@@ -75,7 +75,7 @@ inline KVReader::~KVReader()
 
 inline bool KVReader::FromFile(const std::string &filePath)
 {
-    char* path = new(std::nothrow) char[PATH_MAX + 1];
+    char *path = new (std::nothrow) char[PATH_MAX + 1];
     if (path == nullptr) {
         printf("Memory allocation failed.\n");
         return false;
@@ -196,6 +196,6 @@ inline void KVReader::Dump()
         printf("%s = %s\n", p->name.c_str(), p->value.c_str());
     }
 }
-}
-}
+} // namespace bio
+} // namespace ock
 #endif // BIO_KV_H

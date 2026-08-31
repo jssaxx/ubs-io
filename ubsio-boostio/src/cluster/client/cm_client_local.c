@@ -18,13 +18,13 @@
 
 static char g_mrBuff[NODE_META_BUFF_LEN];
 
-static LocalNodeQueryOpHandle g_localOp[MAX_POOL_NUM] = { 0 };
+static LocalNodeQueryOpHandle g_localOp[MAX_POOL_NUM] = {0};
 
-static NodeInfo g_localNodeInfo[MAX_POOL_NUM] = { 0 };
+static NodeInfo g_localNodeInfo[MAX_POOL_NUM] = {0};
 
-static NodeListChangeOpHandle g_subNodeChange[MAX_POOL_NUM] = { 0 };
+static NodeListChangeOpHandle g_subNodeChange[MAX_POOL_NUM] = {0};
 
-static PtViewChangeOpHandle g_subPtChange[MAX_POOL_NUM] = { 0 };
+static PtViewChangeOpHandle g_subPtChange[MAX_POOL_NUM] = {0};
 
 DATA_INIT CmClientInitLocalOp(void)
 {
@@ -150,7 +150,7 @@ int32_t CM_WriteDataInfo(uint16_t poolId, const char *key, void *value, uint32_t
 }
 
 int32_t CM_RegDataInfoHandle(uint16_t poolId, const char *key, void *value, uint32_t valLen,
-    DataInfoChangeOpHandle *handle)
+                             DataInfoChangeOpHandle *handle)
 {
     if (poolId >= MAX_POOL_NUM || key == NULL || handle == NULL) {
         CM_LOGERROR("Invalid poolId(%u).", poolId);
@@ -231,7 +231,7 @@ int32_t CmClientLocalGetNode(uint16_t poolId, NodeInfo *nodeInfo)
 
     if (nodeInfo->diskList.num > DISK_LIST_NUM || nodeInfo->netList.num > NET_LIST_NUM) {
         CM_LOGERROR("Invalid nodeInfo, poolId(%u) disk num(%hu) net num(%hu).", poolId, nodeInfo->diskList.num,
-            nodeInfo->netList.num);
+                    nodeInfo->netList.num);
         return CM_ERR;
     }
 
@@ -280,7 +280,7 @@ static int32_t CmClientLocalCheckNode(uint16_t poolId, PoolInfo *poolInfo, NodeI
 
     if (ret == CM_NOT_EXIST) {
         CM_LOGINFO("First register, poolId(%u) ipv4AddrStr(%s) port(%u).", poolId, nodeInfo->ipv4AddrStr,
-            nodeInfo->port);
+                   nodeInfo->port);
         return CM_OK; // no needed.
     }
 
@@ -414,7 +414,7 @@ static int32_t CmClientNodeListChangeFp(NodeStateList *changeList)
     for (index = 0; index < changeList->nodeNum; index++) {
         NodeStateInfo *changeInfo = &changeList->nodeList[index];
         CM_LOGINFO("NodeChange: poolId(%u) nodeId(%u) state(%s-%s) session(%lu).", poolId, changeInfo->nodeId,
-            nstate[changeInfo->state], cstate[changeInfo->clusterState], changeInfo->sessionId);
+                   nstate[changeInfo->state], cstate[changeInfo->clusterState], changeInfo->sessionId);
     }
 
     if (g_subNodeChange[poolId].notifyNodeListChange != NULL) {
@@ -427,13 +427,7 @@ static int32_t CmClientNodeListChangeFp(NodeStateList *changeList)
 static int32_t CmClientPtListChangeFp(PtEntryList *changeList)
 {
     static const char *ptstate[PT_STATE_BUTT + 1] = {
-        "init",
-        "norm",
-        "loss1",
-        "loss2",
-        "fault",
-        "loss1_bypass",
-        "butt",
+        "init", "norm", "loss1", "loss2", "fault", "loss1_bypass", "butt",
     };
 
     uint16_t poolId = changeList->poolId;
@@ -448,7 +442,7 @@ static int32_t CmClientPtListChangeFp(PtEntryList *changeList)
     for (index = 0; index < changeList->ptNum; index++) {
         PtEntry *ptEntry = &changeList->ptEntryList[index];
         CM_LOGINFO("ptChange: poolId(%u) ptId(%u) state(%s) version(%lu) refer(%lu).", poolId, ptEntry->ptId,
-            ptstate[ptEntry->state], ptEntry->birthVersion, ptEntry->referNum);
+                   ptstate[ptEntry->state], ptEntry->birthVersion, ptEntry->referNum);
     }
 
     if (g_subPtChange[poolId].notifyPtListChange != NULL) {

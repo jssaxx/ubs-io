@@ -31,7 +31,7 @@ typedef struct {
     std::atomic<uint64_t> backendHitCount;
 } CacheHitDesc;
 
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif

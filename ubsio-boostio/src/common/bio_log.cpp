@@ -10,6 +10,7 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "bio_log.h"
 #include <cstdio>
 #include <ctime>
 #include <iomanip>
@@ -19,7 +20,6 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 #include "bio_tracepoint_helper.h"
-#include "bio_log.h"
 
 namespace ock {
 namespace bio {
@@ -50,7 +50,8 @@ constexpr mode_t ROTATED_LOG_FILE_MODE = S_IRUSR | S_IRGRP;
 
 void Logger::LogToStdErr(const std::ostringstream &oss)
 {
-    struct timeval tv {};
+    struct timeval tv {
+    };
     char strTime[24];
 
     gettimeofday(&tv, nullptr);
@@ -263,5 +264,5 @@ void Logger::ResetLogLevel(int32_t logLevel)
 {
     mOptions.minLogLevel = logLevel;
 }
-}
-}
+} // namespace bio
+} // namespace ock

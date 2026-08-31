@@ -10,14 +10,14 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include "bdm_common.h"
-#include "bdm_obj.h"
-#include "bdm_disk.h"
-#include "securec.h"
 #include "bdm_core.h"
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include "bdm_common.h"
+#include "bdm_disk.h"
+#include "bdm_obj.h"
+#include "securec.h"
 
 #if defined(__aarch64__) || defined(__arm__)
 #include "kunpeng_cpu_checker.h"
@@ -26,8 +26,8 @@
 #endif
 
 #define CHUNK_ID_TO_BDMID(chunkId) (((chunkId) >> 48UL) & 0xFFFF)
-#define ENCODE_CHUNK_ID(chunkId, bdmId) ((((uint64_t)(bdmId) & 0xFFFF) << 48UL) | ((chunkId) & 0xFFFFFFFFFFFF))
-#define DENCODE_CHUNK_ID(chunkId) ((chunkId) & 0xFFFFFFFFFFFF)
+#define ENCODE_CHUNK_ID(chunkId, bdmId) ((((uint64_t)(bdmId)&0xFFFF) << 48UL) | ((chunkId)&0xFFFFFFFFFFFF))
+#define DENCODE_CHUNK_ID(chunkId) ((chunkId)&0xFFFFFFFFFFFF)
 
 uint32_t g_bdmInit = 0UL;
 uint32_t g_bdmStart = 0UL;
@@ -177,7 +177,7 @@ int32_t BdmReadAsync(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len,
         return BDM_CODE_ERR;
     }
 
-    BdmAsyncOpsReq req = { 0 };
+    BdmAsyncOpsReq req = {0};
     req.objPtr = (uintptr_t)bdm;
     req.chunkId = DENCODE_CHUNK_ID(chunkId);
     req.offset = offset;
@@ -217,7 +217,7 @@ int32_t BdmWriteAsync(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len
         return BDM_CODE_ERR;
     }
 
-    BdmAsyncOpsReq req = { 0 };
+    BdmAsyncOpsReq req = {0};
     req.objPtr = (uintptr_t)bdm;
     req.chunkId = DENCODE_CHUNK_ID(chunkId);
     req.offset = offset;
@@ -285,7 +285,7 @@ BdmDiskState BdmGetDiskStatus(uint32_t bdmId)
 }
 
 int32_t BdmGetNextUsedChunkId(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunkSize, uint64_t *bucketId,
-    uint64_t *bucketOffset)
+                              uint64_t *bucketOffset)
 {
     if (chunkId == NULL || chunkSize == NULL || bucketId == NULL || bucketOffset == NULL) {
         return BDM_CODE_ERR;
@@ -357,7 +357,7 @@ static int32_t BdmDevicesCreate(uint32_t diskId, char *name, uint64_t capacity, 
         BDM_LOGERROR(0, "Disk path is null.");
         return BDM_CODE_ERR;
     }
-    BdmCreatePara para = { 0 };
+    BdmCreatePara para = {0};
     int32_t ret;
 
     ret = strncpy_s(para.name, BDM_NAME_LEN, name, strlen(name));

@@ -11,14 +11,14 @@
  */
 
 #include "cache.h"
-#include "cache_flow.h"
-#include "underfs.h"
-#include "flow_manager.h"
 #include "bio.h"
 #include "bio_trace.h"
 #include "bio_tracepoint_helper.h"
-#include "cm.h"
+#include "cache_flow.h"
 #include "cache_overload_ctrl.h"
+#include "cm.h"
+#include "flow_manager.h"
+#include "underfs.h"
 
 namespace ock {
 namespace bio {
@@ -71,7 +71,7 @@ BResult Cache::Recover()
             ret = mWCacheManager->RecoverCache(elem.second);
             ChkTrue(ret == BIO_OK, ret, "Recover cache failed, ret:" << ret << ".");
         } else if (static_cast<uint16_t>(type) == READ_CACHE &&
-            static_cast<uint32_t>(innerType) == RCACHE_FLOW_DISK_DATA_PREFIX) {
+                   static_cast<uint32_t>(innerType) == RCACHE_FLOW_DISK_DATA_PREFIX) {
             BIO_TP_START(CACHE_RECOVER_CACHE_FAIL, &ret, BIO_ERR);
             ret = mRCacheManager->RecoverCache(elem.second);
             BIO_TP_END;
@@ -112,7 +112,7 @@ BResult Cache::CreateWCache(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64
     ret = mWCacheManager->CreateWCache(procId, flowId, ptId, ptv, diskId, mixDegrade);
     BIO_TRACE_END(WCACHE_TRACE_CREATE_OBJ, ret);
     ChkTrue(ret == BIO_OK, ret,
-        "Failed to create WCache, procId:" << procId << ", ptId:" << ptId << ", flowId:" << flowId << ".");
+            "Failed to create WCache, procId:" << procId << ", ptId:" << ptId << ", flowId:" << flowId << ".");
 
     return BIO_OK;
 }
@@ -123,8 +123,8 @@ BResult Cache::DestroyWCache(uint64_t procId, uint16_t ptId, uint64_t ptv, uint6
     BIO_TRACE_START(WCACHE_TRACE_DESTROY_OBJ);
     ret = mWCacheManager->DestroyWCache(procId, flowId, ptId, ptv);
     BIO_TRACE_END(WCACHE_TRACE_DESTROY_OBJ, ret);
-    LOG_TRACE("Destroy wcache finish, ret:" << ret << ", cacheId:" << procId << ", ptId:" << ptId << ", flowId:" <<
-        flowId << ".");
+    LOG_TRACE("Destroy wcache finish, ret:" << ret << ", cacheId:" << procId << ", ptId:" << ptId
+                                            << ", flowId:" << flowId << ".");
     return ret;
 }
 
@@ -189,7 +189,7 @@ BResult Cache::GetFromUnderFS(const Key &key, WCacheSlicePtr &slice, const size_
     std::vector<FlowAddr> addrVec = slice->GetAddrs();
     if (LIKELY(addrVec.size() == NO_1)) {
         ret = UnderFs::Instance()->Get(key, reinterpret_cast<char *>(addrVec[0].chunkId + addrVec[0].chunkOffset),
-            length, offset);
+                                       length, offset);
         if (ret != BIO_OK) {
             LOG_ERROR("Failed to get from underFs failed, ret:" << ret << ", key:" << key << ", len:" << length << ".");
         }
@@ -212,7 +212,7 @@ BResult Cache::GetFromUnderFS(const Key &key, WCacheSlicePtr &slice, const size_
 }
 
 BResult Cache::GetValueLengthFromUnderFS(const Key &key, uint64_t readLen, uint64_t offset, uint64_t &totalLen,
-    uint64_t &realLen)
+                                         uint64_t &realLen)
 {
     UnderFs::ObjStat stat;
     auto ret = UnderFs::Instance()->Stat(key, stat);
@@ -246,7 +246,7 @@ BResult Cache::CalculateDataCrc(const SlicePtr &value, SlicePtr slice)
 }
 
 inline BResult Cache::WriteToDesSlice(const SliceWriter &sliceWriter, SlicePtr fromSlice, SlicePtr destSlice,
-    bool crcFlag, const Key &key)
+                                      bool crcFlag, const Key &key)
 {
     auto ret = sliceWriter(fromSlice, destSlice);
     if (ret != BIO_OK) {
@@ -263,7 +263,7 @@ inline BResult Cache::WriteToDesSlice(const SliceWriter &sliceWriter, SlicePtr f
 }
 
 BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
-    uint64_t &realLen)
+                           uint64_t &realLen)
 {
     // 1. 获取key的信息, 计算value的总长度和此次读取长度.
 
@@ -276,7 +276,7 @@ BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr
         return ret;
     }
     BIO_TP_END;
-    BIO_TP_START(GET_UNDERFS_MODIFY_REALLENGTH, &realLen, NO_60*NO_100);
+    BIO_TP_START(GET_UNDERFS_MODIFY_REALLENGTH, &realLen, NO_60 * NO_100);
     BIO_TP_END;
 
     // 2. 申请内存资源, 首先尝试从RCache中申请, 若失败则申请临时系统内存.
@@ -295,16 +295,16 @@ BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr
             memAddr = aligned_alloc(NO_4096, realLen);
             ChkTrue(memAddr != nullptr, BIO_ALLOC_FAIL, "Alloc aligned memory failed, size:" << realLen << ".");
             isFromRCache = false;
-            MrInfo mrInfo = { reinterpret_cast<uint64_t>(memAddr), static_cast<uint32_t>(realLen) };
-            std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
+            MrInfo mrInfo = {reinterpret_cast<uint64_t>(memAddr), static_cast<uint32_t>(realLen)};
+            std::vector<FlowAddr> addrVec = {FlowAddr(mrInfo)};
             wcSlicePtr = MakeRef<WCacheSlice>(0, 0, 0, realLen, addrVec, FLOW_MEMORY);
         }
     } else {
         memAddr = aligned_alloc(NO_4096, realLen);
         ChkTrue(memAddr != nullptr, BIO_ALLOC_FAIL, "Alloc aligned memory failed, size:" << realLen << ".");
         isFromRCache = false;
-        MrInfo mrInfo = { reinterpret_cast<uint64_t>(memAddr), static_cast<uint32_t>(realLen) };
-        std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
+        MrInfo mrInfo = {reinterpret_cast<uint64_t>(memAddr), static_cast<uint32_t>(realLen)};
+        std::vector<FlowAddr> addrVec = {FlowAddr(mrInfo)};
         wcSlicePtr = MakeRef<WCacheSlice>(0, 0, 0, realLen, addrVec, FLOW_MEMORY);
     }
     if (wcSlicePtr == nullptr) {
@@ -370,9 +370,8 @@ BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr
     return ret;
 }
 
-
 BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
-    uint64_t &realLen)
+                   uint64_t &realLen)
 {
     BResult ret = BIO_INNER_ERR;
     BIO_TRACE_START(WCACHE_TRACE_GET);
@@ -383,15 +382,15 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
     BIO_TP_END;
     BIO_TRACE_END(WCACHE_TRACE_GET, ret);
     if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
-        LOG_ERROR("Write cache get failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
-            (slice == nullptr ? 0 : slice->GetLength()) << ".");
+        LOG_ERROR("Write cache get failed, ret:" << ret << ", key:" << key << ", offset:" << offset
+                                                 << ", length:" << (slice == nullptr ? 0 : slice->GetLength()) << ".");
         return ret;
     }
 
     WCacheStatistic::Instance().IncTotalCount();
     if (ret == BIO_OK) {
-        LOG_DEBUG("Write cache hit, key:" << key << ", offset:" << offset << ", len:" <<
-            (slice == nullptr ? 0 : slice->GetLength()) << ".");
+        LOG_DEBUG("Write cache hit, key:" << key << ", offset:" << offset
+                                          << ", len:" << (slice == nullptr ? 0 : slice->GetLength()) << ".");
         WCacheStatistic::Instance().IncHitCount();
         return BIO_OK;
     }
@@ -402,8 +401,8 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
     BIO_TP_END;
     BIO_TRACE_END(RCACHE_TRACE_GET, ret);
     if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
-        LOG_ERROR("Read cache get failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
-            (slice == nullptr ? 0 : slice->GetLength()) << ".");
+        LOG_ERROR("Read cache get failed, ret:" << ret << ", key:" << key << ", offset:" << offset
+                                                << ", length:" << (slice == nullptr ? 0 : slice->GetLength()) << ".");
         return ret;
     }
 
@@ -446,8 +445,8 @@ BResult Cache::Stat(uint16_t ptId, const Key &key, CacheObjStat &cacheObjStat)
     } else {
         cacheObjStat.time = stat.time;
         cacheObjStat.size = stat.size;
-        LOG_DEBUG("UnderFS stat success, key:" << key << ", size:" << cacheObjStat.size << ", time:" <<
-            cacheObjStat.time << ".");
+        LOG_DEBUG("UnderFS stat success, key:" << key << ", size:" << cacheObjStat.size
+                                               << ", time:" << cacheObjStat.time << ".");
     }
     return ret;
 }
@@ -475,9 +474,9 @@ BResult Cache::List(char *prefix, uint16_t ptId, bool force, std::unordered_map<
             if (objs.size() >= 1000U) {
                 return BIO_OK;
             }
-            LOG_DEBUG("UnderFS list success, key:" << info.first << ", size:" << info.second.size << ", time:" <<
-                info.second.time << ".");
-            objs.insert({ info.first, { info.second.size, info.second.time } });
+            LOG_DEBUG("UnderFS list success, key:" << info.first << ", size:" << info.second.size
+                                                   << ", time:" << info.second.time << ".");
+            objs.insert({info.first, {info.second.size, info.second.time}});
         }
     }
 
@@ -620,5 +619,5 @@ void Cache::ShowEvictNegotiateQueue()
 {
     mWCacheManager->GetEvictNegotiateInfo();
 }
-}
-}
+} // namespace bio
+} // namespace ock

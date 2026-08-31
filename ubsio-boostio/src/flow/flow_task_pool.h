@@ -13,9 +13,9 @@
 #ifndef BOOSTIO_FLOW_TASK_POOL_H
 #define BOOSTIO_FLOW_TASK_POOL_H
 
+#include "bio_err.h"
 #include "bio_execution.h"
 #include "bio_tracepoint_helper.h"
-#include "bio_err.h"
 
 namespace ock {
 namespace bio {
@@ -66,13 +66,13 @@ private:
 private:
     DEFINE_REF_COUNT_VARIABLE;
 
-    ExecutorServicePtr mExeService{ nullptr };
+    ExecutorServicePtr mExeService{nullptr};
     std::mutex mMutex;
     bool mStarted = false;
     std::string mName;
 };
 using FlowTaskPoolPtr = Ref<FlowTaskPool>;
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_FLOW_TASK_POOL_H

@@ -10,15 +10,15 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <iostream>
-#include <cstring>
-#include "securec.h"
-#include "message.h"
-#include "bio_functions.h"
-#include "bio_client_log.h"
-#include "bio_trace.h"
-#include "bio_client.h"
 #include "bio.h"
+#include <cstring>
+#include <iostream>
+#include "bio_client.h"
+#include "bio_client_log.h"
+#include "bio_functions.h"
+#include "bio_trace.h"
+#include "message.h"
+#include "securec.h"
 
 namespace ock {
 namespace bio {
@@ -126,7 +126,7 @@ inline static bool KeyValid(const char *key)
         return false;
     }
 
-    const char* end = (const char*)memchr(key, '\0', KEY_MAX_SIZE);
+    const char *end = (const char *)memchr(key, '\0', KEY_MAX_SIZE);
     if (UNLIKELY(end == nullptr)) {
         return false;
     }
@@ -158,23 +158,25 @@ CResult Bio::Put(const char *key, const char *value, uint64_t length, const ObjL
     }
 
     if (UNLIKELY(!KeyValid(key) || value == nullptr || length == 0 || length > BIO_IO_MAX_LEN)) {
-        CLIENT_LOG_ERROR("Invalid put parameter, key or value pointers is nullptr, length:" << length <<
-            ", max length:" << (BIO_IO_MAX_LEN / NO_1024 / NO_1024) << "(Mb).");
+        CLIENT_LOG_ERROR("Invalid put parameter, key or value pointers is nullptr, length:"
+                         << length << ", max length:" << (BIO_IO_MAX_LEN / NO_1024 / NO_1024) << "(Mb).");
         return RET_CACHE_EPERM;
     }
 
     StatisticPutIoSize(length);
     BIO_TRACE_START(SDK_TRACE_PUT);
-    MirrorClient::MirrorPut param = { { mTenantId, mAffinity, mStrategy }, const_cast<char *>(key),
-        const_cast<char *>(value), length, location, 0 };
+    MirrorClient::MirrorPut param = {
+        {mTenantId, mAffinity, mStrategy}, const_cast<char *>(key), const_cast<char *>(value), length, location, 0};
     BResult ret = gClient->Put(param);
     BIO_TRACE_END(SDK_TRACE_PUT, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Put value failed, ret:" << ret << ", key:" << key << ", length:" << length <<
-            ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
+        CLIENT_LOG_ERROR("Put value failed, ret:" << ret << ", key:" << key << ", length:" << length
+                                                  << ", location0:" << location.location[0]
+                                                  << ", location1:" << location.location[1] << ".");
     } else {
-        CLIENT_LOG_DEBUG("Put value success, key:" << key << ", length:" << length << ", location0:" <<
-            location.location[0] << ", location1:" << location.location[1] << ".");
+        CLIENT_LOG_DEBUG("Put value success, key:" << key << ", length:" << length
+                                                   << ", location0:" << location.location[0]
+                                                   << ", location1:" << location.location[1] << ".");
     }
     return ToCResult(ret);
 }
@@ -195,29 +197,32 @@ CResult Bio::Put(const char *key, CacheSpaceDesc &spaceInfo)
     if (UNLIKELY(length > IO_SIZE_4M)) {
         return RET_CACHE_EPERM;
     }
-    CLIENT_LOG_TRACE("Put value with space key:" << key << ", location0:" << spaceInfo.loc.location[0] <<
-        ", location1:" << spaceInfo.loc.location[1] << ", addr num:" << spaceInfo.addressNum << ", addr0 size:" <<
-        spaceInfo.address[0].size << ", addr1 size:" << spaceInfo.address[1].size << ", length:" << length << ".");
+    CLIENT_LOG_TRACE("Put value with space key:" << key << ", location0:" << spaceInfo.loc.location[0] << ", location1:"
+                                                 << spaceInfo.loc.location[1] << ", addr num:" << spaceInfo.addressNum
+                                                 << ", addr0 size:" << spaceInfo.address[0].size << ", addr1 size:"
+                                                 << spaceInfo.address[1].size << ", length:" << length << ".");
 
     uint64_t startTime = Monotonic::TimeSec();
     StatisticPutIoSize(length);
-    MirrorClient::MirrorPut param = { { mTenantId, mAffinity, mStrategy }, const_cast<char *>(key),
-        nullptr, length, spaceInfo.loc, 0 };
+    MirrorClient::MirrorPut param = {
+        {mTenantId, mAffinity, mStrategy}, const_cast<char *>(key), nullptr, length, spaceInfo.loc, 0};
     BIO_TRACE_START(SDK_TRACE_PUT);
     BResult ret = gClient->Put(param, spaceInfo);
     BIO_TRACE_END(SDK_TRACE_PUT, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Put copy free value failed, ret:" << ret << ", key:" << key << ", length:" << length <<
-            ", location0:" << spaceInfo.loc.location[0] << ", location1:" << spaceInfo.loc.location[1] << ".");
+        CLIENT_LOG_ERROR("Put copy free value failed, ret:" << ret << ", key:" << key << ", length:" << length
+                                                            << ", location0:" << spaceInfo.loc.location[0]
+                                                            << ", location1:" << spaceInfo.loc.location[1] << ".");
     } else {
-        CLIENT_LOG_DEBUG("Put copy free value success, key:" << key << ", length:" << length << ", location0:" <<
-            spaceInfo.loc.location[0] << ", location1:" << spaceInfo.loc.location[1] << ".");
+        CLIENT_LOG_DEBUG("Put copy free value success, key:" << key << ", length:" << length
+                                                             << ", location0:" << spaceInfo.loc.location[0]
+                                                             << ", location1:" << spaceInfo.loc.location[1] << ".");
     }
     return ToCResult(ret);
 }
 
 CResult Bio::Get(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location, char *value,
-    uint64_t &realLength)
+                 uint64_t &realLength)
 {
     if (UNLIKELY(!gClient->Ready())) {
         return RET_CACHE_NOT_READY;
@@ -228,33 +233,34 @@ CResult Bio::Get(const char *key, uint64_t offset, uint64_t length, const ObjLoc
         return RET_CACHE_EPERM;
     }
     if (UNLIKELY(offset > BIO_IO_MAX_LEN)) {
-        CLIENT_LOG_ERROR("Read offset exceed limit, offset" << offset << ", limits:" <<
-            (BIO_IO_MAX_LEN / NO_1024 / NO_1024) << "(Mb).");
+        CLIENT_LOG_ERROR("Read offset exceed limit, offset"
+                         << offset << ", limits:" << (BIO_IO_MAX_LEN / NO_1024 / NO_1024) << "(Mb).");
         return RET_CACHE_READ_EXCEED;
     }
     if (UNLIKELY(length > BIO_IO_MAX_LEN)) {
-        CLIENT_LOG_ERROR("Read length exceed limit, length" << length << ", limits:" <<
-            (BIO_IO_MAX_LEN / NO_1024 / NO_1024) << "(Mb).");
+        CLIENT_LOG_ERROR("Read length exceed limit, length"
+                         << length << ", limits:" << (BIO_IO_MAX_LEN / NO_1024 / NO_1024) << "(Mb).");
         return RET_CACHE_READ_EXCEED;
     }
     if (UNLIKELY((offset + length) > BIO_IO_MAX_LEN)) {
-        CLIENT_LOG_ERROR("Read length exceed limit, offset" << offset << "length:" << length << ", limits:" <<
-            (BIO_IO_MAX_LEN / NO_1024 / NO_1024) << "(Mb).");
+        CLIENT_LOG_ERROR("Read length exceed limit, offset" << offset << "length:" << length << ", limits:"
+                                                            << (BIO_IO_MAX_LEN / NO_1024 / NO_1024) << "(Mb).");
         return RET_CACHE_READ_EXCEED;
     }
 
     StatisticGetIoSize(length);
     BIO_TRACE_START(SDK_TRACE_GET);
-    MirrorClient::MirrorGet param{ { mTenantId, mAffinity, mStrategy }, key, value, offset, length, location };
+    MirrorClient::MirrorGet param{{mTenantId, mAffinity, mStrategy}, key, value, offset, length, location};
     BResult ret = gClient->Get(param, realLength);
     BIO_TRACE_END(SDK_TRACE_GET, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Get value failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
-            length << ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
+        CLIENT_LOG_ERROR("Get value failed, ret:" << ret << ", key:" << key << ", offset:" << offset
+                                                  << ", length:" << length << ", location0:" << location.location[0]
+                                                  << ", location1:" << location.location[1] << ".");
     } else {
-        CLIENT_LOG_DEBUG("Get value success, key:" << key << ", offset:" << offset << ", length:" << length <<
-            ", realLen:" << realLength << ", location0:" << location.location[0] << ", location1:" <<
-            location.location[1] << ".");
+        CLIENT_LOG_DEBUG("Get value success, key:"
+                         << key << ", offset:" << offset << ", length:" << length << ", realLen:" << realLength
+                         << ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
     }
     return ToCResult(ret);
 }
@@ -276,8 +282,8 @@ CResult Bio::Delete(const char *key, const ObjLocation &location)
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Delete key failed, ret:" << ret << ", key:" << key << ".");
     } else {
-        CLIENT_LOG_DEBUG("Delete key success, key:" << key << ", location0:" << location.location[0] <<
-            ", location1:" << location.location[1] << ".");
+        CLIENT_LOG_DEBUG("Delete key success, key:" << key << ", location0:" << location.location[0]
+                                                    << ", location1:" << location.location[1] << ".");
     }
     return ToCResult(ret);
 }
@@ -289,18 +295,19 @@ CResult Bio::Load(LoadPara &para, const ObjLocation location, const BioLoadCallb
     }
 
     if (UNLIKELY(!KeyValid(para.key) || context == nullptr || para.offset != 0 || para.length == 0 ||
-        para.length > BIO_IO_MAX_LEN)) {
+                 para.length > BIO_IO_MAX_LEN)) {
         CLIENT_LOG_ERROR("Invalid load parameter, key:" << para.key << ".");
         return RET_CACHE_EPERM;
     }
 
     LoadCallback cb = [location, &para, callback](void *context, BResult result) {
         if (result != BIO_OK) {
-            CLIENT_LOG_ERROR("Load failed, ret:" << result << ", key:" << para.key << ", location0:" <<
-                location.location[0] << ", location1:" << location.location[1] << ".");
+            CLIENT_LOG_ERROR("Load failed, ret:" << result << ", key:" << para.key
+                                                 << ", location0:" << location.location[0]
+                                                 << ", location1:" << location.location[1] << ".");
         } else {
             CLIENT_LOG_DEBUG("Load success, key:" << para.key << ", location0:" << location.location[0]
-                             << ", location1:" << location.location[1] << ".");
+                                                  << ", location1:" << location.location[1] << ".");
         }
         if (callback != nullptr && context != nullptr) {
             callback(context, ToCResult(result));
@@ -311,8 +318,8 @@ CResult Bio::Load(LoadPara &para, const ObjLocation location, const BioLoadCallb
     BResult ret = gClient->Load(para, location, cb, context);
     BIO_TRACE_END(SDK_TRACE_LOAD, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Load failed, ret:" << ret << ", key:" << para.key << ", offset:" << para.offset
-                         << ", length:" << para.length << ", location:" << location.location[0] << ".");
+        CLIENT_LOG_ERROR("Load failed, ret:" << ret << ", key:" << para.key << ", offset:" << para.offset << ", length:"
+                                             << para.length << ", location:" << location.location[0] << ".");
     }
     return ToCResult(ret);
 }
@@ -426,26 +433,28 @@ CResult Bio::AllocSpace(uint64_t objectId, uint64_t length, CacheSpaceDesc &spac
         location = spaceInfo.loc;
     }
 
-    MirrorClient::MirrorPut param = { { mTenantId, mAffinity, mStrategy }, nullptr, nullptr, length, location, 0 };
+    MirrorClient::MirrorPut param = {{mTenantId, mAffinity, mStrategy}, nullptr, nullptr, length, location, 0};
     BIO_TRACE_START(SDK_TRACE_ALLOC_SPACE);
     auto ret = gClient->AllocSpace(param, spaceInfo);
     BIO_TRACE_END(SDK_TRACE_ALLOC_SPACE, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Alloc space failed, ret:" << ret << ", objectId:" << objectId << ", length:" << length <<
-            ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
+        CLIENT_LOG_ERROR("Alloc space failed, ret:" << ret << ", objectId:" << objectId << ", length:" << length
+                                                    << ", location0:" << location.location[0]
+                                                    << ", location1:" << location.location[1] << ".");
     } else {
-        CLIENT_LOG_DEBUG("Alloc space success, objectId:" << objectId << ", length:" << length << ", location0:" <<
-            location.location[0] << ", location1:" << location.location[1] << ".");
+        CLIENT_LOG_DEBUG("Alloc space success, objectId:" << objectId << ", length:" << length
+                                                          << ", location0:" << location.location[0]
+                                                          << ", location1:" << location.location[1] << ".");
     }
     return ToCResult(ret);
 }
 
 std::shared_ptr<Bio> BioService::CreateCache(const CacheDescriptor &desc)
 {
-    if (UNLIKELY(desc.affinity >= AFFINITY_BUTT || desc.strategy >= STRATEGY_BUTT ||
-        desc.affinity < LOCAL_AFFINITY || desc.strategy < WRITE_BACK)) {
-        CLIENT_LOG_ERROR("Invalid cache descriptor, tenantId:" << desc.tenantId << ", affinity:" << desc.affinity <<
-            ", strategy:" << desc.strategy << ".");
+    if (UNLIKELY(desc.affinity >= AFFINITY_BUTT || desc.strategy >= STRATEGY_BUTT || desc.affinity < LOCAL_AFFINITY ||
+                 desc.strategy < WRITE_BACK)) {
+        CLIENT_LOG_ERROR("Invalid cache descriptor, tenantId:" << desc.tenantId << ", affinity:" << desc.affinity
+                                                               << ", strategy:" << desc.strategy << ".");
         return nullptr;
     }
 
@@ -453,7 +462,7 @@ std::shared_ptr<Bio> BioService::CreateCache(const CacheDescriptor &desc)
     std::shared_ptr<Bio> cache = nullptr;
     try {
         cache = std::make_shared<Bio>(desc.tenantId, desc.affinity, desc.strategy);
-    } catch (const std::bad_alloc& e) {
+    } catch (const std::bad_alloc &e) {
         CLIENT_LOG_ERROR("Malloc bio cache failed.");
         return nullptr;
     }
@@ -464,10 +473,11 @@ std::shared_ptr<Bio> BioService::CreateCache(const CacheDescriptor &desc)
         return nullptr;
     }
 
-    static std::string affinityStr[] = { "INVALID", "LOCAL_AFFINITY", "GLOBAL_BALANCE", "BUTT" };
-    static std::string strategyStr[] = { "INVALID", "WRITE_BACK", "WRITE_THROUGH", "BUTT" };
-    CLIENT_LOG_INFO("Create cache instance success, tenantId:" << desc.tenantId << ", affinity:" <<
-        affinityStr[desc.affinity] << ", strategy:" << strategyStr[desc.strategy] << ".");
+    static std::string affinityStr[] = {"INVALID", "LOCAL_AFFINITY", "GLOBAL_BALANCE", "BUTT"};
+    static std::string strategyStr[] = {"INVALID", "WRITE_BACK", "WRITE_THROUGH", "BUTT"};
+    CLIENT_LOG_INFO("Create cache instance success, tenantId:" << desc.tenantId
+                                                               << ", affinity:" << affinityStr[desc.affinity]
+                                                               << ", strategy:" << strategyStr[desc.strategy] << ".");
     return cache;
 }
 
@@ -529,8 +539,8 @@ void BioService::Exit()
 {
     gClient->Exit();
 }
-}
-}
+} // namespace bio
+} // namespace ock
 
 /* ******************************** Boostio api implementation in C language ********************* */
 using namespace ock::bio;
@@ -592,7 +602,7 @@ void BioExit(void)
 static void BioCacheResourceCalc(CacheResourcesDesc **nodeDesc, const std::vector<CacheResourcesDesc> &nodeDescription)
 {
     uint32_t i = 0;
-    for (auto& nodeInfo : nodeDescription) {
+    for (auto &nodeInfo : nodeDescription) {
         (*nodeDesc)[i].nodeId = nodeInfo.nodeId;
         (*nodeDesc)[i].rCacheMemCapacity = nodeInfo.rCacheMemCapacity;
         (*nodeDesc)[i].rCacheDiskCapacity = nodeInfo.rCacheDiskCapacity;
@@ -648,7 +658,7 @@ static void BioCacheHitRadioCalc(CacheHitFinalDesc *desc, CacheHitFinalDesc **no
     desc->wCacheTotalCount = 0;
     desc->backendHitCount = 0;
     uint32_t i = 0;
-    for (auto& nodeInfo : nodeDescription) {
+    for (auto &nodeInfo : nodeDescription) {
         (*nodeDesc)[i].nodeId = nodeInfo.first;
         (*nodeDesc)[i].rCacheHitMemCount = nodeInfo.second.rCacheHitMemCount.load();
         (*nodeDesc)[i].rCacheHitDiskCount = nodeInfo.second.rCacheHitDiskCount.load();
@@ -733,7 +743,7 @@ CResult BioCreateCache(CacheDescriptor desc)
     if (gBioCacheMap.size() > NO_1024) {
         return RET_CACHE_NO_SPACE;
     }
-    gBioCacheMap.insert({ desc.tenantId, bioInstance });
+    gBioCacheMap.insert({desc.tenantId, bioInstance});
     return RET_CACHE_OK;
 }
 
@@ -747,7 +757,7 @@ CResult BioGetCache(uint64_t tenantId, CacheDescriptor *desc)
     if (UNLIKELY(iter == gBioCacheMap.end())) {
         return RET_CACHE_NOT_FOUND;
     }
-    *desc = { iter->second->mTenantId, iter->second->mAffinity, iter->second->mStrategy };
+    *desc = {iter->second->mTenantId, iter->second->mAffinity, iter->second->mStrategy};
     return RET_CACHE_OK;
 }
 
@@ -777,7 +787,7 @@ CResult BioCalcLocation(uint64_t tenantId, uint64_t objectId, ObjLocation *locat
         }
         bioInstance = iter->second;
     }
-    ObjLocation outLocation = { 0 };
+    ObjLocation outLocation = {0};
     auto ret = bioInstance->CalculateLocation(objectId, outLocation);
     location->location[0] = outLocation.location[0];
     location->location[1] = outLocation.location[1];
@@ -833,7 +843,7 @@ CResult BioPut(uint64_t tenantId, const char *key, const char *value, uint64_t l
 }
 
 CResult BioGet(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location, char *value,
-    uint64_t *realLength)
+               uint64_t *realLength)
 {
     if (UNLIKELY(realLength == nullptr)) {
         return RET_CACHE_EPERM;
@@ -868,7 +878,7 @@ CResult BioDelete(uint64_t tenantId, const char *key, ObjLocation location)
 }
 
 CResult BioLoad(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location,
-    BioLoadCallback callback, void *context)
+                BioLoadCallback callback, void *context)
 {
     std::shared_ptr<Bio> bioInstance = nullptr;
     {
@@ -958,7 +968,6 @@ CResult BioStat(uint64_t tenantId, const char *key, ObjLocation location, ObjSta
     }
     return ret;
 }
-
 
 CResult BioNotifyUpgradePrepare(uint64_t tenantId)
 {
@@ -1084,7 +1093,7 @@ CResult BioConvertLocation(ObjLocation location, ObjLocationDetail *detailLoc)
 
     ret = gClient->GetMirror()->GetFileLocation(info.masterNodeId, slaveId, rsp);
     if (ret != BIO_OK) {
-        CLIENT_LOG_ERROR("Failed get file location, ret:" << ret << ", slaveId:"<< slaveId << ".");
+        CLIENT_LOG_ERROR("Failed get file location, ret:" << ret << ", slaveId:" << slaveId << ".");
         return RET_CACHE_ERROR;
     }
 
@@ -1111,7 +1120,7 @@ CResult BioAddDisk(const char *diskPath)
 
     auto ret = gClient->GetMirror()->AddDisk(diskPath);
     if (ret != BIO_OK) {
-        CLIENT_LOG_ERROR("Failed to add disk, ret:" << ret << ", diskPath:"<< diskPath << ".");
+        CLIENT_LOG_ERROR("Failed to add disk, ret:" << ret << ", diskPath:" << diskPath << ".");
         return ToCResult(ret);
     }
 

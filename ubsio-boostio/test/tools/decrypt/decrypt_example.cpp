@@ -10,9 +10,9 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <string>
-#include <iostream>
 #include <algorithm>
+#include <iostream>
+#include <string>
 
 #ifdef __cplusplus
 extern "C" {

@@ -13,13 +13,13 @@
 #ifndef BOOSTIO_RCACHE_MANAGER_H
 #define BOOSTIO_RCACHE_MANAGER_H
 
-#include <unordered_map>
 #include <cstdint>
-#include "bio_log.h"
+#include <unordered_map>
 #include "bio_err.h"
+#include "bio_log.h"
 #include "bio_ref.h"
-#include "rcache.h"
 #include "cache_def.h"
+#include "rcache.h"
 #include "rcache_evict.h"
 
 namespace ock {
@@ -50,7 +50,7 @@ public:
     BResult Put(uint16_t ptId, const Key &key, const WCacheSlicePtr &slice);
 
     BResult Get(uint16_t ptId, const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
-        const SliceWriter &sliceWriter, uint64_t &realLen);
+                const SliceWriter &sliceWriter, uint64_t &realLen);
 
     BResult Load(uint16_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen);
 
@@ -76,13 +76,13 @@ private:
     ReadWriteLock cacheLock;
     std::unordered_map<uint64_t, RCachePtr> cache; // read cache object
 
-    std::atomic<uint32_t> mWorkIndex{ 0 };
+    std::atomic<uint32_t> mWorkIndex{0};
 
     RCacheEvictPtr rCacheEvict; // read cache evict service
 
     DEFINE_REF_COUNT_VARIABLE;
 };
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_RCACHE_MANAGER_H

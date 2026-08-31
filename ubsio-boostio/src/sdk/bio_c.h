@@ -13,14 +13,15 @@
 #ifndef BIO_C_H
 #define BIO_C_H
 
+#include <limits.h>
 #include <stdint.h>
 #include <time.h>
-#include <limits.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-typedef enum {
+typedef enum
+{
     RET_CACHE_OK = 0,            // successful
     RET_CACHE_PROTECTED = 1,     // cache write protected
     RET_CACHE_ERROR = 2,         // unknown error code
@@ -42,24 +43,28 @@ typedef enum {
     RET_CACHE_BUTT
 } CResult;
 
-typedef enum {
+typedef enum
+{
     LOCAL_AFFINITY = 1, // data local affinity
     GLOBAL_BALANCE = 2, // data global balance
     AFFINITY_BUTT
 } AffinityStrategy;
 
-typedef enum {
+typedef enum
+{
     WRITE_BACK = 1,
     WRITE_THROUGH = 2,
     STRATEGY_BUTT
 } WriteStrategy;
 
-typedef enum {
+typedef enum
+{
     CONVERGENCE,
     SEPARATES
 } WorkerMode;
 
-typedef enum {
+typedef enum
+{
     STDOUT_TYPE,
     FILE_TYPE,
     STDERR_TYPE
@@ -263,7 +268,7 @@ CResult BioPut(uint64_t tenantId, const char *key, const char *value, uint64_t l
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
 CResult BioGet(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location, char *value,
-    uint64_t *realLength);
+               uint64_t *realLength);
 
 /**
  * @brief: Delete object
@@ -288,7 +293,7 @@ CResult BioDelete(uint64_t tenantId, const char *key, ObjLocation location);
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
 CResult BioLoad(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location,
-    BioLoadCallback callback, void *context);
+                BioLoadCallback callback, void *context);
 
 /**
  * @brief: List all object that meets the prefix condition

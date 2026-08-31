@@ -20,11 +20,11 @@
 #include "cache_def.h"
 #include "cache_slice.h"
 #include "cache_slice_operator.h"
+#include "cm.h"
 #include "flow.h"
+#include "rcache_manager.h"
 #include "underfs.h"
 #include "wcache_tier.h"
-#include "rcache_manager.h"
-#include "cm.h"
 
 namespace ock {
 namespace bio {
@@ -33,28 +33,34 @@ using WCachePtr = Ref<WCache>;
 class WCache {
 public:
     WCache(uint64_t procId, uint64_t flowId, uint16_t ptId, uint64_t ptv, uint16_t diskId, bool isDegrade)
-        : mProcId(procId), mFlowId(flowId), mPtId(ptId), mPtv(ptv), mDiskId(diskId), mIsDegrade(isDegrade)
-    {}
+        : mProcId(procId),
+          mFlowId(flowId),
+          mPtId(ptId),
+          mPtv(ptv),
+          mDiskId(diskId),
+          mIsDegrade(isDegrade)
+    {
+    }
 
     using EvictCallback = std::function<BResult(uint16_t ptId, const Key &key, WCacheSliceRefPtr sliceRef)>;
     using RetryCallback = std::function<void(uint64_t flowId, WCacheTierType cacheTier)>;
 
     BResult Init(const ExecutorServicePtr evictNegoService, const ExecutorServicePtr evictService[MAX_WCACHE_TIER],
-        const RCacheManagerPtr rCacheManager, bool isRecover);
+                 const RCacheManagerPtr rCacheManager, bool isRecover);
     void Exit();
 
     void RegOp(GetLocDiskStatus getLocDiskStatus, CheckLocRole locRole, const GetGlobEvictOffset evictOffset,
-        EvictCallback evictCallback, const RetryCallback retryCallback);
+               EvictCallback evictCallback, const RetryCallback retryCallback);
 
     static void GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &diskCap, uint64_t &diskUsed);
 
     BResult GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice);
 
     BResult Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
-        WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
+                WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
 
     BResult PutImpl(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
-        WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
+                    WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
 
     BResult Delete(const Key &key, const WCacheSliceRefPtr &sliceRef);
 
@@ -184,7 +190,7 @@ private:
     void PutSetIoStrategy(RealIoStrategy &ioStrategy, CacheAttr &attr);
 
     BResult PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
-        WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
+                      WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
 
     BResult GetPtMasterNode(uint32_t &masterNid);
 
@@ -196,13 +202,13 @@ private:
     uint16_t mPtId;
     uint64_t mPtv;
     uint16_t mDiskId;
-    uint16_t mCopyNum{ 0 };
+    uint16_t mCopyNum{0};
     bool mIsDegrade;
-    bool mIsMaster{ true };
-    bool mIsNormal{ true };
-    bool mIsForced { false };
-    std::atomic<bool> mIsStartEvictNegotiate{ false };
-    std::atomic<bool> mIsMasterStartEvictNegotiate{ false };
+    bool mIsMaster{true};
+    bool mIsNormal{true};
+    bool mIsForced{false};
+    std::atomic<bool> mIsStartEvictNegotiate{false};
+    std::atomic<bool> mIsMasterStartEvictNegotiate{false};
     EvictCallback mEvictCallback;
     RetryCallback mRetryCallback;
 
@@ -214,9 +220,9 @@ private:
     ExecutorServicePtr mEvictNegotiateService;
     std::atomic<bool> mEvictRef[MAX_WCACHE_TIER];
 
-    GetLocDiskStatus mGetLocDiskStatus{ nullptr };
-    CheckLocRole mLocRole{ nullptr };
-    GetGlobEvictOffset mGlobEvictOffset{ nullptr };
+    GetLocDiskStatus mGetLocDiskStatus{nullptr};
+    CheckLocRole mLocRole{nullptr};
+    GetGlobEvictOffset mGlobEvictOffset{nullptr};
 
     RCacheManagerPtr mRCacheManager;
     UnderFsPtr mUnderFs;
@@ -225,8 +231,7 @@ private:
 
     DEFINE_REF_COUNT_VARIABLE;
 };
-}
-}
-
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_WCACHE_H

@@ -104,7 +104,7 @@ static int32_t CmServerViewUpdatePtEntryList(uint16_t poolId, CmNodeEvent *nodeE
 
     if (pool->redundance != PT_NONE) {
         int32_t isNeed =
-                spool->calcOps->needRebalance(spool->calculator, spool->nodeList, spool->stateList, spool->ptEntryList);
+            spool->calcOps->needRebalance(spool->calculator, spool->nodeList, spool->stateList, spool->ptEntryList);
         if (isNeed == TRUE) {
             ret = spool->calcOps->viewRebalance(spool->calculator, spool->nodeList, spool->stateList,
                                                 spool->ptEntryList, nodeEvent);
@@ -140,7 +140,7 @@ static void CmServerViewExpiredNodeSet(uint16_t poolId, uint16_t nodeId)
     g_sPoolMgr.list[poolId].stateChange = TRUE;
 
     CM_LOGINFO("Expired, poolId(%u) nodeId(%u) state(%s-%s).", poolId, nodeId, g_nstate[cmState->state],
-        g_cstate[cmState->clusterState]);
+               g_cstate[cmState->clusterState]);
     return;
 }
 
@@ -158,7 +158,8 @@ static void CmServerViewExpiredDiskSet(uint16_t poolId, uint16_t nodeId, uint16_
                 g_sPoolMgr.list[poolId].stateChange = TRUE;
 
                 CM_LOGINFO("Expired, poolId(%u) nodeId(%u) state(%s-%s) diskId(%u) disk state(%s).", poolId, nodeId,
-                    g_nstate[cmState->state], g_cstate[cmState->clusterState], diskId, CM_DISK_STATE(DISK_STATE_FAULT));
+                           g_nstate[cmState->state], g_cstate[cmState->clusterState], diskId,
+                           CM_DISK_STATE(DISK_STATE_FAULT));
                 return;
             }
         }
@@ -271,8 +272,7 @@ static void SyncDiskListToState(CmServerPool *spool, uint16_t nodeId, const Node
     spool->ptChange = TRUE;
 }
 
-static int32_t CompareAndUpdateNodeInfo(uint16_t poolId, uint16_t nodeId, CmServerPool *spool,
-                                        bool isInit)
+static int32_t CompareAndUpdateNodeInfo(uint16_t poolId, uint16_t nodeId, CmServerPool *spool, bool isInit)
 {
     NodeInfo *nodeInfo = &spool->nodeList->nodeList[nodeId];
     NodeStateInfo *nodeState = &spool->stateList->nodeList[nodeId];
@@ -418,13 +418,13 @@ static int32_t CmServerViewNodeOffline(uint16_t poolId, uint16_t nodeId)
     CmServerViewUpdateMasterNodeId(poolId);
 
     CM_LOGINFO("Node offline, poolId(%u) nodeId(%u) state(%s-%s).", poolId, nodeId, g_nstate[nodeState->state],
-        g_cstate[nodeState->clusterState]);
+               g_cstate[nodeState->clusterState]);
 
     if (nodeState->clusterState == NODE_CLUSTER_STATE_IN) {
         CmServerListenNodeFault(poolId, nodeId); // 加入节点故障监控
         if (pool->redundance != PT_NONE) {
             spool->calcOps->updateState(nodeId, NODE_STATE_DOWN, nodeInfo, spool->ptEntryList,
-                &spool->ptChange); // 更新PT副本状态
+                                        &spool->ptChange); // 更新PT副本状态
         }
     }
 
@@ -489,13 +489,13 @@ int32_t CmServerViewNodeOnline(uint16_t poolId, uint16_t nodeId)
     CmServerViewUpdateMasterNodeId(poolId);
 
     CM_LOGINFO("Node online, poolId(%u) nodeId(%u) state(%s-%s).", poolId, nodeId, g_nstate[nodeState->state],
-        g_cstate[nodeState->clusterState]);
+               g_cstate[nodeState->clusterState]);
 
     if (nodeState->clusterState == NODE_CLUSTER_STATE_IN) {
         CmServerViewCheckDiskFault(poolId, nodeInfo, nodeState); // 扫描节点磁盘故障监控
         if (pool->redundance != PT_NONE) {
             spool->calcOps->updateState(nodeId, NODE_STATE_UP, nodeInfo, spool->ptEntryList,
-                &spool->ptChange); // 更新PT副本状态
+                                        &spool->ptChange); // 更新PT副本状态
         }
         return CM_OK;
     }
@@ -649,7 +649,7 @@ void CmServerViewPtEvent(CmPtEvent *ptEvent)
     }
 
     spool->calcOps->updateFinish(ptEvent->nodeId, ptEvent->ptList, ptEvent->ptNum, spool->ptEntryList, &spool->ptChange,
-        pool->maxNodeNum, validNum);
+                                 pool->maxNodeNum, validNum);
     return;
 }
 

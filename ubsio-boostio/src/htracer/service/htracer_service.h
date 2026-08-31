@@ -13,11 +13,11 @@
 #ifndef HTRACE_SERVICE_H
 #define HTRACE_SERVICE_H
 
+#include <condition_variable>
 #include <cstdint>
 #include <memory>
-#include <thread>
-#include <condition_variable>
 #include <mutex>
+#include <thread>
 #include "htracer.h"
 
 namespace ock {
@@ -35,9 +35,9 @@ public:
 
 public:
     HTracerService(const HTracerService &) = delete;
-    HTracerService &operator = (const HTracerService &) = delete;
+    HTracerService &operator=(const HTracerService &) = delete;
     HTracerService(HTracerService &&) = delete;
-    HTracerService &operator = (HTracerService &&) = delete;
+    HTracerService &operator=(HTracerService &&) = delete;
 
 public:
     std::string GetTraceInfo();
@@ -58,14 +58,14 @@ private:
     ~HTracerService() = default;
 
 private:
-    off_t writePos{ 0 };
+    off_t writePos{0};
     std::string dumpFilePath;
     std::string headline;
     std::thread mDumpThread;
     std::condition_variable mDumpCond;
     std::mutex mDumpLock;
-    bool mIsRunning{ false };
+    bool mIsRunning{false};
 };
-}
-}
+} // namespace htracer
+} // namespace ock
 #endif // HTRACE_SERVICE_H

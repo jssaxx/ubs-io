@@ -13,8 +13,8 @@
 #ifndef NET_EXECUTOR_POOL_H
 #define NET_EXECUTOR_POOL_H
 
-#include "bio_execution.h"
 #include "bio_err.h"
+#include "bio_execution.h"
 #include "net_common.h"
 
 namespace ock {
@@ -80,13 +80,13 @@ private:
 private:
     DEFINE_REF_COUNT_VARIABLE
 
-    ExecutorServicePtr mExeService{ nullptr };
+    ExecutorServicePtr mExeService{nullptr};
     std::mutex mMutex;
     bool mStarted = false;
     std::string mName;
 };
 using NetExecutorPoolPtr = Ref<NetExecutorPool>;
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // NET_EXECUTOR_POOL_H

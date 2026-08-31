@@ -17,15 +17,15 @@
 #include "tracepoint_type.h"
 
 typedef int TpInt32;
-#define RETURN_OK                   (0)
-#define RETURN_ERROR                (-1)
-#define DP_FAIL                     (-1)
+#define RETURN_OK (0)
+#define RETURN_ERROR (-1)
+#define DP_FAIL (-1)
 
 #define FALSE false
 #define TRUE true
 
 #ifndef UNREFERENCE_PARAM
-#define UNREFERENCE_PARAM(para)     ((void)(para))
+#define UNREFERENCE_PARAM(para) ((void)(para))
 #endif
 
 #ifndef ARRAY_LEN
@@ -46,7 +46,7 @@ typedef int TpInt32;
 #define MODULE_AUTHOR(x)
 #define MODULE_LICENSE(x)
 
-#define MODULE_ID(x)                static TpUint32 MY_PID = (x)
+#define MODULE_ID(x) static TpUint32 MY_PID = (x)
 
 #ifndef INVALID_PID
 #define INVALID_PID 0
@@ -66,10 +66,10 @@ TpInt32 DpaxTimeCharpos(char *pstr, char chr, TpInt32 *sipos);
 void DpaxFilterNewlinesymbol(char *pstr);
 char *DpaxReadLine(TpInt32 siFd, void *pBuf, TpInt32 siMaxSize);
 
-#define BIO_GET_MILLISECOND                         DpaxTimeGetmillisec
-#define BIO_GET_NANOSECOND                          DpaxTimeGetnanosec
-#define BIO_GET_CHAR_POS                            DpaxTimeCharpos
-#define BIO_FILTER_NEWLINE_SYMBOL                   DpaxFilterNewlinesymbol
-#define BIO_READ_LINE(siFd, pBuf, siMaxSize)	    DpaxReadLine(siFd, pBuf, siMaxSize)
+#define BIO_GET_MILLISECOND DpaxTimeGetmillisec
+#define BIO_GET_NANOSECOND DpaxTimeGetnanosec
+#define BIO_GET_CHAR_POS DpaxTimeCharpos
+#define BIO_FILTER_NEWLINE_SYMBOL DpaxFilterNewlinesymbol
+#define BIO_READ_LINE(siFd, pBuf, siMaxSize) DpaxReadLine(siFd, pBuf, siMaxSize)
 
 #endif // BIO_TRACEPOINT_COMMON_H

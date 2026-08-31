@@ -13,9 +13,9 @@
 #ifndef NET_CHANNEL_MGR_H
 #define NET_CHANNEL_MGR_H
 
+#include <list>
 #include <unordered_map>
 #include <utility>
-#include <list>
 #include "bio_tracepoint_helper.h"
 #include "net_common.h"
 
@@ -95,6 +95,6 @@ private:
 };
 
 using NetChannelMgrPtr = Ref<NetChannelMgr>;
-}
-}
+} // namespace bio
+} // namespace ock
 #endif // NET_CHANNEL_MGR_H

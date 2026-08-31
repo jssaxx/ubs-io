@@ -10,19 +10,19 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <cstdint>
-#include <sys/types.h>
-#include <sys/ioctl.h>
-#include <sys/uio.h>
-#include <linux/fs.h>
-#include "interceptor_log.h"
-#include "bio_def.h"
-#include "securec.h"
 #include "bufvec.h"
+#include <linux/fs.h>
+#include <sys/ioctl.h>
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <cstdint>
+#include "bio_def.h"
+#include "interceptor_log.h"
+#include "securec.h"
 
 using namespace ock::bio;
 
-BufVec::BufVec(const iovec *vec, int cnt) noexcept : iov{ vec }, count{ cnt }, size{ ComputeSize(vec, cnt) } {}
+BufVec::BufVec(const iovec *vec, int cnt) noexcept : iov{vec}, count{cnt}, size{ComputeSize(vec, cnt)} {}
 
 void BufVec::Reset() noexcept
 {
@@ -41,8 +41,7 @@ ssize_t BufVec::Read(uint8_t *buf, size_t length) noexcept
     while (copyBytes < length && index < count) {
         if (innerOffset < iov[index].iov_len) {
             auto bytes = std::min(length - copyBytes, iov[index].iov_len - innerOffset);
-            int ret = memcpy_s(buf + copyBytes, cpyLength,
-                               (const uint8_t *)iov[index].iov_base + innerOffset, bytes);
+            int ret = memcpy_s(buf + copyBytes, cpyLength, (const uint8_t *)iov[index].iov_base + innerOffset, bytes);
             if (UNLIKELY(ret != 0)) {
                 CLOG_ERROR("Memory copy failed, ret:" << ret << ".");
                 return -1;
@@ -73,7 +72,7 @@ ssize_t BufVec::Write(const uint8_t *buf, size_t length) noexcept
         if (innerOffset < iov[index].iov_len) {
             auto bytes = std::min(length - copyBytes, iov[index].iov_len - innerOffset);
             int ret = memcpy_s((uint8_t *)iov[index].iov_base + innerOffset, iov[index].iov_len - innerOffset,
-                buf + copyBytes, bytes);
+                               buf + copyBytes, bytes);
             if (UNLIKELY(ret != 0)) {
                 CLOG_ERROR("Memory copy failed, ret:" << ret << ".");
                 return -1;

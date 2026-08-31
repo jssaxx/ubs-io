@@ -13,10 +13,10 @@
 #ifndef NET_STUB_H
 #define NET_STUB_H
 
+#include <atomic>
 #include <cstdint>
 #include <cstdlib>
 #include <string>
-#include <atomic>
 #include "net_common.h"
 
 namespace ock {
@@ -42,7 +42,7 @@ public:
 
     static std::atomic<uint64_t> connectCount;
 };
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif

@@ -10,10 +10,10 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "cm_zk_api_dl.h"
 #include <dlfcn.h>
 #include <stddef.h>
 #include "cm_log.h"
-#include "cm_zk_api_dl.h"
 
 // Function pointers
 ZooCreateFn ZooCreate = NULL;
