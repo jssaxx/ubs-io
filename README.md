@@ -4,10 +4,9 @@
 
 <strong>面向高性能 I/O 与低时延内存 KV 场景的分布式缓存套件</strong>
 
-[![Docs](https://img.shields.io/badge/docs-UBS%20IO-blue)](docs/README.md)
 [![License](https://img.shields.io/badge/license-Mulan%20PSL%20v2-orange)](LICENSE)
 
-[English](README_EN.md) | [文档中心](docs/README.md) | [贡献指南](CONTRIBUTING.md) | [UBSIO-KV(release/1.2)](https://gitcode.com/openeuler/ubs-io/blob/release/1.2/README.md)
+[English](README_EN.md) | [贡献指南](CONTRIBUTING.md) | [UBSIO-KV(release/1.2)](https://gitcode.com/openeuler/ubs-io/blob/release/1.2/README.md)
 
 </div>
 
@@ -33,8 +32,8 @@ UBS IO 是面向推理、大数据、AI 融合和低时延交易等场景的 I/O
 
 | 组件                      | 主要职责 | 入口 |
 |-------------------------| --- | --- |
-| UBSIO-BoostIO           | 分布式读写缓存、Cache/Flow 管理、BDM 磁盘后端和 UnderFS 接入 | [用户指南](docs/ubsio-boostio/zh/boostio_user_guide.md) · [API 参考](docs/ubsio-boostio/zh/boostio_api_reference.md) |
-| UBSIO-MemStore          | 分布式内存 KV、共享内存索引、多副本同步、通知和 CRB 故障恢复 | [特性指南](docs/ubsio-memstore/zh/memstore_user_guide.md) · [API 参考](docs/ubsio-memstore/zh/memstore_api_reference.md) |
+| UBSIO-BoostIO           | 分布式读写缓存、Cache/Flow 管理、BDM 磁盘后端和 UnderFS 接入 | [用户指南](docs/ubsio-boostio/zh/boostio_user_guide.md) · [安装部署指南](docs/ubsio-boostio/zh/boostio_deployment_guide.md) · [API 参考](docs/ubsio-boostio/zh/boostio_api_reference.md) |
+| UBSIO-MemStore          | 分布式内存 KV、共享内存索引、多副本同步、通知和 CRB 故障恢复 | [用户指南](docs/ubsio-memstore/zh/memstore_user_guide.md) · [API 参考](docs/ubsio-memstore/zh/memstore_api_reference.md) |
 | UBSIO-KV                | 面向应用提供 C/Python KV Cache API，负责参数校验、Key 哈希和批量请求组织 | [查看 release/1.2 README](https://gitcode.com/openeuler/ubs-io/blob/release/1.2/README.md) · [API 参考](https://gitcode.com/openeuler/ubs-io/blob/release/1.2/docs/ubsio-kv/API接口列表.md) |
 | UBSIO-Common            | UBSIO-BoostIO 和 UBSIO-MemStore 共用的 CLI 与 Trace 基础组件 | [源码目录](ubsio-common/) |
 
@@ -110,8 +109,10 @@ bash build.sh -t debug
 
 构建依赖、部署步骤和配置要求请以对应组件文档为准：
 
-- [UBSIO-BoostIO 用户指南](docs/ubsio-boostio/zh/boostio_user_guide.md)
-- [UBSIO-MemStore 部署指南](docs/ubsio-memstore/zh/memstore_deployment_guide.md)
+- [UBSIO-BoostIO 安装部署指南](docs/ubsio-boostio/zh/boostio_deployment_guide.md)
+- [UBSIO-BoostIO 配置说明](docs/ubsio-boostio/zh/boostio_configuration_guide.md)
+- [UBSIO-MemStore 安装部署指南](docs/ubsio-memstore/zh/memstore_deployment_guide.md)
+- [UBSIO-MemStore 配置说明](docs/ubsio-memstore/zh/memstore_configuration_guide.md)
 
 ## UT
 
@@ -129,10 +130,10 @@ UT脚本会重新构建对应组件并生成覆盖率结果。运行前请准备
 
 ## 文档
 
-所有组件级产品文档统一存放在顶层 [`docs/`](docs/README.md) 目录：
+所有组件级产品文档统一存放在顶层 [`docs/`](docs/) 目录：
 
-- [`docs/ubsio-boostio/zh/`](docs/ubsio-boostio/zh/)：UBSIO-BoostIO 用户、API、安全和版本文档。
-- [`docs/ubsio-memstore/zh/`](docs/ubsio-memstore/zh/)：UBSIO-MemStore 特性、部署、API、性能和安全文档。
+- [`ubsio-boostio`](docs/ubsio-boostio/zh/)：UBSIO-BoostIO 用户、安装部署、配置、API、安全和版本文档。
+- [`ubsio-memstore`](docs/ubsio-memstore/zh/)：UBSIO-MemStore 用户、安装部署、配置、API、性能和安全文档。
 
 ## 参与贡献
 
@@ -141,3 +142,7 @@ UT脚本会重新构建对应组件并生成覆盖率结果。运行前请准备
 ## 许可证
 
 UBS IO 源代码采用 [木兰宽松许可证第 2 版](LICENSE)，产品文档许可证请参见 [`docs/LICENSE`](docs/LICENSE)。
+
+## 说明
+
+此开源项目非华为产品，仅提供有限支持。

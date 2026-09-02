@@ -41,11 +41,11 @@
 <tbody>
   <tr>
     <td>操作系统</td>
-    <td>openEuler 22.03 LTS SP4</td>
+    <td>openEuler 24.03 LTS SP4</td>
   </tr>
   <tr>
     <td>JuiceFS</td>
-    <td>1.0.3</td>
+    <td>1.0.2</td>
   </tr>
   <tr>
     <td>Redis</td>
@@ -53,7 +53,7 @@
   </tr>
     <tr>
     <td>ZooKeeper</td>
-    <td>3.9.3</td>
+    <td>3.9.5</td>
   </tr>
   <tr>
     <td>Ceph</td>
@@ -142,7 +142,17 @@
   </tr>
   <tr>
     <td>《<a href="boostio_user_guide.md">UBSIO-BoostIO 用户指南</a>》</td>
-    <td>本文档提供 UBSIO-BoostIO 特性介绍、安装部署及使用指导。</td>
+    <td>本文档提供 UBSIO-BoostIO 的特性、故障处理和后端存储使用说明。</td>
+    <td>开源仓</td>
+  </tr>
+  <tr>
+    <td>《<a href="boostio_deployment_guide.md">UBSIO-BoostIO 安装部署指南</a>》</td>
+    <td>本文档提供 UBSIO-BoostIO 的安装、启动、卸载和升级指导。</td>
+    <td>开源仓</td>
+  </tr>
+  <tr>
+    <td>《<a href="boostio_configuration_guide.md">UBSIO-BoostIO 配置说明</a>》</td>
+    <td>本文档提供 UBSIO-BoostIO 的配置项和 TLS 认证说明。</td>
     <td>开源仓</td>
   </tr>
   <tr>
@@ -151,13 +161,8 @@
     <td>开源仓</td>
   </tr>
   <tr>
-    <td>《<a href="boostio_security_management.md">UBSIO-BoostIO 安全指南</a>》</td>
-    <td>本文档提供 UBSIO-BoostIO 的安全配置和加固说明。</td>
-    <td>开源仓</td>
-  </tr>
-  <tr>
-    <td>《<a href="boostio_security_note.md">UBSIO-BoostIO 安全说明</a>》</td>
-    <td>本文档提供 UBSIO-BoostIO 的通信矩阵、运行用户和文件权限建议。</td>
+    <td>《<a href="boostio_security_guide.md">UBSIO-BoostIO 安全指南</a>》</td>
+    <td>本文档提供 UBSIO-BoostIO 的通信矩阵、权限建议和安全加固说明。</td>
     <td>开源仓</td>
   </tr>
 </tbody>

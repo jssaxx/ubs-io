@@ -4,10 +4,9 @@
 
 <strong>A distributed caching suite for high-performance I/O and low-latency in-memory KV workloads</strong>
 
-[![Docs](https://img.shields.io/badge/docs-UBS%20IO-blue)](docs/README.md)
 [![License](https://img.shields.io/badge/license-Mulan%20PSL%20v2-orange)](LICENSE)
 
-[中文](README.md) | [Documentation](docs/README.md) | [Contributing](CONTRIBUTING.md) | [UBSIO-KV (release/1.2)](https://gitcode.com/openeuler/ubs-io/blob/release/1.2/README.md)
+[中文](README.md) | [Contributing](CONTRIBUTING.md) | [UBSIO-KV (release/1.2)](https://gitcode.com/openeuler/ubs-io/blob/release/1.2/README.md)
 
 </div>
 
@@ -33,8 +32,8 @@ The project contains two independent data paths that share common infrastructure
 
 | Component | Responsibility | Entry |
 | --- | --- | --- |
-| UBSIO-BoostIO | Distributed cache, Cache/Flow management, BDM disk backend, and UnderFS integration | [User guide](docs/ubsio-boostio/zh/boostio_user_guide.md) · [API reference](docs/ubsio-boostio/zh/boostio_api_reference.md) |
-| UBSIO-MemStore | Distributed in-memory KV, shared-memory index, replication, notifications, and CRB recovery | [Feature guide](docs/ubsio-memstore/zh/memstore_user_guide.md) · [API reference](docs/ubsio-memstore/zh/memstore_api_reference.md) |
+| UBSIO-BoostIO | Distributed cache, Cache/Flow management, BDM disk backend, and UnderFS integration | [User guide](docs/ubsio-boostio/zh/boostio_user_guide.md) · [Deployment guide](docs/ubsio-boostio/zh/boostio_deployment_guide.md) · [API reference](docs/ubsio-boostio/zh/boostio_api_reference.md) |
+| UBSIO-MemStore | Distributed in-memory KV, shared-memory index, replication, notifications, and CRB recovery | [User guide](docs/ubsio-memstore/zh/memstore_user_guide.md) · [API reference](docs/ubsio-memstore/zh/memstore_api_reference.md) |
 | UBSIO-KV | C/Python KV Cache APIs with validation, key hashing, and batch request organization | [Read the release/1.2 README](https://gitcode.com/openeuler/ubs-io/blob/release/1.2/README.md) · [API reference](https://gitcode.com/openeuler/ubs-io/blob/release/1.2/docs/ubsio-kv/API接口列表.md) |
 | UBSIO-Common | Shared CLI and tracing infrastructure for UBSIO-BoostIO and UBSIO-MemStore | [Source](ubsio-common/) |
 
@@ -110,8 +109,10 @@ bash build.sh -t debug
 
 See the component documents for prerequisites, deployment, and configuration:
 
-- [UBSIO-BoostIO user guide](docs/ubsio-boostio/zh/boostio_user_guide.md)
+- [UBSIO-BoostIO deployment guide](docs/ubsio-boostio/zh/boostio_deployment_guide.md)
+- [UBSIO-BoostIO configuration guide](docs/ubsio-boostio/zh/boostio_configuration_guide.md)
 - [UBSIO-MemStore deployment guide](docs/ubsio-memstore/zh/memstore_deployment_guide.md)
+- [UBSIO-MemStore configuration guide](docs/ubsio-memstore/zh/memstore_configuration_guide.md)
 
 ## Tests
 
@@ -129,10 +130,10 @@ The scripts rebuild their component and generate coverage results. Install the d
 
 ## Documentation
 
-All component-level product documentation is under the top-level [`docs/`](docs/README.md) directory:
+All component-level product documentation is under the top-level [`docs/`](docs/) directory:
 
-- [`docs/ubsio-boostio/zh/`](docs/ubsio-boostio/zh/) contains UBSIO-BoostIO user, API, security, and release documents.
-- [`docs/ubsio-memstore/zh/`](docs/ubsio-memstore/zh/) contains UBSIO-MemStore feature, deployment, API, performance, and security documents.
+- [`ubsio-boostio`](docs/ubsio-boostio/zh/) contains UBSIO-BoostIO user, deployment, configuration, API, security, and release documents.
+- [`ubsio-memstore`](docs/ubsio-memstore/zh/) contains UBSIO-MemStore user, deployment, configuration, API, performance, and security documents.
 
 ## Contributing
 
@@ -141,3 +142,7 @@ Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md), k
 ## License
 
 UBS IO source code is licensed under [Mulan PSL v2](LICENSE). The product documentation license is available at [`docs/LICENSE`](docs/LICENSE).
+
+## Notice
+
+This open source project is not a Huawei product and is provided with limited support only.
