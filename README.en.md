@@ -60,6 +60,13 @@ Issues, pull requests, and design discussions are welcome. Please read:
 - [CONTRIBUTING.md](CONTRIBUTING.md) for contribution types, branch model, PR requirements, RFC criteria, and review SLA.
 - [SECURITY.md](SECURITY.md) for vulnerability reporting and disclosure.
 
+## Community
+
+- **Code of Conduct**: see [CONTRIBUTING.md](CONTRIBUTING.md) (follows openEuler community CoC, report tc@openeuler.org)
+- **Contributing**: [CONTRIBUTING.md](CONTRIBUTING.md) (CLA, roles, SIG, channels)
+- **Maintainers**: [OWNERS](OWNERS)
+- **Channels**: openEuler [mailing list](https://gitcode.com/openeuler/community/blob/master/zh/communication/Mails.md) / [IRC](https://gitcode.com/openeuler/community/blob/master/zh/communication/IRCs.md)
+
 ## License
 
 UBS IO is licensed under Mulan PSL v2. See [LICENSE](LICENSE).

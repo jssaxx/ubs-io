@@ -162,3 +162,33 @@ PR 描述中请粘贴实际执行命令和关键结果。
 ## 行为准则
 
 请保持专业、尊重和面向事实的讨论。评审聚焦代码、设计、文档和可复现证据。对争议方案优先通过 RFC、最小实验和性能数据收敛。
+
+本项目遵循 [openEuler 社区行为守则](https://gitcode.com/openeuler/community/blob/master/code-of-conduct.md)。
+
+---
+
+## 贡献者授权（CLA）
+
+本项目遵循 [openEuler 社区贡献者授权协议（CLA）](https://gitcode.com/openeuler/community/blob/master/zh/CLA.md)。首次提交 PR 时，openEuler 平台会引导您完成 CLA 签署。
+
+## 社区角色
+
+本项目采用 openEuler 三级角色体系：Contributor / Committer / Maintainer。
+
+- 角色定义与晋升路径见 [openEuler 社区成员说明](https://gitcode.com/openeuler/community/blob/master/community-membership_cn.md)。
+- 仓库维护者清单见 [OWNERS](OWNERS)。
+- Committer / Maintainer 可用 `/lgtm` `/approve` 命令触发 openEuler ci-bot 合入。
+
+## 社区归属
+
+本项目属 openEuler 社区 sig-UB-ServiceCore，遵循 openEuler SIG 治理。
+
+- [openEuler SIG角色和组织治理](https://gitcode.com/openeuler/community/blob/master/zh/technical-committee/governance/SIG-governance.md)
+- [openEuler SIG中心](https://www.openeuler.org/zh/sig/sig-list/)
+
+## 沟通渠道
+
+- [openEuler 邮件列表](https://gitcode.com/openeuler/community/blob/master/zh/communication/Mails.md)
+- [IRC](https://gitcode.com/openeuler/community/blob/master/zh/communication/IRCs.md)
+- [openEuler 官网](https://www.openeuler.org/zh/)
+- 紧急或安全问题参考 [SECURITY.md](SECURITY.md)。
