@@ -1751,28 +1751,28 @@ static const char *BdmDiskHeadMode(uint32_t pad)
     return BdmDiskHeadHasStandaloneInfo(pad) ? "standalone" : "cluster";
 }
 
-static uint32_t BdmDiskHeadDeviceId(uint32_t pad)
+static uint32_t BdmDiskHeadSlotIndex(uint32_t pad)
 {
-    return pad & BDM_DISK_HEAD_DEVICE_ID_MASK;
+    return pad & BDM_DISK_HEAD_SLOT_INDEX_MASK;
 }
 
-static uint32_t BdmDiskHeadDeviceCount(uint32_t pad)
+static uint32_t BdmDiskHeadSlotCount(uint32_t pad)
 {
-    return (pad & BDM_DISK_HEAD_DEVICE_COUNT_MASK) >> BDM_DISK_HEAD_DEVICE_COUNT_SHIFT;
+    return (pad & BDM_DISK_HEAD_SLOT_COUNT_MASK) >> BDM_DISK_HEAD_SLOT_COUNT_SHIFT;
 }
 
 static int32_t BdmDiskClearVirtualHeaders(BdmDiskItem *item, const BdmDiskHead *observedHead)
 {
-    uint32_t storedDeviceCount = BdmDiskHeadDeviceCount(observedHead->pad);
-    uint32_t currentDeviceCount = BdmDiskHeadDeviceCount(item->pad);
-    if (UNLIKELY(currentDeviceCount == 0 || currentDeviceCount > BDM_VIRTUAL_LAYOUT_SLOT_NUM)) {
-        BDM_LOGERROR(0, "Invalid current virtual disk metadata, device(%s), bdmId(%u), currentDeviceCount(%u).",
-            item->name, item->bdmId, currentDeviceCount);
+    uint32_t storedSlotCount = BdmDiskHeadSlotCount(observedHead->pad);
+    uint32_t currentSlotCount = BdmDiskHeadSlotCount(item->pad);
+    if (UNLIKELY(currentSlotCount == 0 || currentSlotCount > BDM_VIRTUAL_LAYOUT_SLOT_NUM)) {
+        BDM_LOGERROR(0, "Invalid current virtual disk metadata, device(%s), bdmId(%u), currentSlotCount(%u).",
+            item->name, item->bdmId, currentSlotCount);
         return BDM_CODE_ERR_IO;
     }
 
     /* A current Region is a union of 16-way slots; clear the 2 MiB header area of every owned slot. */
-    uint32_t headerSlotCount = BDM_VIRTUAL_LAYOUT_SLOT_NUM / currentDeviceCount;
+    uint32_t headerSlotCount = BDM_VIRTUAL_LAYOUT_SLOT_NUM / currentSlotCount;
     if (UNLIKELY(item->totalSize % headerSlotCount != 0 ||
         item->totalSize / headerSlotCount < BDM_RESTORE_META_SIZE)) {
         BDM_LOGERROR(0, "Invalid current virtual disk region, device(%s), bdmId(%u), regionLength(%llu), "
@@ -1804,11 +1804,11 @@ static int32_t BdmDiskClearVirtualHeaders(BdmDiskItem *item, const BdmDiskHead *
 
     free(clearBuff);
     if (ret == BDM_CODE_OK) {
-        BDM_LOGWARN(0, "Cleared old virtual disk headers, device(%s), bdmId(%u), storedDeviceCount(%u), "
-            "currentDeviceCount(%u), currentDeviceId(%u), regionOffset(%llu), regionLength(%llu), "
+        BDM_LOGWARN(0, "Cleared old virtual disk headers, device(%s), bdmId(%u), storedSlotCount(%u), "
+            "currentSlotCount(%u), currentSlotIndex(%u), regionOffset(%llu), regionLength(%llu), "
             "headerStride(%llu), headerSlotCount(%u).",
-            item->name, item->bdmId, storedDeviceCount, BdmDiskHeadDeviceCount(item->pad),
-            BdmDiskHeadDeviceId(item->pad), item->offset, item->totalSize, headerStride, headerSlotCount);
+            item->name, item->bdmId, storedSlotCount, BdmDiskHeadSlotCount(item->pad),
+            BdmDiskHeadSlotIndex(item->pad), item->offset, item->totalSize, headerStride, headerSlotCount);
     }
     return ret;
 }
@@ -1830,19 +1830,26 @@ static int32_t BdmDiskCheckItem(const BdmDiskHead *head, const BdmDiskItem *item
     if (head->pad == item->pad) {
         return BDM_CODE_OK;
     }
+    if (BdmDiskHeadHasVirtualLayout(head->pad) && BdmDiskHeadHasVirtualLayout(item->pad) &&
+        BdmDiskHeadSlotCount(head->pad) == BdmDiskHeadSlotCount(item->pad)) {
+        BDM_LOGINFO(0, "Reuse virtual disk metadata with a new owner, device(%s), bdmId(%u), "
+            "storedSlotIndex(%u), currentSlotIndex(%u), slotCount(%u).", item->name, item->bdmId,
+            BdmDiskHeadSlotIndex(head->pad), BdmDiskHeadSlotIndex(item->pad), BdmDiskHeadSlotCount(item->pad));
+        return BDM_CODE_OK;
+    }
     if (UNLIKELY(!BdmDiskHeadHasStandaloneInfo(head->pad) && !BdmDiskHeadHasStandaloneInfo(item->pad))) {
-        BDM_LOGWARN(0, "Disk metadata without standalone startup info, device(%s), bdmId(%u), currentDeviceId(%u).",
-            item->name, item->bdmId, BdmDiskHeadDeviceId(item->pad));
+        BDM_LOGWARN(0, "Disk metadata without standalone startup info, device(%s), bdmId(%u), currentSlotIndex(%u).",
+            item->name, item->bdmId, BdmDiskHeadSlotIndex(item->pad));
         return BDM_CODE_OK;
     }
 
     BDM_LOGERROR(0,
-        "Disk metadata mismatch, device(%s), bdmId(%u), storedMode(%s), storedVersion(%u), storedDeviceCount(%u), "
-        "storedDeviceId(%u), currentMode(%s), currentVersion(%u), currentDeviceCount(%u), currentDeviceId(%u).",
+        "Disk metadata mismatch, device(%s), bdmId(%u), storedMode(%s), storedVersion(%u), storedSlotCount(%u), "
+        "storedSlotIndex(%u), currentMode(%s), currentVersion(%u), currentSlotCount(%u), currentSlotIndex(%u).",
         item->name, item->bdmId, BdmDiskHeadMode(head->pad), BdmDiskHeadLayoutVersion(head->pad),
-        BdmDiskHeadDeviceCount(head->pad), BdmDiskHeadDeviceId(head->pad),
-        BdmDiskHeadMode(item->pad), BdmDiskHeadLayoutVersion(item->pad), BdmDiskHeadDeviceCount(item->pad),
-        BdmDiskHeadDeviceId(item->pad));
+        BdmDiskHeadSlotCount(head->pad), BdmDiskHeadSlotIndex(head->pad),
+        BdmDiskHeadMode(item->pad), BdmDiskHeadLayoutVersion(item->pad), BdmDiskHeadSlotCount(item->pad),
+        BdmDiskHeadSlotIndex(item->pad));
     return BDM_CODE_METADATA_MISMATCH;
 }
 
@@ -1876,7 +1883,7 @@ int32_t BdmDiskRestoreCheckOK(BdmDiskItem *item)
     bool currentVirtualLayout = BdmDiskHeadHasVirtualLayout(item->pad);
     bool storedVirtualLayout = head.magic == BDM_DISK_MAGIC && BdmDiskHeadHasVirtualLayout(head.pad);
     if (currentVirtualLayout && (!storedVirtualLayout ||
-        BdmDiskHeadDeviceCount(head.pad) != BdmDiskHeadDeviceCount(item->pad))) {
+        BdmDiskHeadSlotCount(head.pad) != BdmDiskHeadSlotCount(item->pad))) {
         ret = BdmDiskClearVirtualHeaders(item, &head);
         if (UNLIKELY(ret != BDM_CODE_OK)) {
             return ret;

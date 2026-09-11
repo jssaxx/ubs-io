@@ -711,15 +711,6 @@ CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf)
     return BioService::Initialize(mode, *optConf);
 }
 
-void BioSetStandaloneDevice(uint32_t deviceId)
-{
-    auto agentPtr = ock::bio::agent::BioClientAgent::Instance();
-    if (agentPtr == nullptr) {
-        return;
-    }
-    agentPtr->SetStandaloneDevice(deviceId);
-}
-
 CResult BioRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)
 {
     auto agentPtr = ock::bio::agent::BioClientAgent::Instance();

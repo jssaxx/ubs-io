@@ -71,8 +71,7 @@ int32_t StandaloneAsyncGetOpStub(GetRequest *req, GetResponse *rsp)
 
 struct AgentStateGuard {
     explicit AgentStateGuard(BioClientAgentPtr agentParam) : agent(agentParam), mode(agentParam->mMode),
-        handler(agentParam->handler), getRuntimeConfigOp(agentParam->getRuntimeConfigOp), getOp(agentParam->getOp),
-        standaloneDeviceInfo(agentParam->mStandaloneDeviceInfo)
+        handler(agentParam->handler), getRuntimeConfigOp(agentParam->getRuntimeConfigOp), getOp(agentParam->getOp)
     {
     }
 
@@ -82,7 +81,6 @@ struct AgentStateGuard {
         agent->handler = handler;
         agent->getRuntimeConfigOp = getRuntimeConfigOp;
         agent->getOp = getOp;
-        agent->mStandaloneDeviceInfo = standaloneDeviceInfo;
     }
 
     BioClientAgentPtr agent;
@@ -90,7 +88,6 @@ struct AgentStateGuard {
     void *handler;
     BioClientAgent::GetRuntimeConfigFuncPtr getRuntimeConfigOp;
     BioClientAgent::GetFuncPtr getOp;
-    BioClientAgent::StandaloneDeviceInfo standaloneDeviceInfo;
 };
 
 struct AsyncGetCallbackState {
@@ -99,22 +96,6 @@ struct AsyncGetCallbackState {
     uint64_t realLen{0};
     uint32_t respLen{0};
 };
-}
-
-TEST(BioClientAgentTest, standalone_device_must_be_set_before_initialize)
-{
-    auto agent = BioClientAgent::Instance();
-    AgentStateGuard guard(agent);
-    agent->handler = nullptr;
-    agent->mStandaloneDeviceInfo = {};
-
-    agent->SetStandaloneDevice(3);
-    EXPECT_TRUE(agent->mStandaloneDeviceInfo.configured);
-    EXPECT_EQ(agent->mStandaloneDeviceInfo.deviceId, 3);
-
-    agent->handler = reinterpret_cast<void *>(0x1);
-    agent->SetStandaloneDevice(4);
-    EXPECT_EQ(agent->mStandaloneDeviceInfo.deviceId, 3);
 }
 
 TEST(BioClientAgentTest, standalone_runtime_config_requires_direct_mode_and_loaded_op)
