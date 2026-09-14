@@ -2,7 +2,7 @@
 
 本文面向 630 商用版本的主推场景：单机推理三级池化。该场景下 UBS IO 作为 KV Cache 分层缓存体系中的 SSD 层，配合 memcache 或 Mooncake 接入 vLLM-Ascend，扩大本地 KV Cache 可承载容量并提升高复用请求命中率。
 
-本文只说明推荐配置方式，不修改仓库中的现有配置文件。默认配置文件可参考 [ubsio-boostio/configs/ubsio.conf](../ubsio-boostio/configs/ubsio.conf)；如需指定运行时配置，建议通过环境变量加载：
+本文只说明推荐配置方式，不修改仓库中的现有配置文件。默认配置文件为 `ubsio-boostio/configs/ubsio.conf`；如需指定运行时配置，建议通过环境变量加载：
 
 ```bash
 export UBSIO_CONFIG_PATH=/path/to/ubsio.conf
@@ -11,7 +11,7 @@ export UBSIO_CONFIG_PATH=/path/to/ubsio.conf
 ## 适用范围
 
 - 单机模式推理服务，当前重点覆盖本地 SSD 作为 KV Cache 扩容层的场景。
-- UBSIO-KV 通过 BoostIO 后端提供标准 KV 接口，并可与 memcache、Mooncake 组合使用。
+- UBS IO KV 通过 BoostIO 后端提供标准 KV 接口，并可与 memcache、Mooncake 组合使用。
 - 不要求 UBS IO 自身绑定特定硬件；与 memcache、Mooncake 或上层推理框架组合使用时，以对应项目官方文档为准。
 
 ## 最小本地单机模式示例
@@ -55,7 +55,7 @@ ubsio.standalone.device_count = 0
 | `ubsio.cache.mem_read_write_ratio` | 字符串 | 可选 | `0:10` | 两个 `0` 到 `10` 的整数；总和必须为 `10` | 将 `ubsio.mem.size_in_gb` 划分给读缓存和写缓存。例如：`0:10` 表示把全部内存缓存容量预留给写缓存。 |
 | `ubsio.cache.disk_read_write_ratio` | 字符串 | 可选 | `0:10` | 两个 `0` 到 `10` 的整数；总和必须为 `10` | 将缓存盘容量划分给读缓存和写缓存。例如：`0:10` 表示把全部磁盘缓存容量预留给写缓存。 |
 | `ubsio.bdm.io_engine` | 字符串 | 可选 | `sync` | `sync`、`io_uring` | BDM I/O 引擎。 |
-| `ubsio.bdm.io_uring.sqpoll_mode` | 字符串 | 可选 | `auto` | `auto`、`required`、`disabled` | io_uring SQPOLL 模式；`auto` 在不支持 SQPOLL 时回退到普通 io_uring。 |
+| `ubsio.bdm.io_uring.sqpoll_mode` | 字符串 | 可选 | `auto` | `auto`、`required`、`disabled` | io_uring 内核轮询模式；`auto` 在内核轮询不可用时使用普通 io_uring。 |
 | `ubsio.bdm.sync.worker_num` | 整数 | 可选 | `16` | `1` 到 `64` | sync 引擎执行 BDM 批量阻塞 I/O 的内部线程数。 |
 | `ubsio.bdm.batch_read.window_keys` | 整数 | 可选 | `128` | `1` 到 `1024` | BatchGet 经 BDM 读盘时，单个窗口的 key 数上限。 |
 | `ubsio.bdm.batch_read.window_bytes_mb` | 整数 | 可选 | `64` | `1` 到 `1024` | BatchGet 经 BDM 读盘时，单个窗口的字节数上限，单位 MB。 |

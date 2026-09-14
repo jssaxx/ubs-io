@@ -42,8 +42,6 @@ apt-get install -y libibverbs-dev librdmacm-dev
 
 > **说明**：openEuler 的 `rdma-core-devel` 包含 Verbs 和 RDMACM 开发头文件；Ubuntu 需要分别安装 `libibverbs-dev` 和 `librdmacm-dev`。
 
-
-
 源码目录需要保持以下相对位置：
 
 ```text
@@ -157,7 +155,7 @@ BoostIO 支持默认配置文件路径。未配置 `UBSIO_CONFIG_PATH` 时，推
 /opt/ubsio/conf/ubsio.conf
 ```
 
-单机推理三级池化场景可参考 [UBSIO 单机模式配置参考](../单机模式配置说明.md)。常用配置项如下。
+单机推理三级池化场景可参考 [UBS IO 单机模式配置参考](../standalone_mode_configuration.md)。常用配置项如下。
 
 | 配置项                                 | 说明                        |
 | ----------------------------------- | ------------------------- |
