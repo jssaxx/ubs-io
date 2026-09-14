@@ -25,6 +25,7 @@ namespace bio {
 Logger *Logger::gInstance = nullptr;
 std::mutex Logger::gMutex;
 bool Logger::gInited = false;
+std::atomic<bool> Logger::gInitErrorScreenEnabled{ false };
 
 const int STDOUT_TYPE = 0;
 const int FILE_TYPE = 1;
@@ -187,16 +188,31 @@ void Logger::Exit()
 
 int32_t Logger::Log(int level, const std::string &message) const
 {
-    if (mSpdLogger == nullptr) {
-        return -2L;
-    }
-
     if (level < 0 || level > 5) { // 5
         return -3L;
     }
 
+    if (level >= BIOLOG_LEVEL_ERROR && mOptions.logType == FILE_TYPE &&
+        gInitErrorScreenEnabled.load(std::memory_order_relaxed)) {
+        LogToStdErr(level, message);
+    }
+
+    if (mSpdLogger == nullptr) {
+        return -2L;
+    }
+
     mSpdLogger->log(static_cast<spdlog::level::level_enum>(level), "{}", message);
     return 0L;
+}
+
+void Logger::SetInitErrorScreenEnabled(bool enabled) noexcept
+{
+    gInitErrorScreenEnabled.store(enabled, std::memory_order_relaxed);
+}
+
+bool Logger::IsInitErrorScreenEnabled() noexcept
+{
+    return gInitErrorScreenEnabled.load(std::memory_order_relaxed);
 }
 
 void Logger::ResetLogLevel(int32_t logLevel)
