@@ -33,17 +33,6 @@ protected:
 };
 }
 
-TEST_F(TestBioLog, stderr_error_has_standard_context)
-{
-    testing::internal::CaptureStderr();
-    BIO_LOG_STD_ERR("bootstrap failure");
-    const std::string output = testing::internal::GetCapturedStderr();
-
-    const std::regex expected(
-        R"(^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6} [0-9]+ error \[test_log\.cpp:[0-9]+\]\[TestBody\] bootstrap failure\n$)");
-    EXPECT_TRUE(std::regex_match(output, expected)) << output;
-}
-
 TEST_F(TestBioLog, init_error_screen_outputs_error_before_logger_initialization)
 {
     ock::bio::Logger::SetInitErrorScreenEnabled(true);
@@ -53,8 +42,10 @@ TEST_F(TestBioLog, init_error_screen_outputs_error_before_logger_initialization)
     LOG_ERROR("initialization failure");
     const std::string output = testing::internal::GetCapturedStderr();
 
+    const std::regex expected(
+        R"(^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6} [0-9]+ error \[test_log\.cpp:[0-9]+\]\[TestBody\] initialization failure\n$)");
     EXPECT_EQ(output.find("initialization info"), std::string::npos);
-    EXPECT_NE(output.find("initialization failure"), std::string::npos);
+    EXPECT_TRUE(std::regex_match(output, expected)) << output;
 }
 
 TEST_F(TestBioLog, init_error_screen_outputs_error_when_file_logger_initialization_fails)
