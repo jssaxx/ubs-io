@@ -16,7 +16,24 @@
 #include "bio_log.h"
 #include "gtest/gtest.h"
 
-TEST(TestBioLog, stderr_error_has_standard_context)
+namespace {
+class TestBioLog : public testing::Test {
+protected:
+    void SetUp() override
+    {
+        ock::bio::Logger::SetInitErrorScreenEnabled(false);
+        ock::bio::Logger::Destroy();
+    }
+
+    void TearDown() override
+    {
+        ock::bio::Logger::SetInitErrorScreenEnabled(false);
+        ock::bio::Logger::Destroy();
+    }
+};
+}
+
+TEST_F(TestBioLog, stderr_error_has_standard_context)
 {
     testing::internal::CaptureStderr();
     BIO_LOG_STD_ERR("bootstrap failure");
@@ -27,9 +44,8 @@ TEST(TestBioLog, stderr_error_has_standard_context)
     EXPECT_TRUE(std::regex_match(output, expected)) << output;
 }
 
-TEST(TestBioLog, init_error_screen_outputs_error_before_logger_initialization)
+TEST_F(TestBioLog, init_error_screen_outputs_error_before_logger_initialization)
 {
-    ock::bio::Logger::Destroy();
     ock::bio::Logger::SetInitErrorScreenEnabled(true);
 
     testing::internal::CaptureStderr();
@@ -37,15 +53,33 @@ TEST(TestBioLog, init_error_screen_outputs_error_before_logger_initialization)
     LOG_ERROR("initialization failure");
     const std::string output = testing::internal::GetCapturedStderr();
 
-    ock::bio::Logger::SetInitErrorScreenEnabled(false);
     EXPECT_EQ(output.find("initialization info"), std::string::npos);
     EXPECT_NE(output.find("initialization failure"), std::string::npos);
 }
 
-TEST(TestBioLog, init_error_screen_is_disabled_by_default)
+TEST_F(TestBioLog, init_error_screen_outputs_error_when_file_logger_initialization_fails)
 {
-    ock::bio::Logger::Destroy();
-    ock::bio::Logger::SetInitErrorScreenEnabled(false);
+    ock::bio::LoggerOptions options;
+    options.logType = 1;
+    options.path = "/path/that/does/not/exist/ubsio.log";
+    auto *logger = ock::bio::Logger::Instance(options);
+    ASSERT_NE(logger, nullptr);
+
+    testing::internal::CaptureStderr();
+    const int32_t initResult = logger->Init();
+    testing::internal::GetCapturedStderr();
+    ASSERT_NE(initResult, 0);
+
+    ock::bio::Logger::SetInitErrorScreenEnabled(true);
+    testing::internal::CaptureStderr();
+    LOG_ERROR("logger backend initialization failure");
+    const std::string output = testing::internal::GetCapturedStderr();
+
+    EXPECT_NE(output.find("logger backend initialization failure"), std::string::npos) << output;
+}
+
+TEST_F(TestBioLog, init_error_screen_suppresses_error_when_disabled)
+{
 
     testing::internal::CaptureStderr();
     LOG_ERROR("hidden initialization failure");
