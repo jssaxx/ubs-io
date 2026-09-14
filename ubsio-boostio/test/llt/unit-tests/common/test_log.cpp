@@ -26,3 +26,30 @@ TEST(TestBioLog, stderr_error_has_standard_context)
         R"(^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6} [0-9]+ error \[test_log\.cpp:[0-9]+\]\[TestBody\] bootstrap failure\n$)");
     EXPECT_TRUE(std::regex_match(output, expected)) << output;
 }
+
+TEST(TestBioLog, init_error_screen_outputs_error_before_logger_initialization)
+{
+    ock::bio::Logger::Destroy();
+    ock::bio::Logger::SetInitErrorScreenEnabled(true);
+
+    testing::internal::CaptureStderr();
+    LOG_INFO("initialization info");
+    LOG_ERROR("initialization failure");
+    const std::string output = testing::internal::GetCapturedStderr();
+
+    ock::bio::Logger::SetInitErrorScreenEnabled(false);
+    EXPECT_EQ(output.find("initialization info"), std::string::npos);
+    EXPECT_NE(output.find("initialization failure"), std::string::npos);
+}
+
+TEST(TestBioLog, init_error_screen_is_disabled_by_default)
+{
+    ock::bio::Logger::Destroy();
+    ock::bio::Logger::SetInitErrorScreenEnabled(false);
+
+    testing::internal::CaptureStderr();
+    LOG_ERROR("hidden initialization failure");
+    const std::string output = testing::internal::GetCapturedStderr();
+
+    EXPECT_TRUE(output.empty()) << output;
+}
