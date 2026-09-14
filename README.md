@@ -79,8 +79,8 @@ UBS IO 的性能收益来自 KV Cache 层级容量扩展和本地访问路径收
 
 ## 🚀快速入门
 
-- [安装使用](docs/ubsio-boostio/推理三级池化场景安装部署指南.md#部署库包)
-- [配置文件](docs/ubsio-boostio/推理三级池化场景安装部署指南.md#配置文件)
+- [安装使用](docs/ubsio-boostio/inference_three_level_pooling_deployment_guide.md#部署库包)
+- [配置文件](docs/ubsio-boostio/inference_three_level_pooling_deployment_guide.md#配置文件)
 - [样例执行](examples/ubsio-kv/README.md)
 
 ## 📑学习教程

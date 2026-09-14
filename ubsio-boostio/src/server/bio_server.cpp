@@ -57,6 +57,19 @@ void *gMetaEventCallbackContext = nullptr;
 bool gMetaEventCallbackConfigured = false;
 bool gMetaEventCallbackApplicable = false;
 
+class InitErrorScreenGuard {
+public:
+    InitErrorScreenGuard()
+    {
+        Logger::SetInitErrorScreenEnabled(true);
+    }
+
+    ~InitErrorScreenGuard()
+    {
+        Logger::SetInitErrorScreenEnabled(false);
+    }
+};
+
 UbsIoMetaEventCallback BuildMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)
 {
     if (callback == nullptr) {
@@ -237,6 +250,7 @@ BResult BioServer::Start()
 BResult BioServer::StartStandalone()
 {
     std::lock_guard<std::mutex> lock(mStartLock);
+    InitErrorScreenGuard initErrorScreenGuard;
     BIO_TP_START(NO_PROCESS_SERVER_START, 0);
     if (mStarted) {
         return BIO_OK;

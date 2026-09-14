@@ -13,6 +13,7 @@
 #ifndef BOOSTIO_BIO_LOG_H
 #define BOOSTIO_BIO_LOG_H
 
+#include <atomic>
 #include <cstdint>
 #include <cstring>
 #include <sstream>
@@ -42,16 +43,22 @@ namespace bio {
     } while (0)
 
 /* for default logger */
-#define BIO_LOG_INTERNAL(level, file, line, func, msg)                             \
-    do {                                                                           \
-        if (ock::bio::Logger::gInstance != nullptr &&                              \
-            ock::bio::Logger::gInstance->IsHigherLevel(static_cast<int>(level))) { \
+#define BIO_LOG_INTERNAL(level, file, line, func, msg)                                                \
+    do {                                                                                              \
+        if ((ock::bio::Logger::gInstance != nullptr &&                                                \
+                ock::bio::Logger::gInstance->IsHigherLevel(static_cast<int>(level))) ||               \
+            (ock::bio::Logger::gInstance == nullptr && static_cast<int>(level) >= BIOLOG_LEVEL_ERROR && \
+                ock::bio::Logger::IsInitErrorScreenEnabled())) {                                     \
             std::ostringstream oss;                                                \
             oss.str("");                                                           \
             oss.clear();                                                           \
             oss << "[" << file << ":" << line << "]"                               \
                 << "[" << func << "] " << msg;                                     \
-            ock::bio::Logger::gInstance->Log(level, oss.str());                    \
+            if (ock::bio::Logger::gInstance != nullptr) {                          \
+                ock::bio::Logger::gInstance->Log(level, oss.str());                \
+            } else {                                                               \
+                ock::bio::Logger::LogToStdErr(level, oss.str());                   \
+            }                                                                      \
         }                                                                          \
     } while (0)
 
@@ -115,6 +122,12 @@ public:
 
     int32_t Log(int level, const std::string &message) const;
 
+    static void LogToStdErr(int32_t level, const std::string &message);
+
+    static void SetInitErrorScreenEnabled(bool enabled) noexcept;
+
+    static bool IsInitErrorScreenEnabled() noexcept;
+
     void ResetLogLevel(int32_t logLevel);
 
     inline bool IsHigherLevel(int nowLevel) const
@@ -135,6 +148,7 @@ private:
 private:
     static std::mutex gMutex;
     static bool gInited;
+    static std::atomic<bool> gInitErrorScreenEnabled;
 };
 }
 }

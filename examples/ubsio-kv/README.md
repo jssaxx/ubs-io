@@ -15,7 +15,7 @@ cmake --version
 gcc --version
 ```
 
-构建工具要求参考 [推理三级池化场景安装部署指南](../../docs/ubsio-boostio/推理三级池化场景安装部署指南.md#构建环境准备)。源码目录保持如下结构：
+构建工具要求参考 [推理三级池化场景安装部署指南](../../docs/ubsio-boostio/inference_three_level_pooling_deployment_guide.md#构建环境准备)。源码目录保持如下结构：
 
 ```text
 ubs-io/
@@ -42,7 +42,7 @@ ubsio-boostio/dist/lib/
 ubsio-kv/dist/pkg/pykvc-*.whl
 ```
 
-如果 BoostIO 已按 [安装使用](../../docs/ubsio-boostio/推理三级池化场景安装部署指南.md#部署库包) 完成构建，也可以只构建 UBSIO-KV Python 包：
+如果 BoostIO 已按 [安装使用](../../docs/ubsio-boostio/inference_three_level_pooling_deployment_guide.md#部署库包) 完成构建，也可以只构建 UBSIO-KV Python 包：
 
 ```bash
 cd ubsio-kv
@@ -75,7 +75,7 @@ python3 -m pip install --force-reinstall ubsio-kv/dist/pkg/pykvc-*.whl
 /etc/ubsio/ubsio.conf
 ```
 
-如果需要使用自定义配置文件，可以参考 [配置文件](../../docs/ubsio-boostio/推理三级池化场景安装部署指南.md#配置文件) 准备 `/opt/ubsio/conf/ubsio.conf`。单机三级池化场景的配置项可参考 [UBS IO 单机模式配置参考](../../docs/单机模式配置说明.md)。
+如果需要使用自定义配置文件，可以参考 [配置文件](../../docs/ubsio-boostio/inference_three_level_pooling_deployment_guide.md#配置文件) 准备 `/opt/ubsio/conf/ubsio.conf`。单机三级池化场景的配置项可参考 [UBS IO 单机模式配置参考](../../docs/standalone_mode_configuration.md)。
 
 ## 5. 设置运行环境变量
 
