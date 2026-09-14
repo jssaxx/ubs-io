@@ -45,9 +45,7 @@ aux_source_directory(disk BIO_TEST)
 aux_source_directory(sdk BIO_TEST)
 aux_source_directory(common BIO_TEST)
 aux_source_directory(underfs BIO_TEST)
-list(FILTER BIO_TEST EXCLUDE REGEX "common/test_log\\.cpp$")
 add_executable(bio_test ${BIO_TEST} main.cpp ut_common.cpp ut_common.h)
-add_executable(bio_log_test common/test_log.cpp log_test_main.cpp)
 
 set(TEST_DIR ${PROJECT_SOURCE_DIR})
 target_include_directories(bio_test PRIVATE
@@ -90,12 +88,6 @@ target_link_libraries(bio_test bio_sdk bio_server
         ${PROJECT_OUTPUT_PATH}/boostio_test_tools/mockcpp/lib/libmockcpp.a
         -Wl,--end-group)
 
-target_include_directories(bio_log_test PRIVATE
-        ${SRC_DIR}/common
-        ${PROJECT_OUTPUT_PATH}/boostio_test_tools/googletest/include/)
-target_link_libraries(bio_log_test bio_common pthread ${GTEST_LIBRARY})
-
 set_target_properties(bio_test PROPERTIES OUTPUT_NAME "bio_test")
 set_target_properties(bio_test PROPERTIES CLEAN_DIRECT_OUTPUT 1)
 set_target_properties(bio_test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
-set_target_properties(bio_log_test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")

@@ -37,7 +37,6 @@ echo "=== 4. Running Tests ==="
 cd ${BUILD_DIR}
 \cp -r ${PROJECT_ROOT}/dist/boostio/lib/* ${BUILD_DIR}/
 export LD_LIBRARY_PATH=${BUILD_DIR}:$LD_LIBRARY_PATH
-./bio_log_test --gtest_output="xml:${REPORT_DIR}/report_log.xml"
 ./bio_test --gtest_output="xml:${REPORT_DIR}/report.xml"
 
 echo "=== 5. Capturing Test Data (Execution State) ==="
