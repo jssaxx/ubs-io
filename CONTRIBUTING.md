@@ -145,7 +145,7 @@ RFC 应说明背景、目标、非目标、方案、兼容性、测试计划和�
 - 文档：检查链接、命令路径、标题结构和中英文一致性。
 - 构建脚本：执行对应脚本的帮助、 dry-run 或最小构建路径。
 - UBSIO-KV：当前可参考 [ubsio-kv](ubsio-kv/) 代码入口；独立安装与使用指南以后续版本文档为准。
-- BoostIO：参考 [推理三级池化场景安装部署指南](docs/ubsio-boostio/推理三级池化场景安装部署指南.md)。
+- BoostIO：参考 [推理三级池化场景安装部署指南](docs/ubsio-boostio/inference_three_level_pooling_deployment_guide.md)。
 - Mooncake 集成：参考 [Mooncake patch 指南](patches/mooncake/mooncake.md)。
 
 PR 描述中请粘贴实际执行命令和关键结果。

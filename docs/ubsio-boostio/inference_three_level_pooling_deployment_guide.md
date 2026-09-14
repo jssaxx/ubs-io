@@ -131,7 +131,7 @@ BoostIO 支持默认配置文件路径。未配置 `UBSIO_CONFIG_PATH` 时，推
 /opt/ubsio/conf/ubsio.conf
 ```
 
-单机推理三级池化场景可参考 [UBSIO 单机模式配置参考](../单机模式配置说明.md)。常用配置项如下。
+单机推理三级池化场景可参考 [UBS IO 单机模式配置参考](../standalone_mode_configuration.md)。常用配置项如下。
 
 | 配置项 | 说明 |
 | --- | --- |
