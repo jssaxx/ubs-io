@@ -26,6 +26,7 @@
 #include "mirror_server_crb.h"
 #include "net_engine.h"
 #include "standalone_memory_pool.h"
+#include "standalone_slot_lease.h"
 
 namespace ock {
 namespace bio {
@@ -451,7 +452,8 @@ protected:
     void BioTraceExit();
     BResult BioUnderFsInit();
     void BioUnderFsExit();
-    BResult BioStandaloneDeviceIdGatherInit();
+    BResult BioStandaloneSlotLeaseInit();
+    void BioStandaloneSlotLeaseExit();
     BResult BioBdmInit();
     void BioBdmExit();
     BResult BioNetInit();
@@ -498,6 +500,7 @@ private:
     BioConfigPtr mConfig = nullptr;
     NetEnginePtr mNetEngine = nullptr;
     StandaloneMemoryPoolPtr mStandaloneMemPool = nullptr;
+    StandaloneSlotLease mStandaloneSlotLease;
     CmPtr mCm = nullptr;
     MirrorServerPtr mMirror = nullptr;
     MirrorServerCrbPtr mMirrorCrb = nullptr;

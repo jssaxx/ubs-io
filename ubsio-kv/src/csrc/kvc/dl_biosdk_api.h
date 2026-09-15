@@ -27,7 +27,6 @@ namespace ubsio {
 
 using BioExitFunc = void (*)(void);
 using BioInitFunc = CResult (*)(WorkerMode mode, ClientOptionsConfig *optConf);
-using BioSetStandaloneDeviceFunc = void (*)(uint32_t deviceId);
 using BioCreateCacheFunc = CResult (*)(CacheDescriptor desc);
 using BioCalLocationFunc = CResult (*)(uint64_t tenantId, uint64_t objectId, ObjLocation *location);
 using BioGetFunc = CResult (*)(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location,
@@ -53,11 +52,6 @@ public:
     static CResult Initialize(WorkerMode mode, ClientOptionsConfig *optConf)
     {
         return static_cast<CResult>(pBioInitialize(mode, optConf));
-    }
-
-    static void SetStandaloneDevice(uint32_t deviceId)
-    {
-        pBioSetStandaloneDevice(deviceId);
     }
 
     static CResult CreateCache(CacheDescriptor desc)
@@ -116,7 +110,7 @@ public:
         }
     }
 
-    static int32_t KvBioInit(int32_t devId);
+    static int32_t KvBioInit();
 
     static CResult BatchGetKeyDiskAddr(uint64_t tenantId, const char **keys, ObjLocation *locations,
                                        const uint32_t count, KeyAddrInfo *infos)
@@ -142,7 +136,6 @@ private:
 
     static BioExitFunc pBioExit;
     static BioInitFunc pBioInitialize;
-    static BioSetStandaloneDeviceFunc pBioSetStandaloneDevice;
     static BioGetFunc pBioGet;
     static BioPutFunc pBioPut;
     static BioStatFunc pBioStat;

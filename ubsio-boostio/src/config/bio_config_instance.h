@@ -60,9 +60,7 @@ const auto MEM_CAPACITY_SIZE_GB = std::make_pair("ubsio.mem.size_in_gb", 50);
 
 const auto DISK_CONF_PATH = std::make_pair("ubsio.disk.path", "xxx:xxx:xxx");
 const auto BDM_IO_ENGINE = std::make_pair("ubsio.bdm.io_engine", "sync");
-const auto STANDALONE_DEVICE_COUNT = std::make_pair("ubsio.standalone.device_count", 0);
-const auto STANDALONE_DEVICE_ID_GATHER_TIMEOUT_SEC =
-    std::make_pair("ubsio.standalone.device_id_gather_timeout_sec", 180);
+const auto STANDALONE_DEVICE_COUNT = std::make_pair("ubsio.standalone.device_count", 1);
 const auto STANDALONE_FORCE_NEW_DISK = std::make_pair("ubsio.standalone.force_new_disk", "false");
 const auto SDK_MEM_CAPACITY_SIZE_MB = std::make_pair("ubsio.sdkmem.size_in_mb", 0);
 
@@ -167,8 +165,7 @@ public:
         std::vector<std::string> diskList;
         std::vector<int64_t> diskCaps;
         std::string bdmIoEngine = "sync";
-        uint32_t standaloneDeviceCount = 0;
-        uint32_t standaloneDeviceIdGatherTimeoutSec = 180;
+        uint32_t standaloneDeviceCount = 1;
         bool standaloneForceNewDisk = false;
         uint32_t workScene = 0;
         uint32_t workIoAlignSize = 1;
@@ -226,6 +223,11 @@ public:
 
     BResult Initialize(const std::string &configPath);
 
+    void SetStandaloneMode(bool standaloneMode) noexcept
+    {
+        mStandaloneMode = standaloneMode;
+    }
+
     void LoadDefaultConf() override;
 
     const NetConfig &GetNetConfig() const noexcept
@@ -251,15 +253,6 @@ public:
     const UnderFsConfig &GetUnderFsConfig() const noexcept
     {
         return mUnderFsConfig;
-    }
-
-    void SetStandaloneDeviceInfo(uint32_t deviceId);
-
-    BResult SelectStandaloneDiskByDeviceInfo();
-
-    uint32_t GetStandaloneDeviceId() const noexcept
-    {
-        return mStandaloneDeviceInfo.deviceId;
     }
 
     BResult UpdateStandaloneDiskCapacity(uint32_t diskId, int64_t capacity);
@@ -300,25 +293,14 @@ private:
     BResult AutoConfigClient(const ConfigurationPtr &conf);
 
     BResult AutoConfigUnderFs(const ConfigurationPtr &conf);
-
-    BResult SelectStandaloneDiskLegacy(uint16_t diskNum);
-
-    BResult SelectStandaloneVirtualDisks(uint16_t diskNum);
-
 private:
-    struct StandaloneDeviceInfo {
-        bool configured{ false };
-        uint32_t deviceId{ 0 };
-    };
-
     NetConfig mNetConfig;
     CmConfig mCmConfig;
     DaemonConfig mDaemonConfig;
     ClientConfig mClientConfig;
     UnderFsConfig mUnderFsConfig;
+    bool mStandaloneMode{ false };
     bool mInited{ false };
-    uint32_t mStandaloneDiskIndex{ 0 };
-    StandaloneDeviceInfo mStandaloneDeviceInfo;
 };
 }
 }

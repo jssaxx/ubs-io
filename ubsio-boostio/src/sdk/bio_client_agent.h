@@ -46,7 +46,6 @@ public:
 
 public:
     using BioServerStartFuncPtr = int32_t (*)();
-    using SetStandaloneDeviceInfoFuncPtr = void (*)(uint32_t);
     using BioServerExitFuncPtr = void (*)();
     using GetRuntimeConfigFuncPtr = int32_t (*)(StandaloneRuntimeConfigResponse *);
     using GetBioServerCrcFlagFuncPtr = bool (*)();
@@ -93,8 +92,6 @@ public:
 
     BResult Initialize(WorkerMode mode);
     void Exit();
-
-    void SetStandaloneDevice(uint32_t deviceId);
 
     BResult RegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context);
 
@@ -202,7 +199,6 @@ private:
     void *LoadFunction(const char *name);
     void UnloadServerLibrary();
     void ResetLoadedOperations();
-    void ResetStandaloneDeviceInfo();
     // Direct mode means client and server share one process address space.
     // CONVERGENCE still has NetEngine, STANDALONE does not.
     bool IsDirectMode() const;
@@ -243,11 +239,6 @@ private:
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
-    struct StandaloneDeviceInfo {
-        bool configured{ false };
-        uint32_t deviceId{ 0 };
-    };
-
     WorkerMode mMode = CONVERGENCE;
     CmNodeId mLocalNid;
     uint32_t localPid;
@@ -256,7 +247,6 @@ private:
     void *handler = nullptr;
     BioServerStartFuncPtr startOp = nullptr;
     BioServerStartFuncPtr standaloneStartOp = nullptr;
-    SetStandaloneDeviceInfoFuncPtr setStandaloneDeviceInfoOp = nullptr;
     BioServerExitFuncPtr exitOp = nullptr;
     GetRuntimeConfigFuncPtr getRuntimeConfigOp = nullptr;
     GetBioServerCrcFlagFuncPtr getCrcFlag = nullptr;
@@ -295,8 +285,6 @@ private:
     UbsioMetaEventCallbackC mMetaEventCallback = nullptr;
     void *mMetaEventCallbackContext = nullptr;
     bool mMetaEventCallbackConfigured{ false };
-    std::mutex mStandaloneDeviceLock;
-    StandaloneDeviceInfo mStandaloneDeviceInfo;
 };
 }
 }

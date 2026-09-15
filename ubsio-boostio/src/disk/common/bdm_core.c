@@ -35,28 +35,14 @@ uint32_t g_bdmStart = 0UL;
 uint32_t g_bdmDiskCount = 0UL;
 static uint32_t g_bdmDiskMaxId = 0UL;
 static uint32_t g_bdmDiskHeadPad = 0UL;
-static uint32_t g_bdmVirtualDeviceId = 0UL;
-static uint32_t g_bdmVirtualDeviceCount = 0UL;
+static uint32_t g_bdmVirtualSlotIndex = 0UL;
+static uint32_t g_bdmVirtualSlotCount = 0UL;
 
-static uint32_t BdmBuildDiskHeadPad(uint32_t isStandalone, uint32_t deviceId)
-{
-    if (isStandalone == 0) {
-        return 0;
-    }
-    return BDM_DISK_HEAD_STANDALONE_MAGIC | (deviceId & BDM_DISK_HEAD_DEVICE_ID_MASK);
-}
-
-static uint32_t BdmBuildVirtualDiskHeadPad(uint32_t deviceId, uint32_t deviceCount)
+static uint32_t BdmBuildVirtualDiskHeadPad(uint32_t slotIndex, uint32_t slotCount)
 {
     return (BDM_DISK_HEAD_VIRTUAL_LAYOUT_VERSION << BDM_DISK_HEAD_LAYOUT_VERSION_SHIFT) |
-        ((deviceCount << BDM_DISK_HEAD_DEVICE_COUNT_SHIFT) & BDM_DISK_HEAD_DEVICE_COUNT_MASK) |
-        BDM_DISK_HEAD_STANDALONE_MAGIC | (deviceId & BDM_DISK_HEAD_DEVICE_ID_MASK);
-}
-
-void BdmSetDiskStartupInfo(uint32_t isStandalone, uint32_t deviceId)
-{
-    g_bdmDiskHeadPad = BdmBuildDiskHeadPad(isStandalone, deviceId);
-    BDM_LOGINFO(0, "Set bdm disk startup info, standalone(%u), deviceId(%u).", isStandalone, deviceId);
+        ((slotCount << BDM_DISK_HEAD_SLOT_COUNT_SHIFT) & BDM_DISK_HEAD_SLOT_COUNT_MASK) |
+        BDM_DISK_HEAD_STANDALONE_MAGIC | (slotIndex & BDM_DISK_HEAD_SLOT_INDEX_MASK);
 }
 
 int32_t BdmAlloc(uint32_t bdmId, uint64_t bucketId, uint64_t bucketOffset, uint64_t len, uint64_t *chunkId)
@@ -527,17 +513,17 @@ int32_t BdmExit(void)
     g_bdmStart = 0UL;
     g_bdmInit = 0UL;
     g_bdmDiskHeadPad = 0UL;
-    g_bdmVirtualDeviceId = 0UL;
-    g_bdmVirtualDeviceCount = 0UL;
+    g_bdmVirtualSlotIndex = 0UL;
+    g_bdmVirtualSlotCount = 0UL;
     BDM_LOGINFO(0, "Bdm exit finished, result(%d).", result);
     return result;
 }
 
-int32_t BdmCalculateVirtualRegion(uint64_t capacity, uint64_t chunkSize, uint32_t deviceId, uint32_t deviceCount,
+int32_t BdmCalculateVirtualRegion(uint64_t capacity, uint64_t chunkSize, uint32_t slotIndex, uint32_t slotCount,
     uint64_t *regionOffset, uint64_t *regionLength)
 {
-    if (UNLIKELY(regionOffset == NULL || regionLength == NULL || deviceCount == 0 ||
-        deviceCount > BDM_VIRTUAL_LAYOUT_SLOT_NUM || deviceId >= deviceCount ||
+    if (UNLIKELY(regionOffset == NULL || regionLength == NULL || slotCount == 0 ||
+        slotCount > BDM_VIRTUAL_LAYOUT_SLOT_NUM || slotIndex >= slotCount ||
         chunkSize < BDM_MIN_CHUNK_LENGTH || chunkSize > BDM_MAX_CHUNK_LENGTH)) {
         return BDM_CODE_INVALID_PARAM;
     }
@@ -546,13 +532,13 @@ int32_t BdmCalculateVirtualRegion(uint64_t capacity, uint64_t chunkSize, uint32_
     uint64_t smallestRegionLength =
         (capacity / BDM_VIRTUAL_LAYOUT_SLOT_NUM) / BDM_ALIGN_SIZE * BDM_ALIGN_SIZE;
     if (UNLIKELY(smallestRegionLength < BDM_RESTORE_META_SIZE + chunkSize)) {
-        BDM_LOGERROR(0, "Virtual disk region is too small, capacity(%llu), chunkSize(%llu), deviceCount(%u).",
-            capacity, chunkSize, deviceCount);
+        BDM_LOGERROR(0, "Virtual disk region is too small, capacity(%llu), chunkSize(%llu), slotCount(%u).",
+            capacity, chunkSize, slotCount);
         return BDM_CODE_INVALID_PARAM;
     }
 
-    uint64_t length = smallestRegionLength * (BDM_VIRTUAL_LAYOUT_SLOT_NUM / deviceCount);
-    *regionOffset = length * deviceId;
+    uint64_t length = smallestRegionLength * (BDM_VIRTUAL_LAYOUT_SLOT_NUM / slotCount);
+    *regionOffset = length * slotIndex;
     *regionLength = length;
     return BDM_CODE_OK;
 }
@@ -625,7 +611,7 @@ static int32_t BdmStartCheck(DiskDevices *diskList, uint64_t chunkSize)
     return BDM_CODE_OK;
 }
 
-static int32_t BdmStartInternal(DiskDevices *diskList, uint64_t chunkSize, uint32_t deviceId, uint32_t deviceCount)
+static int32_t BdmStartInternal(DiskDevices *diskList, uint64_t chunkSize, uint32_t slotIndex, uint32_t slotCount)
 {
     if (UNLIKELY(g_bdmStart == 1UL)) {
         BDM_LOGINFO(0, "Bdm already start succeed.");
@@ -649,8 +635,8 @@ static int32_t BdmStartInternal(DiskDevices *diskList, uint64_t chunkSize, uint3
     for (diskId = 0; diskId < diskList->num; diskId++) {
         uint64_t regionOffset = 0;
         uint64_t regionLength = diskList->diskCaps[diskId];
-        if (deviceCount != 0) {
-            ret = BdmCalculateVirtualRegion(diskList->diskCaps[diskId], chunkSize, deviceId, deviceCount,
+        if (slotCount != 0) {
+            ret = BdmCalculateVirtualRegion(diskList->diskCaps[diskId], chunkSize, slotIndex, slotCount,
                 &regionOffset, &regionLength);
             if (UNLIKELY(ret != BDM_CODE_OK)) {
                 BDM_LOGERROR(0, "Calculate virtual disk region failed, diskId(%u), ret(%d).", diskId, ret);
@@ -682,7 +668,7 @@ int32_t BdmStart(DiskDevices *diskList, uint64_t chunkSize)
     return BdmStartInternal(diskList, chunkSize, 0, 0);
 }
 
-int32_t BdmStartVirtual(DiskDevices *diskList, uint64_t chunkSize, uint32_t deviceId, uint32_t deviceCount)
+int32_t BdmStartVirtual(DiskDevices *diskList, uint64_t chunkSize, uint32_t slotIndex, uint32_t slotCount)
 {
     if (UNLIKELY(g_bdmStart == 1UL)) {
         BDM_LOGINFO(0, "Bdm already start succeed.");
@@ -692,35 +678,35 @@ int32_t BdmStartVirtual(DiskDevices *diskList, uint64_t chunkSize, uint32_t devi
     if (UNLIKELY(ret != BDM_CODE_OK)) {
         return ret;
     }
-    if (UNLIKELY(diskList->num == 0 || deviceCount == 0 || deviceCount > BDM_VIRTUAL_LAYOUT_SLOT_NUM ||
-        deviceId >= deviceCount)) {
-        BDM_LOGERROR(0, "Virtual device param input failed, diskNum(%u), deviceId(%u), deviceCount(%u).",
-            diskList->num, deviceId, deviceCount);
+    if (UNLIKELY(diskList->num == 0 || slotCount == 0 || slotCount > BDM_VIRTUAL_LAYOUT_SLOT_NUM ||
+        slotIndex >= slotCount)) {
+        BDM_LOGERROR(0, "Virtual slot param input failed, diskNum(%u), slotIndex(%u), slotCount(%u).",
+            diskList->num, slotIndex, slotCount);
         return BDM_CODE_INVALID_PARAM;
     }
     for (uint32_t diskId = 0; diskId < diskList->num; diskId++) {
         uint64_t regionOffset = 0;
         uint64_t regionLength = 0;
-        ret = BdmCalculateVirtualRegion(diskList->diskCaps[diskId], chunkSize, deviceId, deviceCount,
+        ret = BdmCalculateVirtualRegion(diskList->diskCaps[diskId], chunkSize, slotIndex, slotCount,
             &regionOffset, &regionLength);
         if (UNLIKELY(ret != BDM_CODE_OK)) {
             return ret;
         }
     }
-    if (BDM_VIRTUAL_LAYOUT_SLOT_NUM % deviceCount != 0) {
-        BDM_LOGWARN(0, "Virtual device count(%u) does not evenly divide layout slot count(%u); "
-            "unassigned tail slots will remain unused.", deviceCount, (uint32_t)BDM_VIRTUAL_LAYOUT_SLOT_NUM);
+    if (BDM_VIRTUAL_LAYOUT_SLOT_NUM % slotCount != 0) {
+        BDM_LOGWARN(0, "Virtual slot count(%u) does not evenly divide layout slot limit(%u); "
+            "unassigned tail slots will remain unused.", slotCount, (uint32_t)BDM_VIRTUAL_LAYOUT_SLOT_NUM);
     }
 
-    g_bdmVirtualDeviceId = deviceId;
-    g_bdmVirtualDeviceCount = deviceCount;
-    g_bdmDiskHeadPad = BdmBuildVirtualDiskHeadPad(deviceId, deviceCount);
-    BDM_LOGINFO(0, "Start bdm virtual layout, version(%u), deviceId(%u), deviceCount(%u).",
-        BDM_DISK_HEAD_VIRTUAL_LAYOUT_VERSION, deviceId, deviceCount);
-    ret = BdmStartInternal(diskList, chunkSize, deviceId, deviceCount);
+    g_bdmVirtualSlotIndex = slotIndex;
+    g_bdmVirtualSlotCount = slotCount;
+    g_bdmDiskHeadPad = BdmBuildVirtualDiskHeadPad(slotIndex, slotCount);
+    BDM_LOGINFO(0, "Start bdm virtual layout, version(%u), slotIndex(%u), slotCount(%u).",
+        BDM_DISK_HEAD_VIRTUAL_LAYOUT_VERSION, slotIndex, slotCount);
+    ret = BdmStartInternal(diskList, chunkSize, slotIndex, slotCount);
     if (UNLIKELY(ret != BDM_CODE_OK)) {
-        g_bdmVirtualDeviceId = 0;
-        g_bdmVirtualDeviceCount = 0;
+        g_bdmVirtualSlotIndex = 0;
+        g_bdmVirtualSlotCount = 0;
         g_bdmDiskHeadPad = 0;
     }
     return ret;
@@ -736,8 +722,8 @@ int32_t BdmUpdate(char *diskPath, uint64_t chunkSize, uint64_t diskCap)
     uint64_t regionOffset = 0;
     uint64_t regionLength = diskCap;
     int32_t ret = BDM_CODE_OK;
-    if (g_bdmVirtualDeviceCount != 0) {
-        ret = BdmCalculateVirtualRegion(diskCap, chunkSize, g_bdmVirtualDeviceId, g_bdmVirtualDeviceCount,
+    if (g_bdmVirtualSlotCount != 0) {
+        ret = BdmCalculateVirtualRegion(diskCap, chunkSize, g_bdmVirtualSlotIndex, g_bdmVirtualSlotCount,
             &regionOffset, &regionLength);
         if (UNLIKELY(ret != BDM_CODE_OK)) {
             return ret;
