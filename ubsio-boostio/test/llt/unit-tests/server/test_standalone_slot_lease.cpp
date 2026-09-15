@@ -13,11 +13,13 @@
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
+#include <fstream>
 #include <set>
 #include <string>
 #include <vector>
 
 #include <fcntl.h>
+#include <pthread.h>
 #include <signal.h>
 #include <sys/mman.h>
 #include <sys/wait.h>
@@ -41,6 +43,7 @@ constexpr uint64_t SEGMENT_SIZE = 1024;
 constexpr uint32_t SLOT_LEASE_MAGIC = 0x5542534CU;
 constexpr uint32_t SLOT_LEASE_VERSION = 1U;
 constexpr uint32_t LAYOUT_STATE_FAILED = 3U;
+constexpr size_t PROC_STAT_STATE_OFFSET_FROM_COMM_END = 2U;
 
 struct TestSlotOwner {
     uint32_t occupied;
@@ -68,6 +71,11 @@ struct LeaseChildResult {
     uint32_t slotIndex;
 };
 
+struct LeaseWorkerContext {
+    int32_t releaseFd;
+    StandaloneSlotLease *lease;
+};
+
 const std::string &GetLeaseShmName()
 {
     static const std::string shmName = "/ubsio_standalone_slot_lease_test_" + std::to_string(getpid()) + "_" +
@@ -82,6 +90,40 @@ void CleanupLeaseShm()
     if (!shmName.empty()) {
         (void)shm_unlink(shmName.c_str());
     }
+}
+
+bool WaitForProcessState(pid_t pid, char expectedState)
+{
+    constexpr uint32_t RETRY_TIMES = 200U;
+    constexpr useconds_t RETRY_INTERVAL_US = 10000U;
+    for (uint32_t retry = 0; retry < RETRY_TIMES; ++retry) {
+        std::ifstream statFile("/proc/" + std::to_string(pid) + "/stat");
+        std::string line;
+        if (statFile.is_open() && std::getline(statFile, line)) {
+            auto commandEnd = line.rfind(')');
+            if (commandEnd != std::string::npos &&
+                commandEnd + PROC_STAT_STATE_OFFSET_FROM_COMM_END < line.size() &&
+                line[commandEnd + PROC_STAT_STATE_OFFSET_FROM_COMM_END] == expectedState) {
+                return true;
+            }
+        }
+        (void)usleep(RETRY_INTERVAL_US);
+    }
+    return false;
+}
+
+void *WaitForPipeClose(void *argument)
+{
+    auto *context = static_cast<LeaseWorkerContext *>(argument);
+    char signal = 0;
+    ssize_t readResult = 0;
+    do {
+        readResult = read(context->releaseFd, &signal, sizeof(signal));
+    } while (readResult < 0 && errno == EINTR);
+    (void)close(context->releaseFd);
+    delete context->lease;
+    delete context;
+    return nullptr;
 }
 
 std::vector<LeaseChildResult> RunLeaseProcesses(uint32_t processCount, uint32_t slotCount)
@@ -256,6 +298,68 @@ TEST(TestStandaloneSlotLease, reclaims_slot_from_zombie_owner)
     EXPECT_EQ(slotIndex, 0U);
     lease.Release();
     ASSERT_EQ(waitpid(child, nullptr, 0), child);
+    CleanupLeaseShm();
+}
+
+TEST(TestStandaloneSlotLease, keeps_slot_while_other_threads_remain_alive)
+{
+    CleanupLeaseShm();
+    int32_t readyPipe[2] = { -1, -1 };
+    int32_t releasePipe[2] = { -1, -1 };
+    ASSERT_EQ(pipe(readyPipe), 0);
+    ASSERT_EQ(pipe(releasePipe), 0);
+    pid_t child = fork();
+    ASSERT_GE(child, 0);
+    if (child == 0) {
+        (void)close(readyPipe[0]);
+        (void)close(releasePipe[1]);
+        auto *lease = new StandaloneSlotLease;
+        uint32_t slotIndex = UINT32_MAX;
+        int32_t ret = lease->Acquire(1, DISK_PATHS, DISK_CAPS, SEGMENT_SIZE, slotIndex);
+        if (ret == BIO_OK) {
+            ret = lease->PublishLayoutReady();
+        }
+        pthread_t worker = {};
+        auto *workerContext = new LeaseWorkerContext{ releasePipe[0], lease };
+        bool workerStarted = ret == BIO_OK && pthread_create(&worker, nullptr, WaitForPipeClose, workerContext) == 0;
+        if (ret == BIO_OK && !workerStarted) {
+            ret = BIO_ERR;
+        }
+        ssize_t written = write(readyPipe[1], &ret, sizeof(ret));
+        (void)close(readyPipe[1]);
+        if (ret != BIO_OK || written != static_cast<ssize_t>(sizeof(ret))) {
+            if (!workerStarted) {
+                delete workerContext;
+                delete lease;
+            }
+            _exit(1);
+        }
+        // Transfer the lease to the worker before the thread-group leader exits.
+        pthread_exit(nullptr);
+    }
+    (void)close(readyPipe[1]);
+    (void)close(releasePipe[0]);
+    int32_t childResult = BIO_ERR;
+    ssize_t readSize = read(readyPipe[0], &childResult, sizeof(childResult));
+    (void)close(readyPipe[0]);
+    EXPECT_EQ(readSize, static_cast<ssize_t>(sizeof(childResult)));
+    EXPECT_EQ(childResult, BIO_OK);
+
+    bool leaderIsZombie = childResult == BIO_OK && WaitForProcessState(child, 'Z');
+    EXPECT_TRUE(leaderIsZombie);
+    if (leaderIsZombie) {
+        StandaloneSlotLease contender;
+        uint32_t contenderSlot = UINT32_MAX;
+        EXPECT_EQ(contender.Acquire(1, DISK_PATHS, DISK_CAPS, SEGMENT_SIZE, contenderSlot), BIO_NOT_READY);
+    }
+
+    (void)close(releasePipe[1]);
+    int32_t status = 0;
+    EXPECT_EQ(waitpid(child, &status, 0), child);
+    EXPECT_TRUE(WIFEXITED(status));
+    if (WIFEXITED(status)) {
+        EXPECT_EQ(WEXITSTATUS(status), 0);
+    }
     CleanupLeaseShm();
 }
 
