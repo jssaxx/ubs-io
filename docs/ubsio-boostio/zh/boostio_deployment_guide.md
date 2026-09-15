@@ -200,18 +200,18 @@ UBS IO-BoostIO 提供运行包和开发包，具体用途如[表 4](#软件包�
 
 > **说明：**
 >
-> - 本节使用 `quay.io/ascend/vllm-ascend:v0.23.0-openeuler` 作为基础镜像。
-> - 基础镜像包含 vLLM Ascend 环境，但 UBS IO-BoostIO 本身不要求挂载 NPU 设备。只有同一容器还运行 vLLM 等 NPU 业务时，才需要按对应业务的容器文档挂载 NPU 驱动和设备。
+> - 本节使用 `hub.oepkgs.net/openeuler/openeuler:24.03-lts-sp3` 作为基础镜像。
+> - 基础镜像为 openEuler 24.03 LTS SP3 通用环境。UBS IO-BoostIO 不依赖 NPU，容器不需要挂载 NPU 驱动和设备。
 > - 以下命令以宿主机源码目录 `/opt/ubs-io` 为例。该目录应检出 `master` 分支或经过确认的发布提交，并保证所有节点使用相同版本。
 
 ### 部署流程概览
 
 ```text
-quay.io/ascend/vllm-ascend:v0.23.0-openeuler
+hub.oepkgs.net/openeuler/openeuler:24.03-lts-sp3
                          │
                          │ docker build：安装 BoostIO 构建/运行依赖
                          ▼
-           ubsio-boostio-build:v0.23.0-openeuler
+           ubsio-boostio-build:24.03-lts-sp3
                          │
                          │ 挂载 master 源码到 /workspace
                          ▼
@@ -253,7 +253,7 @@ quay.io/ascend/vllm-ascend:v0.23.0-openeuler
 3. 确认宿主机能够访问基础镜像仓库和源码构建期间使用的 GitCode 地址：
 
     ```bash
-    docker pull quay.io/ascend/vllm-ascend:v0.23.0-openeuler
+    docker pull hub.oepkgs.net/openeuler/openeuler:24.03-lts-sp3
     git ls-remote https://gitcode.com/openeuler/ubs-comm.git HEAD
     git ls-remote https://gitcode.com/openeuler/libboundscheck.git HEAD
     ```
@@ -267,23 +267,23 @@ quay.io/ascend/vllm-ascend:v0.23.0-openeuler
 ```bash
 cd /opt/ubs-io
 docker build \
-    --build-arg BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.23.0-openeuler \
-    -t ubsio-boostio-build:v0.23.0-openeuler \
+    --build-arg BASE_IMAGE=hub.oepkgs.net/openeuler/openeuler:24.03-lts-sp3 \
+    -t ubsio-boostio-build:24.03-lts-sp3 \
     ubsio-boostio/docker
 ```
 
 构建完成后记录镜像标识，便于问题定位和多节点一致性检查：
 
 ```bash
-docker image inspect ubsio-boostio-build:v0.23.0-openeuler \
+docker image inspect ubsio-boostio-build:24.03-lts-sp3 \
     --format 'image={{.Id}} created={{.Created}} arch={{.Architecture}}'
-docker image inspect quay.io/ascend/vllm-ascend:v0.23.0-openeuler \
+docker image inspect hub.oepkgs.net/openeuler/openeuler:24.03-lts-sp3 \
     --format '{{index .RepoDigests 0}}'
 ```
 
 > **说明：**
 >
-> - 基础镜像已提供 CMake、GCC/G++、Git、Make、RDMA Core、numactl 开发包、证书和常用系统工具，Dockerfile 不再重复安装。Dockerfile 仅补充 `ubsio-boostio/build/ubs-io.spec`、BoostIO CMake 文件和 `build.sh` 要求但基础镜像缺少的依赖；其中 Maven、Autoconf、Automake 和 Libtool 用于首次构建内置 ZooKeeper 客户端。
+> - 基础镜像已提供 CA 证书、gzip、procps-ng 和 tar，Dockerfile 不再重复安装。Dockerfile 仅补充 `ubsio-boostio/build/ubs-io.spec`、BoostIO CMake 文件和 `build.sh` 要求但基础镜像缺少的直接依赖；其中 Maven、Autoconf、Automake 和 Libtool 用于首次构建内置 ZooKeeper 客户端。
 > - 首次编译时，如果容器中没有系统安装的 HCOM、libboundscheck 或 ZooKeeper 客户端，CMake 会从 GitCode 拉取并构建对应源码，因此必须保证构建容器能访问 GitCode。
 > - 生产环境建议记录基础镜像的 digest，并在多节点使用同一个 digest，避免同名 tag 更新造成环境不一致。
 
@@ -296,7 +296,7 @@ docker run -dit \
     --name ubsio-boostio-build \
     --network host \
     -v /opt/ubs-io:/workspace \
-    ubsio-boostio-build:v0.23.0-openeuler \
+    ubsio-boostio-build:24.03-lts-sp3 \
     /bin/bash
 ```
 
@@ -402,7 +402,7 @@ docker run -d \
     -v /var/log/boostio:/var/log/boostio \
     -v /etc/ceph:/etc/ceph:ro \
     -e LD_LIBRARY_PATH=/workspace/ubsio-boostio/dist/boostio/lib:/workspace/ubsio-boostio/dist/3rdparty/ubs-comm/lib:/workspace/ubsio-boostio/dist/3rdparty/libboundscheck/lib:/usr/lib64:/usr/lib \
-    ubsio-boostio-build:v0.23.0-openeuler \
+    ubsio-boostio-build:24.03-lts-sp3 \
     /workspace/ubsio-boostio/dist/boostio/bin/bio_daemon
 ```
 
@@ -437,7 +437,7 @@ tail -n 100 /var/log/boostio/bio.log
 
 ```bash
 git -C /opt/ubs-io rev-parse HEAD
-docker image inspect ubsio-boostio-build:v0.23.0-openeuler --format '{{.Id}}'
+docker image inspect ubsio-boostio-build:24.03-lts-sp3 --format '{{.Id}}'
 docker inspect ubsio-boostio --format '{{.HostConfig.NetworkMode}} {{.HostConfig.IpcMode}}'
 docker logs --tail 200 ubsio-boostio
 ```
