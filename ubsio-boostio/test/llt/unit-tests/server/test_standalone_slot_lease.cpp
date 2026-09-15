@@ -22,6 +22,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <sys/mman.h>
+#include <sys/syscall.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -334,8 +335,10 @@ TEST(TestStandaloneSlotLease, keeps_slot_while_other_threads_remain_alive)
             }
             _exit(1);
         }
-        // Transfer the lease to the worker before the thread-group leader exits.
-        pthread_exit(nullptr);
+        // Exit only the thread-group leader. The raw syscall avoids pthread_exit's forced C++ stack unwind through
+        // GTest's exception handler while the worker retains and later releases the lease.
+        (void)syscall(SYS_exit, 0);
+        __builtin_unreachable();
     }
     (void)close(readyPipe[1]);
     (void)close(releasePipe[0]);
