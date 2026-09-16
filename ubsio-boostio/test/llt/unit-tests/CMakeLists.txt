@@ -72,7 +72,6 @@ target_include_directories(bio_test PRIVATE
         ${SRC_DIR}/cluster/server
         ${SRC_DIR}/config
         ${SRC_DIR}/disk
-        ${SRC_DIR}/disk/x86
         ${SRC_DIR}/flow
         ${SRC_DIR}/htracer
 		${SRC_DIR}/net
@@ -82,6 +81,10 @@ target_include_directories(bio_test PRIVATE
         ${SRC_DIR}/underfs
         ${PROJECT_OUTPUT_PATH}/boostio_test_tools/googletest/include/
         ${PROJECT_OUTPUT_PATH}/boostio_test_tools/mockcpp/include/)
+
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|i[3-6]86)$")
+    target_include_directories(bio_test PRIVATE ${SRC_DIR}/disk/x86)
+endif()
 
 target_link_libraries(bio_test bio_sdk bio_server
         -Wl,--start-group

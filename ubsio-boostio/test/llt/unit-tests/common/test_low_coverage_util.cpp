@@ -16,7 +16,9 @@
 #include "gtest/gtest.h"
 #include "bio_tls_util.h"
 #include "bdm_common.h"
+#if defined(__x86_64__) || defined(__i386__)
 #include "cpu_vendor_checker.h"
+#endif
 #include "disk_statistic.h"
 
 using namespace ock::bio;
@@ -51,6 +53,7 @@ TEST(TestLowCoverageUtil, TlsLibraryLoadingHandlesMissingLibraryAndSymbol)
     *handler = nullptr;
 }
 
+#if defined(__x86_64__) || defined(__i386__)
 TEST(TestLowCoverageUtil, CpuVendorQueriesValidateArgumentsAndReturnAnId)
 {
     std::array<char, VENDOR_NAME_MAX_LEN> vendor{};
@@ -61,6 +64,7 @@ TEST(TestLowCoverageUtil, CpuVendorQueriesValidateArgumentsAndReturnAnId)
     EXPECT_EQ(vendor.back(), '\0');
     EXPECT_EQ(CheckCpuVendor(), BDM_CODE_OK);
 }
+#endif
 
 TEST(TestLowCoverageUtil, DiskStatisticCountsHits)
 {
