@@ -105,6 +105,7 @@ BResult MmsClient::Initialize(const MmsOptions &options, ServiceCallback service
         return MMS_INVALID_PARAM;
     }
 
+    mStopping.store(false, std::memory_order_release);
     mServiceCallback = service;
     auto ret = InitClientBase(options);
     if (ret != MMS_OK) {
@@ -129,6 +130,7 @@ BResult MmsClient::Initialize(const MmsOptions &options, ServiceCallback service
 
 void MmsClient::Exit(void)
 {
+    mStopping.store(true, std::memory_order_release);
     DestroyStartService();
 #ifdef USE_CLI_TOOLS
     ClientDiagnoseExit();
@@ -622,9 +624,13 @@ BResult MmsClient::ReconnectLocalServer(uint32_t interval)
         ret = mNetEngine->SyncConnect(info);
         if (ret != MMS_OK) {
             sleep(interval);
-            CLIENT_LOG_WARN("Connect to local server failed, retry cnt:" << retryCnt++ << ".");
+            CLIENT_LOG_WARN("Connect to local server failed, retry count:" << retryCnt++ << ".");
         }
-    } while (ret != MMS_OK);
+    } while (ret != MMS_OK && !mStopping.load(std::memory_order_acquire));
+
+    if (mStopping.load(std::memory_order_acquire)) {
+        return MMS_NOT_READY;
+    }
 
     mServerOnline.store(true);
     return MMS_OK;
@@ -642,17 +648,17 @@ BResult MmsClient::RebuildServices(uint32_t interval)
         ret = BuildServices();
         if (ret != MMS_OK) {
             sleep(interval);
-            CLIENT_LOG_WARN("Build services fail, ret:" << ret << ". retryCnt:" << retryCnt);
+            CLIENT_LOG_WARN("Build services failed, ret:" << ret << ", retry count:" << retryCnt << ".");
             retryCnt++;
         }
-    } while (ret != MMS_OK);
-    return MMS_OK;
+    } while (ret != MMS_OK && !mStopping.load(std::memory_order_acquire));
+    return mStopping.load(std::memory_order_acquire) ? MMS_NOT_READY : MMS_OK;
 }
 
 BResult MmsClient::ReregisterNotifyCallback(uint32_t interval)
 {
     uint32_t retryCount = 0;
-    while (mServerOnline.load(std::memory_order_acquire)) {
+    while (mServerOnline.load(std::memory_order_acquire) && !mStopping.load(std::memory_order_acquire)) {
         BResult ret = MMS_OK;
         {
             std::lock_guard<std::mutex> lock(mNotifyMutex);
@@ -666,9 +672,12 @@ BResult MmsClient::ReregisterNotifyCallback(uint32_t interval)
         }
         CLIENT_LOG_WARN("Re-register notify callback failed, ret:" << ret <<
             ", retry count:" << retryCount++ << ".");
+        if (mNetEngine->CheckConnect(INVALID_NID) != MMS_OK) {
+            return MMS_NET_RETRY;
+        }
         sleep(interval);
     }
-    return MMS_NET_RETRY;
+    return mStopping.load(std::memory_order_acquire) ? MMS_OK : MMS_NET_RETRY;
 }
 
 BResult MmsClient::BuildThreadTask(void)

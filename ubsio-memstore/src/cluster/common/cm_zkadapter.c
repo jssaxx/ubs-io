@@ -2202,6 +2202,19 @@ int CmZkWgetChildren(zhandle_t *zh, const char *path, watcher_fn watcher, void *
 #if DESC("zk initial")
 static int32_t CmZkConnect(void);
 
+static void CmZkClose(void)
+{
+    if (g_zh == NULL) {
+        return;
+    }
+
+    int32_t ret = ZookeeperClose(g_zh);
+    if (ret != CM_OK) {
+        CM_LOGWARN("Zookeeper close failed, ret(%d).", ret);
+    }
+    g_zh = NULL;
+}
+
 static void CmZkClientRestore(void)
 {
     int32_t ret;
@@ -2257,10 +2270,7 @@ static void CmZkRestore(void)
     int32_t ret;
 
     do {
-        ret = ZookeeperClose(g_zh);
-        if (ret != CM_OK) {
-            CM_LOGWARN("Zookeeper close failed, ret(%d).", ret);
-        }
+        CmZkClose();
         ret = CmZkConnect();
     } while (ret != CM_OK);
 
@@ -2313,6 +2323,7 @@ static int32_t CmZkConnect(void)
         CM_LOGWARN("Waiting for zookeeper connected, retry(%u ms).", cnt);
         if (cnt >= CM_ZK_TRY_CONNECT_TIME) {
             CM_LOGERROR("Connect zookeeper failed, zkserver(%s).", zkServerIp);
+            CmZkClose();
             return CM_ERR;
         }
         CmSleep(CM_ZK_TRY_INTERAL);

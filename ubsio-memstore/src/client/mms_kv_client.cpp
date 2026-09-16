@@ -242,7 +242,7 @@ BResult MmsKvClient::MmsPut(PutItems *itemList, uint32_t itemNum)
 
 BResult MmsKvClient::MmsGet(GetItems *itemList, uint32_t itemNum)
 {
-    uint16_t index;
+    uint32_t index;
     BResult result = MMS_OK;
 
     for (index = 0; index < itemNum; index++) {

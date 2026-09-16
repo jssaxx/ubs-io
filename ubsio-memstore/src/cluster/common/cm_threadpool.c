@@ -15,6 +15,9 @@
 #include "securec.h"
 #include "cm_threadpool.h"
 
+static const uint16_t THREAD_POOL_ENQUEUE_RETRY_COUNT = 5;
+static const useconds_t THREAD_POOL_ENQUEUE_RETRY_INTERVAL_US = 200;
+
 void *ThreadPoolThread(void *thread_pool)
 {
     CM_THREAD_POOL_S *pool = (CM_THREAD_POOL_S *)thread_pool;
@@ -166,14 +169,16 @@ int32_t CmThreadPoolAdd(CM_THREAD_POOL_S *pool, THREAD_CALL_BACK callback, void 
     }
 
     int32_t ret = -1;
-    while (ret != 0) {
+    for (uint16_t retryCnt = 0; retryCnt < THREAD_POOL_ENQUEUE_RETRY_COUNT; retryCnt++) {
         ret = ThreadPoolEnqueue(pool, callback, args);
         if (ret == 0) {
-            break;
+            return 0;
         }
 
         pool->queue_full_cnt++;
-        usleep(200);
+        if (retryCnt + 1 < THREAD_POOL_ENQUEUE_RETRY_COUNT) {
+            usleep(THREAD_POOL_ENQUEUE_RETRY_INTERVAL_US);
+        }
     }
 
     return ret;
