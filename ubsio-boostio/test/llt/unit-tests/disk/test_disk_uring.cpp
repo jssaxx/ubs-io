@@ -17,6 +17,7 @@
 #include <fcntl.h>
 #include <semaphore.h>
 #include <string>
+#include <vector>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -24,6 +25,7 @@
 #include "securec.h"
 #include "bdm_core.h"
 #include "bdm_disk.h"
+#include "cache_slice_operator.h"
 
 namespace {
 constexpr uint32_t URING_TEST_BDM_ID = 27;
@@ -85,6 +87,24 @@ bool WaitForCallback(UringCallbackContext &context)
         ret = sem_timedwait(&context.semaphore, &deadline);
     } while (ret != 0 && errno == EINTR);
     return ret == 0;
+}
+
+ock::bio::SlicePtr MakeIoSlice(uint64_t chunkId, uint64_t length, ock::bio::FlowType type)
+{
+    std::vector<ock::bio::FlowAddr> addrs;
+    addrs.emplace_back(chunkId, 0, length);
+    return ock::bio::MakeRef<ock::bio::Slice>(length, addrs, type);
+}
+
+ock::bio::WCacheSliceRefPtr MakeIoLease(uint64_t length)
+{
+    std::vector<ock::bio::FlowAddr> addrs;
+    auto slice = ock::bio::MakeRef<ock::bio::WCacheSlice>(1, 0, 0, length, addrs);
+    auto lease = ock::bio::MakeRef<ock::bio::WCacheSliceRef>(slice);
+    if (lease != nullptr && lease->Aquire()) {
+        return lease;
+    }
+    return nullptr;
 }
 }
 
@@ -181,6 +201,65 @@ void RunUringScenario()
         EXPECT_EQ(batchContexts[i].result, BDM_CODE_OK);
         EXPECT_EQ(sem_destroy(&batchContexts[i].semaphore), 0);
     }
+
+    auto diskSlice = MakeIoSlice(chunkId, URING_TEST_IO_LEN, ock::bio::FLOW_DISK);
+    auto directSlice = MakeIoSlice(reinterpret_cast<uint64_t>(readBuffer), URING_TEST_IO_LEN,
+        ock::bio::FLOW_MEMORY);
+    auto writeSlice = MakeIoSlice(reinterpret_cast<uint64_t>(writeBuffer), URING_TEST_IO_LEN,
+        ock::bio::FLOW_MEMORY);
+    ASSERT_NE(diskSlice, nullptr);
+    ASSERT_NE(directSlice, nullptr);
+    ASSERT_NE(writeSlice, nullptr);
+    ock::bio::CacheSliceOperator sliceOperator;
+    ASSERT_EQ(sliceOperator.Copy(writeSlice, diskSlice), ock::bio::BIO_OK);
+    ASSERT_EQ(memset_s(readBuffer, URING_TEST_IO_LEN, 0, URING_TEST_IO_LEN), EOK);
+    ASSERT_EQ(sliceOperator.Copy(diskSlice, directSlice), ock::bio::BIO_OK);
+    EXPECT_EQ(memcmp(writeBuffer, readBuffer, URING_TEST_IO_LEN), 0);
+    ASSERT_EQ(sliceOperator.Copy(static_cast<const char *>(writeBuffer), diskSlice), ock::bio::BIO_OK);
+    ASSERT_EQ(memset_s(readBuffer, URING_TEST_IO_LEN, 0, URING_TEST_IO_LEN), EOK);
+    ASSERT_EQ(sliceOperator.Copy(diskSlice, static_cast<char *>(readBuffer), URING_TEST_IO_LEN), ock::bio::BIO_OK);
+    EXPECT_EQ(memcmp(writeBuffer, readBuffer, URING_TEST_IO_LEN), 0);
+    ASSERT_EQ(memset_s(readBuffer, URING_TEST_IO_LEN, 0, URING_TEST_IO_LEN), EOK);
+
+    ock::bio::BdmCopyBatchContext direct;
+    ock::bio::BResult directResult = ock::bio::BIO_ERR;
+    ock::bio::WCacheSliceRefPtr missingLease;
+    EXPECT_EQ(direct.EnqueueDiskToMemory(diskSlice, directSlice, &directResult, missingLease),
+        ock::bio::BIO_INVALID_PARAM);
+    auto directLease = MakeIoLease(URING_TEST_IO_LEN);
+    ASSERT_NE(directLease, nullptr);
+    ASSERT_EQ(direct.EnqueueDiskToMemory(diskSlice, directSlice, &directResult, directLease), ock::bio::BIO_OK);
+    EXPECT_FALSE(direct.Empty());
+    ASSERT_EQ(direct.Submit(), ock::bio::BIO_OK);
+    EXPECT_TRUE(direct.Empty());
+    EXPECT_EQ(directResult, ock::bio::BIO_OK);
+    EXPECT_EQ(memcmp(writeBuffer, readBuffer, URING_TEST_IO_LEN), 0);
+
+    std::vector<char> unalignedBuffer(URING_TEST_IO_LEN + 1, 0);
+    auto tempSlice = MakeIoSlice(reinterpret_cast<uint64_t>(unalignedBuffer.data() + 1), URING_TEST_IO_LEN,
+        ock::bio::FLOW_MEMORY);
+    ASSERT_NE(tempSlice, nullptr);
+    ock::bio::BdmCopyBatchContext temp;
+    ock::bio::BResult tempResult = ock::bio::BIO_ERR;
+    auto tempLease = MakeIoLease(URING_TEST_IO_LEN);
+    ASSERT_NE(tempLease, nullptr);
+    ASSERT_EQ(temp.EnqueueDiskToTempThenCopy(diskSlice, tempSlice, &tempResult, tempLease), ock::bio::BIO_OK);
+    EXPECT_FALSE(temp.Empty());
+    ASSERT_EQ(temp.Submit(), ock::bio::BIO_OK);
+    EXPECT_TRUE(temp.Empty());
+    EXPECT_EQ(tempResult, ock::bio::BIO_OK);
+    EXPECT_EQ(memcmp(writeBuffer, unalignedBuffer.data() + 1, URING_TEST_IO_LEN), 0);
+
+    auto invalidDiskSlice = MakeIoSlice(BDM_INVALID_ID, URING_TEST_IO_LEN, ock::bio::FLOW_DISK);
+    ASSERT_NE(invalidDiskSlice, nullptr);
+    ock::bio::BdmCopyBatchContext failed;
+    ock::bio::BResult failedResult = ock::bio::BIO_OK;
+    auto failedLease = MakeIoLease(URING_TEST_IO_LEN);
+    ASSERT_NE(failedLease, nullptr);
+    ASSERT_EQ(failed.EnqueueDiskToTempThenCopy(invalidDiskSlice, tempSlice, &failedResult, failedLease),
+        ock::bio::BIO_OK);
+    EXPECT_NE(failed.Submit(), ock::bio::BIO_OK);
+    EXPECT_NE(failedResult, ock::bio::BIO_OK);
 
     EXPECT_EQ(BdmFree(createdId, URING_TEST_CHUNK_LEN, chunkId), BDM_CODE_OK);
     EXPECT_EQ(BdmDestroy(createdId), BDM_CODE_OK);

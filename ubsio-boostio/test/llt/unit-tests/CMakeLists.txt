@@ -72,6 +72,8 @@ target_include_directories(bio_test PRIVATE
         ${SRC_DIR}/cluster/server
         ${SRC_DIR}/config
         ${SRC_DIR}/disk
+        ${SRC_DIR}/disk/x86
+        ${SRC_DIR}/flow
         ${SRC_DIR}/htracer
 		${SRC_DIR}/net
         ${SRC_DIR}/sdk
