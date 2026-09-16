@@ -15,7 +15,6 @@
 using namespace ock::bio;
 using namespace ock::bio::tp;
 
-#ifdef __aarch64__
 static uint32_t MY_PID = 102;
 
 void tp::SdkTp::Register() noexcept
@@ -107,8 +106,3 @@ void tp::SdkTp::Deregister() noexcept
     BIO_TP_UNREG(SDK_ADD_DISK_BY_SEPARATES);
     BIO_TP_UNREG(SDK_REQUEST_IPC_OPCODE_EXCEED);
 }
-#else
-void tp::SdkTp::Register() noexcept {}
-
-void tp::SdkTp::Deregister() noexcept {}
-#endif

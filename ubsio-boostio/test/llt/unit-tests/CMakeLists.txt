@@ -88,6 +88,10 @@ target_link_libraries(bio_test bio_sdk bio_server
         ${PROJECT_OUTPUT_PATH}/boostio_test_tools/mockcpp/lib/libmockcpp.a
         -Wl,--end-group)
 
+if (OPEN_TP STREQUAL "ON")
+    target_link_libraries(bio_test bio_tp_shared)
+endif()
+
 set_target_properties(bio_test PROPERTIES OUTPUT_NAME "bio_test")
 set_target_properties(bio_test PROPERTIES CLEAN_DIRECT_OUTPUT 1)
 set_target_properties(bio_test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")

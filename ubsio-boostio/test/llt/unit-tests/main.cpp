@@ -32,6 +32,9 @@
 using namespace ock::bio;
 using namespace ock::htracer;
 
+extern void RunUringScenario();
+extern "C" void __gcov_dump(void);
+
 static bool DiskPathInvalid()
 {
     std::string filename = "./ubsio_old.conf";
@@ -48,6 +51,13 @@ static bool DiskPathInvalid()
 
 int main(int argc, char *argv[])
 {
+    if (getenv("BOOSTIO_URING_TEST_CHILD") != nullptr) {
+        ::testing::InitGoogleTest(&argc, argv);
+        RunUringScenario();
+        __gcov_dump();
+        _exit(::testing::Test::HasFailure() ? 1 : 0);
+    }
+
     TestCm::Stub();
     TestHtracer::Stub();
     TestUnderFs::Stub();
