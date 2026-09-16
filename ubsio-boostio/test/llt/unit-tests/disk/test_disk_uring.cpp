@@ -12,6 +12,7 @@
 
 #include <cerrno>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
@@ -33,6 +34,7 @@ constexpr uint64_t URING_TEST_DISK_LEN = 1073741824UL;
 constexpr uint64_t URING_TEST_CHUNK_LEN = 4194304UL;
 constexpr uint64_t URING_TEST_IO_LEN = 4096UL;
 constexpr char URING_CHILD_ENV[] = "BOOSTIO_URING_TEST_CHILD";
+constexpr char FORCE_SYNC_ENV[] = "BOOSTIO_TEST_FORCE_SYNC_IO";
 
 class TempUringDisk {
 public:
@@ -113,14 +115,18 @@ extern "C" void __gcov_dump(void);
 void RunUringScenario()
 {
     ASSERT_EQ(BdmExit(), BDM_CODE_OK);
-    ASSERT_EQ(BdmSetIoEngine("io_uring"), BDM_CODE_OK);
+    const bool forceSync = std::getenv(FORCE_SYNC_ENV) != nullptr;
+    ASSERT_EQ(BdmSetIoEngine(forceSync ? "sync" : "io_uring"), BDM_CODE_OK);
     ASSERT_EQ(BdmSetUringSqpollMode("disabled"), BDM_CODE_OK);
     ASSERT_EQ(BdmSetSyncWorkerNum(1), BDM_CODE_OK);
 
     int32_t initRet = BdmInit();
-    if (initRet != BDM_CODE_OK) {
-        return;
+    if (initRet != BDM_CODE_OK && !forceSync) {
+        std::fprintf(stderr, "io_uring init unavailable (ret=%d); retrying disk scenario with sync I/O\n", initRet);
+        ASSERT_EQ(BdmSetIoEngine("sync"), BDM_CODE_OK);
+        initRet = BdmInit();
     }
+    ASSERT_EQ(initRet, BDM_CODE_OK);
 
     BdmSetNormalDiskNum(1);
     TempUringDisk disk;
