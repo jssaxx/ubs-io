@@ -170,6 +170,7 @@ private:
 
     std::atomic<bool> mServiceCheckStarted{false};
     std::atomic<bool> mServerOnline{false};
+    std::atomic<bool> mStopping{false};
 #ifdef USE_CLI_TOOLS
     void *mClientDiagnoseHandler = nullptr;
 #endif
