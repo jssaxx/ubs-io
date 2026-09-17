@@ -251,7 +251,7 @@ else
     CMAKE_FLAGS+='-DOPEN_RELEASE=OFF '
 fi
 
-if [[ "$TP_FLAG" == 'ON' && ( "$arch" == 'aarch64' || "$BUILD_UT" == 'ON' ) ]]; then
+if [[ "$TP_FLAG $arch" == 'ON aarch64' ]]; then
     CMAKE_FLAGS+='-DOPEN_TP=ON '
 else
     CMAKE_FLAGS+='-DOPEN_TP=OFF '
