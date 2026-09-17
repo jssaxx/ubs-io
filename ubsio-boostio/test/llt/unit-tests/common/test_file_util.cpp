@@ -201,3 +201,74 @@ TEST(TestFileUtil, append_config_updates_last_valid_duplicate)
     EXPECT_EQ(lines[2], "ubsio.disk.path.backup = /dev/similar");
     EXPECT_EQ(lines[3], "  ubsio.disk.path  =   /dev/effective:/dev/new");
 }
+
+TEST(TestFileUtil, disk_capacity_and_raw_path_diagnostics)
+{
+    TempDiskState state("capacity");
+    ASSERT_TRUE(state.CreateFile(state.partition));
+    int fd = open(state.partition.c_str(), O_RDWR);
+    ASSERT_GE(fd, 0);
+    ASSERT_EQ(ftruncate(fd, 4096), 0);
+    ASSERT_EQ(close(fd), 0);
+
+    std::string path = state.partition;
+    std::string operation;
+    int32_t errorCode = 0;
+    EXPECT_EQ(FileUtil::GetDiskCapacityWithDiagnostics(path, operation, errorCode), 4096);
+    EXPECT_TRUE(operation.empty());
+    EXPECT_EQ(errorCode, 0);
+
+    std::string absent = state.root + "/absent";
+    EXPECT_EQ(FileUtil::GetDiskCapacityWithDiagnostics(absent, operation, errorCode), 0);
+    EXPECT_EQ(operation, "realpath");
+    EXPECT_NE(errorCode, 0);
+
+    std::string directory = state.root;
+    EXPECT_EQ(FileUtil::GetDiskCapacityWithDiagnostics(directory, operation, errorCode), 0);
+    EXPECT_EQ(operation, "open(O_RDWR|O_SYNC)");
+    EXPECT_NE(errorCode, 0);
+
+    std::string sysPath;
+    ASSERT_TRUE(FileUtil::GetBlockDeviceSysPath(path, sysPath));
+    EXPECT_EQ(sysPath.front(), '/');
+    std::string diskKey;
+    ASSERT_TRUE(FileUtil::GetPhysicalDiskKey(path, diskKey));
+    EXPECT_EQ(diskKey, sysPath);
+    EXPECT_FALSE(FileUtil::GetBlockDeviceSysPath(absent, sysPath));
+    EXPECT_FALSE(FileUtil::GetPhysicalDiskKey(absent, diskKey));
+
+    std::string reason;
+    EXPECT_FALSE(FileUtil::CheckNoPartitions(absent, reason));
+    EXPECT_EQ(reason, "failed to inspect device partitions");
+    EXPECT_FALSE(FileUtil::CheckNotMounted(absent, "8:0", reason));
+    EXPECT_EQ(reason, "failed to inspect mounted devices");
+}
+
+TEST(TestFileUtil, file_mutations_sync_and_report_failures)
+{
+    TempDiskState state("mutations");
+    ASSERT_TRUE(state.CreateFile(state.partition, "original"));
+    ASSERT_TRUE(state.CreateChild());
+    const std::string absent = state.root + "/absent";
+
+    EXPECT_FALSE(FileUtil::BackUpFile(absent, state.mountInfo));
+    EXPECT_FALSE(FileUtil::BackUpFile(state.partition, state.root + "/missing/copy"));
+    ASSERT_TRUE(FileUtil::BackUpFile(state.partition, state.mountInfo));
+    EXPECT_TRUE(FileUtil::SyncFile(state.mountInfo));
+    EXPECT_FALSE(FileUtil::SyncFile(absent));
+    EXPECT_TRUE(FileUtil::SyncDir(state.root));
+    EXPECT_FALSE(FileUtil::SyncDir(state.partition));
+
+    EXPECT_TRUE(FileUtil::RenameFile(state.mountInfo, state.mountInfo));
+    EXPECT_FALSE(FileUtil::RenameFile(absent, state.childPartition));
+    ASSERT_TRUE(FileUtil::RenameFile(state.mountInfo, state.childPartition));
+    EXPECT_TRUE(FileUtil::RemoveFile(state.childPartition));
+    EXPECT_FALSE(FileUtil::RemoveFile(state.childPartition));
+
+    EXPECT_FALSE(FileUtil::WriteFile(state.root, { "invalid" }));
+    ASSERT_TRUE(FileUtil::WriteFile(state.mountInfo, { "first", "second" }));
+    std::vector<std::string> lines;
+    ASSERT_TRUE(FileUtil::ReadFile(state.mountInfo, lines));
+    EXPECT_EQ(lines, (std::vector<std::string>{ "first", "second" }));
+    EXPECT_FALSE(FileUtil::ReadFile(absent, lines));
+}

@@ -16,7 +16,6 @@
 #include "bio_cache_tp.h"
 
 using namespace ock::bio;
-#ifdef __aarch64__
 int tp::TracePointManager::Initialize() noexcept
 {
     TracePointInit();
@@ -43,24 +42,3 @@ void tp::TracePointManager::RemoveAllPoints() noexcept
     tp::ServerTp::Deregister();
     tp::CacheTp::Deregister();
 }
-#else
-int tp::TracePointManager::Initialize() noexcept
-{
-    return 0;
-}
-
-void tp::TracePointManager::Destroy() noexcept
-{
-    return;
-}
-
-int tp::TracePointManager::RegisterAllPoints() noexcept
-{
-    return 0;
-}
-
-void tp::TracePointManager::RemoveAllPoints() noexcept
-{
-    return;
-}
-#endif
