@@ -17,6 +17,7 @@
 #include <sched.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#include <string>
 #include <vector>
 #include "mms_ref.h"
 #include "mms_types.h"
