@@ -35,6 +35,7 @@ BioCalLocationFunc DlBioSdkApi::pBioCalcLocation = nullptr;
 BioGetFunc DlBioSdkApi::pBioGet = nullptr;
 BioPutFunc DlBioSdkApi::pBioPut = nullptr;
 BioStatFunc DlBioSdkApi::pBioStat = nullptr;
+BioBatchStatFunc DlBioSdkApi::pBioBatchStat = nullptr;
 BioBatchGetFunc DlBioSdkApi::pBioBatchGet = nullptr;
 BioBatchExistFunc DlBioSdkApi::pBioBatchExist = nullptr;
 BioBatchFreeFunc DlBioSdkApi::pBioBatchGetFree = nullptr;
@@ -65,6 +66,7 @@ int32_t DlBioSdkApi::LoadLibrary()
     DL_LOAD_SYM(pBioGet, BioGetFunc, bioSdkHandle, "BioGet");
     DL_LOAD_SYM(pBioPut, BioPutFunc, bioSdkHandle, "BioPut");
     DL_LOAD_SYM(pBioStat, BioStatFunc, bioSdkHandle, "BioStat");
+    DL_LOAD_SYM(pBioBatchStat, BioBatchStatFunc, bioSdkHandle, "BioBatchStat");
     DL_LOAD_SYM(pBioCreateCache, BioCreateCacheFunc, bioSdkHandle, "BioCreateCache");
     DL_LOAD_SYM(pBioCalcLocation, BioCalLocationFunc, bioSdkHandle, "BioCalcLocation");
     DL_LOAD_SYM(pBioBatchGet, BioBatchGetFunc, bioSdkHandle, "BioBatchGet");
@@ -95,6 +97,7 @@ void DlBioSdkApi::CleanupLibrary()
     pBioGet = nullptr;
     pBioPut = nullptr;
     pBioStat = nullptr;
+    pBioBatchStat = nullptr;
     pBioCreateCache = nullptr;
     pBioCalcLocation = nullptr;
     pBioBatchGet = nullptr;

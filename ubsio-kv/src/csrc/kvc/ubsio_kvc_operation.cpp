@@ -124,6 +124,17 @@ int32_t KvcBatchGetData(const std::vector<std::string> &key,
     return g_kvOperation->BatchKvGetData(key, bufs, lengths, results);
 }
 
+int32_t KvcBatchGetData(const char **keys,
+                        uint32_t keysCount,
+                        void **bufs,
+                        size_t *lengths,
+                        int *results,
+                        uint32_t flags)
+{
+    (void)flags;
+    return g_kvOperation->BatchKvGetData(keys, keysCount, bufs, lengths, results);
+}
+
 int32_t KvcBatchDeleteKey(const std::vector<std::string> &key, std::vector<int> &results, uint32_t flags)
 {
     return g_kvOperation->BatchKvDeleteKey(key, results);

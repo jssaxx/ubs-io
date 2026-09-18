@@ -55,6 +55,12 @@ TEST_F(KvTest, BioSdkStubLoadsAndCoversAllDelegates)
     EXPECT_EQ(stat.size, 64U);
 
     const char *keys[] = {"a", "b"};
+    BatchObjStat batchStats[2]{};
+    EXPECT_EQ(DlBioSdkApi::BatchStat(1, keys, nullptr, 2, batchStats), RET_CACHE_OK);
+    EXPECT_STREQ(batchStats[0].key, keys[0]);
+    EXPECT_EQ(batchStats[0].size, 64U);
+    EXPECT_EQ(batchStats[0].result, RET_CACHE_OK);
+
     uint64_t offsets[] = {0, 0};
     uint64_t lengths[] = {4, 8};
     ObjLocation locations[2]{};

@@ -172,6 +172,22 @@ extern "C" CResult BioStat(uint64_t, const char *, ObjLocation, ObjStat *stat)
     return static_cast<CResult>(result);
 }
 
+extern "C" CResult BioBatchStat(uint64_t, const char **keys, ObjLocation *, uint32_t count, BatchObjStat *stats)
+{
+    auto &state = State();
+    std::lock_guard<std::mutex> lock(state.mutex);
+    auto result = ResultLocked(state, "BioBatchStat");
+    if (result != RET_CACHE_OK) {
+        return static_cast<CResult>(result);
+    }
+    for (uint32_t index = 0; index < count; ++index) {
+        std::snprintf(stats[index].key, sizeof(stats[index].key), "%s", keys[index]);
+        stats[index].size = state.statSize;
+        stats[index].result = state.batchItemResult;
+    }
+    return RET_CACHE_OK;
+}
+
 extern "C" CResult BioBatchGet(uint64_t, const char **, const uint32_t count, uint64_t *,
                                 uint64_t *lengths, ObjLocation *, uintptr_t *valueAddrs,
                                 uint64_t *realLengths, int32_t *results)

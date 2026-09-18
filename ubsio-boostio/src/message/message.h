@@ -622,9 +622,14 @@ typedef struct {
 } HdfsConfigResponse;
 
 typedef struct {
+    char rootPath[KEY_MAX_SIZE];
+} LocalConfigResponse;
+
+typedef struct {
     char underFsType[KEY_MAX_SIZE];
     CephConfigResponse cephConfig;
     HdfsConfigResponse hdfsConfig;
+    LocalConfigResponse localConfig;
 } GetUnderFsConfigResponse;
 
 /* Cache Resource */

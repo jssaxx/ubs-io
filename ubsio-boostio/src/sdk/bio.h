@@ -176,6 +176,17 @@ public:
     CResult Stat(const char *key, const ObjLocation &location, ObjStat &stat);
 
     /**
+     * @brief: Get multiple object stat information in standalone mode
+     *
+     * @param[in]: keys: key array
+     * @param[in]: locations: location info array
+     * @param[in]: count: key count
+     * @param[out]: stats: key, size and result for each object
+     * @return: return RET_CACHE_OK when the batch is processed, others return a batch-level error
+     */
+    CResult BatchStat(const char **keys, ObjLocation *locations, uint32_t count, BatchObjStat *stats);
+
+    /**
      * @brief: Batch exist object
      *
      * @param[in]: tenantId: tenant id

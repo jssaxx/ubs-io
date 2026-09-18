@@ -474,6 +474,12 @@ bool BioClientNet::CheckGetUnderFsConfigResp(GetUnderFsConfigResponse &rsp)
     size_t clusterLen = strnlen(rsp.cephConfig.cluster, KEY_MAX_SIZE);
     size_t cfgPathLen = strnlen(rsp.cephConfig.cfgPath, KEY_MAX_SIZE);
     size_t poolLen = strnlen(rsp.cephConfig.pool, KEY_MAX_SIZE);
+    size_t rootPathLen = strnlen(rsp.localConfig.rootPath, KEY_MAX_SIZE);
+
+    if (strcmp(rsp.underFsType, "local") == 0) {
+        return underFsTypeLen != 0 && underFsTypeLen < KEY_MAX_SIZE && rootPathLen != 0 &&
+            rootPathLen < KEY_MAX_SIZE;
+    }
 
     return ((underFsTypeLen != 0 && underFsTypeLen < KEY_MAX_SIZE) && (nameNodeLen != 0 && nameNodeLen < KEY_MAX_SIZE)
             && (workingPathLen != 0 && workingPathLen < KEY_MAX_SIZE) && (userLen != 0 && userLen < KEY_MAX_SIZE) &&
@@ -485,7 +491,7 @@ bool BioClientNet::CheckGetUnderFsConfigResp(GetUnderFsConfigResponse &rsp)
 BResult BioClientNet::GetUnderFsConfig(BioConfig::UnderFsConfig &config)
 {
     GetUnderFsConfigRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
-    GetUnderFsConfigResponse rsp;
+    GetUnderFsConfigResponse rsp{};
 
     BIO_TP_START(SDK_CLIENT_GET_UNDERFS_CONFIG_PASS_SYNC_CALL, 0);
     BResult ret = mNetEngine->SyncCall<GetUnderFsConfigRequest, GetUnderFsConfigResponse>(INVALID_NID,
@@ -508,6 +514,7 @@ BResult BioClientNet::GetUnderFsConfig(BioConfig::UnderFsConfig &config)
     config.cephConfig.cluster = rsp.cephConfig.cluster;
     config.cephConfig.cfgPath = rsp.cephConfig.cfgPath;
     config.cephConfig.pools.insert({ 0, rsp.cephConfig.pool });
+    config.localConfig.rootPath = rsp.localConfig.rootPath;
     return BIO_OK;
 }
 

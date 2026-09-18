@@ -108,12 +108,14 @@ void BioConfig::LoadDefaultConf()
     AddIntConf(BDM_BATCH_READ_WINDOW_KEYS, VIntRange::Create(BDM_BATCH_READ_WINDOW_KEYS.first, NO_1, NO_1024));
     AddIntConf(BDM_BATCH_READ_WINDOW_BYTES_MB,
         VIntRange::Create(BDM_BATCH_READ_WINDOW_BYTES_MB.first, NO_1, NO_1024));
-    AddIntConf(BDM_BATCH_READ_PIPELINE_DEPTH,
-        VIntRange::Create(BDM_BATCH_READ_PIPELINE_DEPTH.first, NO_1, NO_64));
+    AddIntConf(BATCH_READ_PIPELINE_DEPTH,
+        VIntRange::Create(BATCH_READ_PIPELINE_DEPTH.first, NO_1, NO_64));
+    AddIntConf(BATCH_READ_COPY_WORKERS,
+        VIntRange::Create(BATCH_READ_COPY_WORKERS.first, NO_1, NO_64));
     AddIntConf(BDM_BATCH_READ_TEMP_POOL_MB,
         VIntRange::Create(BDM_BATCH_READ_TEMP_POOL_MB.first, 0, NO_65535));
-    AddStrConf(BDM_BATCH_READ_STANDALONE_USE_SCRATCH_POOL,
-        VStrBoolRange::Create(BDM_BATCH_READ_STANDALONE_USE_SCRATCH_POOL.first));
+    AddStrConf(BATCH_READ_STANDALONE_USE_SCRATCH_POOL,
+        VStrBoolRange::Create(BATCH_READ_STANDALONE_USE_SCRATCH_POOL.first));
 
     /* load cluster manager config */
     AddIntConf(CM_INITIAL_NODE_NUM, VIntRange::Create(CM_INITIAL_NODE_NUM.first, NO_1, NO_256));
@@ -124,13 +126,16 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(CM_ZK_HOST, VIpv4PortListValidator::Create(CM_ZK_HOST.first));
 
     /* load underfs config */
-    AddStrConf(UNDERFS_FILE_SYSTEM_TYPE, VStrEnum::Create(UNDERFS_FILE_SYSTEM_TYPE.first, "ceph||hdfs||none"));
+    AddStrConf(UNDERFS_FILE_SYSTEM_TYPE, VStrEnum::Create(UNDERFS_FILE_SYSTEM_TYPE.first, "ceph||hdfs||local||none"));
     AddStrConf(UNDERFS_CEPH_CFG_PATH);
     AddStrConf(UNDERFS_CEPH_CLUSTER, VStrNotNull::Create(UNDERFS_CEPH_CLUSTER.first));
     AddStrConf(UNDERFS_CEPH_USER, VStrNotNull::Create(UNDERFS_CEPH_USER.first));
     AddStrConf(UNDERFS_CEPH_POOL, VStrCephPool::Create(UNDERFS_CEPH_POOL.first));
     AddStrConf(UNDERFS_HDFS_NAMENODE);
     AddStrConf(UNDERFS_HDFS_WORKING_PATH);
+    AddStrConf(UNDERFS_LOCAL_ROOT_PATH);
+    AddIntConf(UNDERFS_BATCH_READ_WORKER_NUM,
+        VIntRange::Create(UNDERFS_BATCH_READ_WORKER_NUM.first, NO_1, NO_64));
 
     /* load net config for security */
     AddStrConf(NET_TLS_ENABLE_SWITCH, VStrBoolRange::Create(NET_TLS_ENABLE_SWITCH.first));
@@ -321,10 +326,13 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
     mDaemonConfig.bdmBatchReadWindowKeys = static_cast<uint32_t>(conf->GetInt(BDM_BATCH_READ_WINDOW_KEYS.first));
     mDaemonConfig.bdmBatchReadWindowBytesMb =
         static_cast<uint32_t>(conf->GetInt(BDM_BATCH_READ_WINDOW_BYTES_MB.first));
-    mDaemonConfig.bdmBatchReadPipelineDepth = static_cast<uint32_t>(conf->GetInt(BDM_BATCH_READ_PIPELINE_DEPTH.first));
+    mDaemonConfig.batchReadPipelineDepth = static_cast<uint32_t>(conf->GetInt(BATCH_READ_PIPELINE_DEPTH.first));
+    mDaemonConfig.batchReadCopyWorkers = static_cast<uint32_t>(conf->GetInt(BATCH_READ_COPY_WORKERS.first));
     mDaemonConfig.bdmBatchReadTempPoolMb = static_cast<uint32_t>(conf->GetInt(BDM_BATCH_READ_TEMP_POOL_MB.first));
-    mDaemonConfig.bdmBatchReadStandaloneUseScratchPool =
-        conf->GetStr(BDM_BATCH_READ_STANDALONE_USE_SCRATCH_POOL.first) == "true";
+    mDaemonConfig.batchReadStandaloneUseScratchPool =
+        conf->GetStr(BATCH_READ_STANDALONE_USE_SCRATCH_POOL.first) == "true";
+    mDaemonConfig.underFsBatchReadWorkerNum =
+        static_cast<uint32_t>(conf->GetInt(UNDERFS_BATCH_READ_WORKER_NUM.first));
 
     mDaemonConfig.segment = static_cast<uint32_t>(conf->GetInt(SEGMENT_SIZE_MB.first) * MB_SIZE);
     mDaemonConfig.sdkPoolSize = static_cast<uint64_t>(conf->GetInt(SDK_MEM_CAPACITY_SIZE_MB.first) * MB_SIZE);
@@ -347,7 +355,8 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
     }
     mDaemonConfig.wcacheMemEvictLevel = static_cast<uint64_t>(conf->GetInt(WCACHE_EVICT_WATER_LEVEL.first));
     mDaemonConfig.wcacheDiskEvictLevel = static_cast<uint64_t>(conf->GetInt(WCACHE_DISK_EVICT_WATER_LEVEL.first));
-    if (!mDaemonConfig.hasDiskCache && mDaemonConfig.wcacheMemEvictLevel == 0) {
+    bool underFsEnabled = conf->GetStr(UNDERFS_FILE_SYSTEM_TYPE.first) != "none";
+    if (!mDaemonConfig.hasDiskCache && !underFsEnabled && mDaemonConfig.wcacheMemEvictLevel == 0) {
         mDaemonConfig.wcacheMemEvictLevel = NO_90;
     }
     mDaemonConfig.rcacheMemEvictLevel = static_cast<uint64_t>(conf->GetInt(RCACHE_EVICT_WATER_LEVEL.first));
@@ -482,6 +491,13 @@ BResult BioConfig::AutoConfigUnderFs(const ConfigurationPtr &conf)
     mUnderFsConfig.cephConfig.user = conf->GetStr(UNDERFS_CEPH_USER.first);
     mUnderFsConfig.hdfsConfig.nameNode = conf->GetStr(UNDERFS_HDFS_NAMENODE.first);
     mUnderFsConfig.hdfsConfig.workingPath = conf->GetStr(UNDERFS_HDFS_WORKING_PATH.first);
+    mUnderFsConfig.localConfig.rootPath = conf->GetStr(UNDERFS_LOCAL_ROOT_PATH.first);
+    if (mUnderFsConfig.underFsType == "local") {
+        if (!FileUtil::CanonicalPath(mUnderFsConfig.localConfig.rootPath)) {
+            LOG_ERROR("Local underfs root path does not exist, value:" << mUnderFsConfig.localConfig.rootPath << ".");
+            return BIO_ERR;
+        }
+    }
 
     std::vector<std::string> idWithPoolNames;
     StrUtil::Split(conf->GetStr(UNDERFS_CEPH_POOL.first), ",", idWithPoolNames);

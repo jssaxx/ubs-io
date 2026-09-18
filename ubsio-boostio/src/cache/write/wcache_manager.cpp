@@ -544,7 +544,10 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
     BIO_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Insert slice reference to write cache index manager failed, ret:" << ret << ", key:" << key << ".");
+        wcache->DecFlyIo();
+        return ret;
     }
+    wcache->StartDirectUnderFsEvict();
     wcache->DecFlyIo();
     return ret;
 }

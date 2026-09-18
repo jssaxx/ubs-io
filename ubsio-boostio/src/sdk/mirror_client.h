@@ -188,6 +188,8 @@ public:
 
     BResult StatObject(const char *key, const ObjLocation &location, ObjStat &stat);
 
+    BResult BatchStat(const char **keys, ObjLocation *locations, uint32_t count, BatchObjStat *stats);
+
     BResult BatchExist(const char *key[], ObjLocation location[], uint32_t count, bool *result);
 
     BResult DispathBatchExist(const char *key[], ObjLocation location[], uint32_t count, bool *result);
@@ -299,6 +301,8 @@ private:
     BResult BatchGetKeyDiskAddrImpl(MirrorBatchGetKeyAddr &param);
 
     BResult BatchGetImpl(MirrorBatchGet &param);
+
+    BResult BatchGetStandalone(MirrorBatchGet &param);
 
     BResult GetImpl(MirrorGet &param, AsyncOpParam &opParam);
 

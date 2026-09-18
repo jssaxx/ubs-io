@@ -33,6 +33,8 @@ using BioGetFunc = CResult (*)(uint64_t tenantId, const char *key, uint64_t offs
                            char *value, uint64_t *realLength);
 using BioPutFunc = CResult (*)(uint64_t tenantId, const char *key, const char *value, uint64_t length, ObjLocation location);
 using BioStatFunc = CResult (*)(uint64_t tenantId, const char *key, ObjLocation location, ObjStat *stat);
+using BioBatchStatFunc = CResult (*)(uint64_t tenantId, const char **keys, ObjLocation *locations, uint32_t count,
+    BatchObjStat *stats);
 using BioBatchGetFunc = CResult (*)(uint64_t tenantId, const char **keys, const uint32_t count, uint64_t *offsets,
                                 uint64_t *lengths, ObjLocation *locations, uintptr_t *valueAddrs, uint64_t *realLengths, int32_t *results);
 using BioBatchExistFunc = CResult (*)(uint64_t tenantId, const char *key[], ObjLocation location[], uint32_t count, bool result[]);
@@ -80,6 +82,12 @@ public:
     static CResult Stat(uint64_t tenantId, const char *key, ObjLocation location, ObjStat *stat)
     {
         return static_cast<CResult>(pBioStat(tenantId, key, location, stat));
+    }
+
+    static CResult BatchStat(uint64_t tenantId, const char **keys, ObjLocation *locations, uint32_t count,
+        BatchObjStat *stats)
+    {
+        return static_cast<CResult>(pBioBatchStat(tenantId, keys, locations, count, stats));
     }
 
     static CResult BatchExist(uint64_t tenantId, const char *key[], ObjLocation location[], uint32_t count, bool result[])
@@ -151,6 +159,7 @@ private:
     static BioGetFunc pBioGet;
     static BioPutFunc pBioPut;
     static BioStatFunc pBioStat;
+    static BioBatchStatFunc pBioBatchStat;
     static BioCreateCacheFunc pBioCreateCache;
     static BioCalLocationFunc pBioCalcLocation;
     static BioBatchGetFunc pBioBatchGet;

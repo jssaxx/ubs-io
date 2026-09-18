@@ -34,6 +34,15 @@ typedef struct {
 } UbsioKvKeyInfo;
 #endif
 
+#ifndef UBSIO_KV_BATCH_STAT_DEFINED
+#define UBSIO_KV_BATCH_STAT_DEFINED
+typedef struct {
+    char key[UBSIO_KV_MAX_KEY_SIZE];
+    uint32_t size;
+    int32_t result;
+} UbsioKvBatchStat;
+#endif
+
 typedef struct {
     uint16_t status;
     char path[UBSIO_RESOURCE_DISK_PATH_MAX_SIZE];
@@ -277,6 +286,20 @@ int32_t UbsioKvCacheGetLength(const char *key, size_t *length, uint32_t flags);
  * @return 0 if successfully, positive value if error happens
  */
 int32_t UbsioKvCacheBatchGetLength(const char **keys, uint32_t keysCount, size_t *lengths, int32_t *results, uint32_t flags);
+
+/**
+ * @brief Query metadata for multiple keys from the UBS-IO KV Cache
+ *
+ * The request is forwarded to UBS-IO BioBatchStat in one batch. Each output entry contains the key, value size,
+ * and per-key result. This API currently supports standalone mode only.
+ *
+ * @param keys             [in] Keys to query; each key must contain 1 to 255 bytes
+ * @param keysCount        [in] Number of keys, in the range [1, 16384]
+ * @param stats            [out] Key, value size, and result for each input key
+ * @param flags            [in] Reserved; must be 0
+ * @return 0 if the batch request is processed successfully, positive value if a batch-level error occurs
+ */
+int32_t UbsioKvCacheBatchStat(const char **keys, uint32_t keysCount, UbsioKvBatchStat *stats, uint32_t flags);
 
 /**
  * @brief Free shm address within the UBS-IO KV Cache

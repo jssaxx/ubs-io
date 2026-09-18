@@ -1933,6 +1933,12 @@ int32_t BatchExist(BatchExistRequest *req, BatchExistResponse *rsp)
     return BioServer::Instance()->GetMirrorServer()->BatchExistConvergence(*req, *rsp);
 }
 
+int32_t BatchExistStandalone(const char **keys, ObjLocation *locations, uint32_t count, bool *results)
+{
+    return static_cast<int32_t>(
+        BioServer::Instance()->GetMirrorServer()->BatchExistStandalone(keys, locations, count, results));
+}
+
 int32_t Delete(DeleteRequest *req)
 {
     return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->Delete(*req));
@@ -1980,6 +1986,12 @@ int32_t Stat(StatRequest *req, StatResponse *rsp)
     rsp->size = objInfo.size;
     rsp->time = objInfo.time;
     return static_cast<int32_t>(ret);
+}
+
+int32_t BatchStat(const char **keys, ObjLocation *locations, uint32_t count, BatchObjStat *stats)
+{
+    return static_cast<int32_t>(
+        BioServer::Instance()->GetMirrorServer()->BatchStatConvergence(keys, locations, count, stats));
 }
 
 int32_t Load(LoadRequest *req)

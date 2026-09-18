@@ -13,6 +13,10 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
+#include <functional>
+#include <new>
+#include <string_view>
 #include <vector>
 #include "ubsio_kvc_log.h"
 #include <ubsio_kvc_err.h>
@@ -28,6 +32,61 @@ constexpr int MAX_KEY_LENGTH = 255;
 constexpr int MAX_BATCH_OP_COUNT = 16 << 10; // 16K
 constexpr int MAX_KV_LAYER_NUM = 2 * 512; // k layer + v layer
 constexpr int64_t MAX_KV_LAYER_LENGTH = 2 * 1024 * 1024 * 1024LL; // 2G
+constexpr uint64_t DEFAULT_TENANT_ID = 1;
+
+bool IsBatchKeyValid(const char *key)
+{
+    if (key == nullptr) {
+        return false;
+    }
+    size_t keyLen = strnlen(key, static_cast<size_t>(MAX_KEY_LENGTH) + 1);
+    return keyLen > 0 && keyLen <= static_cast<size_t>(MAX_KEY_LENGTH);
+}
+
+bool AreBatchStatKeysValid(const char **keys, uint32_t keysCount)
+{
+    for (uint32_t index = 0; index < keysCount; ++index) {
+        if (UNLIKELY(!IsBatchKeyValid(keys[index]))) {
+            LOG_ERROR("Invalid batch stat key, index:" << index << ".");
+            return false;
+        }
+    }
+    return true;
+}
+
+bool IsBatchStatRequestValid(const char **keys, uint32_t keysCount, const UbsioKvBatchStat *stats, uint32_t flags)
+{
+    if (UNLIKELY(keys == nullptr || stats == nullptr || flags != 0)) {
+        LOG_ERROR("Invalid batch stat parameters, keys count:" << keysCount << ", flags:" << flags << ".");
+        return false;
+    }
+    if (UNLIKELY(keysCount == 0 || keysCount > static_cast<uint32_t>(MAX_BATCH_OP_COUNT))) {
+        LOG_ERROR("Invalid batch stat keys count:" << keysCount << ".");
+        return false;
+    }
+    return AreBatchStatKeysValid(keys, keysCount);
+}
+
+bool PrepareBatchStatLocations(const char **keys, uint32_t keysCount, std::vector<ObjLocation> &locations)
+{
+    try {
+        locations.resize(keysCount);
+    } catch (const std::bad_alloc &) {
+        LOG_ERROR("Allocate batch stat locations failed, keys count:" << keysCount << ".");
+        return false;
+    }
+
+    for (uint32_t index = 0; index < keysCount; ++index) {
+        auto keyView = std::string_view(keys[index]);
+        uint64_t objectId = static_cast<uint64_t>(std::hash<std::string_view>{}(keyView));
+        CResult ret = DlBioSdkApi::CalcLocation(DEFAULT_TENANT_ID, objectId, &locations[index]);
+        if (UNLIKELY(ret != RET_CACHE_OK)) {
+            LOG_ERROR("Calculate batch stat location failed, ret:" << ret << ", index:" << index << ".");
+            return false;
+        }
+    }
+    return true;
+}
 }
 
 UBSIO_API int32_t UbsioKvCacheInit(int32_t devId)
@@ -344,41 +403,48 @@ UBSIO_API int32_t UbsioKvCacheBatchGet(const char **keys,
                                        uint32_t flags)
 {
     if (UNLIKELY(keys == nullptr || bufs == nullptr || lengths == nullptr || results == nullptr)) {
-        LOG_ERROR("Invalid params, keysCount: " << keysCount);
+        LOG_ERROR("Invalid params, keysCount:" << keysCount << ".");
         return UBSIO_KVC_INVALID_PARAM;
     }
     if (UNLIKELY(keysCount > MAX_BATCH_OP_COUNT || keysCount < 1)) {
-        LOG_ERROR("Invalid params, keysCount: " << keysCount);
+        LOG_ERROR("Invalid params, keysCount:" << keysCount << ".");
         return UBSIO_KVC_INVALID_PARAM;
     }
 
-    std::vector<std::string> keyVector(keysCount);
-    std::vector<int> batchResult(keysCount, UBSIO_KVC_ERR);
-    std::vector<size_t> lengthsVector(keysCount);
-    for (size_t i = 0; i < keysCount; i++) {
-        if (UNLIKELY(keys[i] == nullptr)) {
-            LOG_ERROR("Get invalid key nullptr on idx [" << i << "]");
-            return UBSIO_KVC_INVALID_PARAM;
-        }
-        if (UNLIKELY(strlen(keys[i]) > MAX_KEY_LENGTH || strlen(keys[i]) < 1)) {
-            LOG_ERROR("Get invalid key length [" << i << "]");
+    for (uint32_t i = 0; i < keysCount; ++i) {
+        if (UNLIKELY(!IsBatchKeyValid(keys[i]))) {
+            LOG_ERROR("Get invalid key, index:" << i << ".");
             return UBSIO_KVC_INVALID_PARAM;
         }
         if (UNLIKELY(lengths[i] == 0)) {
-            LOG_ERROR("Get invalid lengths [" << i << "]");
+            LOG_ERROR("Get invalid length, index:" << i << ".");
             return UBSIO_KVC_INVALID_PARAM;
         }
-        keyVector[i] = keys[i];
-        lengthsVector[i] = lengths[i];
     }
 
-    auto ret = KvcBatchGetData(keyVector, bufs, lengthsVector, batchResult, flags);
+    auto ret = KvcBatchGetData(keys, keysCount, bufs, lengths, results, flags);
     if (UNLIKELY(ret != UBSIO_KVC_OK)) {
-        LOG_ERROR("Kvc batch get failed, ret:" << ret);
+        LOG_ERROR("Kvc batch get failed, ret:" << ret << ".");
         return UBSIO_KVC_ERR;
     }
-    for (uint32_t i = 0; i < keysCount; ++i) {
-        results[i] = batchResult[i];
+    return UBSIO_KVC_OK;
+}
+
+UBSIO_API int32_t UbsioKvCacheBatchStat(const char **keys, uint32_t keysCount, UbsioKvBatchStat *stats,
+    uint32_t flags)
+{
+    if (UNLIKELY(!IsBatchStatRequestValid(keys, keysCount, stats, flags))) {
+        return UBSIO_KVC_INVALID_PARAM;
+    }
+
+    static thread_local std::vector<ObjLocation> locations;
+    if (UNLIKELY(!PrepareBatchStatLocations(keys, keysCount, locations))) {
+        return UBSIO_KVC_BIO_ERR;
+    }
+    auto ret = DlBioSdkApi::BatchStat(DEFAULT_TENANT_ID, keys, locations.data(), keysCount, stats);
+    if (UNLIKELY(ret != RET_CACHE_OK)) {
+        LOG_ERROR("Bio batch stat failed, ret:" << ret << ", keys count:" << keysCount << ".");
+        return UBSIO_KVC_BIO_ERR;
     }
     return UBSIO_KVC_OK;
 }

@@ -109,6 +109,8 @@ public:
 
     void StartEvictTask(WCacheTierType type);
 
+    void StartDirectUnderFsEvict();
+
     void RetryEvictTask(WCacheTierType type);
 
     uint64_t GetCapacity(WCacheTierType type);
@@ -197,12 +199,13 @@ public:
 
 private:
     BResult EvictAllMemSliceToDisk();
-    BResult EvictAllMemSliceToDiscard();
+    BResult EvictAllMemSliceWithoutDisk();
     BResult EvictAllDiskSliceToUnderFs();
 
     BResult EvictFromMemToDisk(WCacheSliceRefPtr sliceRef, bool isFront = false,
         const UbsIoMetaEventBatchPtr &batch = nullptr);
     BResult EvictFromMemToDiscard(WCacheSliceRefPtr sliceRef, const UbsIoMetaEventBatchPtr &batch = nullptr);
+    BResult EvictFromMemToUnderFs(WCacheSliceRefPtr sliceRef, const UbsIoMetaEventBatchPtr &batch = nullptr);
     BResult EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront = false,
         const UbsIoMetaEventBatchPtr &batch = nullptr);
 
@@ -256,6 +259,7 @@ private:
     bool mIsForced { false };
     bool mUfsEnable{ false };
     bool mHasDiskCache{ true };
+    bool mDirectUnderFs{ false };
 
     RecordMetaDeleteEventCallback mRecordMetaDeleteEventCallback;
     RetryCallback mRetryCallback;

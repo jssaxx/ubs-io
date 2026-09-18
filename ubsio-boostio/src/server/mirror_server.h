@@ -103,11 +103,34 @@ public:
     BResult Put(PutRequest &req, const WCacheSlicePtr &sliceP, ServiceContext &netCtx, uint32_t &ioStrategy);
     BResult GetConvergence(GetRequest &req, GetResponse &rsp);
     BResult BatchGetConvergence(BatchGetRequest &req, BatchGetResponse &rsp);
+    BResult BatchGetConvergenceParallel(BatchGetRequest &req, BatchGetResponse &rsp);
+    BResult BatchStatConvergence(const char **keys, ObjLocation *locations, uint32_t count, BatchObjStat *stats);
+    BResult BatchExistStandalone(const char **keys, ObjLocation *locations, uint32_t count, bool *results);
     BResult BatchExistConvergence(BatchExistRequest &req, BatchExistResponse &rsp);
     BResult ParseKeyAddr(const Key &key, uint16_t ptId, BatchKeyAddrInfo *info);
     BResult Get(GetRequest &req, GetResponse &rsp, ServiceContext &netCtx);
     BResult BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, BatchGetRequest *req,
         BdmCopyBatchContext *bdmBatch = nullptr, BResult *keyResult = nullptr);
+    BResult PrepareBatchGetEntries(BatchGetRequest *req, std::vector<uint64_t> &realLengths,
+        std::vector<int32_t> &results, BdmCopyBatchContext &bdmBatch);
+    BResult PrepareStandaloneBatchGetEntries(BatchGetRequest &req, BdmCopyBatchContext &bdmBatch);
+    BResult DispatchBatchGetEntries(BatchGetRequest *req, std::vector<uint64_t> &realLengths,
+        std::vector<int32_t> &results, BdmCopyBatchContext &bdmBatch);
+    BResult DispatchUnderFsBatchGetEntries(BatchGetRequest &req, const std::vector<uint32_t> &missIndices);
+    void GetUnderFsBatchEntry(GetKeyInfo &keyInfo);
+    void GetUnderFsBatchEntryWithScratch(GetKeyInfo &keyInfo, const std::function<void()> &complete);
+    RCacheSlicePtr MakeUnderFsBatchGetSlice(const GetKeyInfo &keyInfo, uintptr_t address);
+    BResult ReadUnderFsBatchEntry(GetKeyInfo &keyInfo, const RCacheSlicePtr &sliceP);
+    void PrepareBatchStatEntry(const char *key, const ObjLocation &location, BatchObjStat &stat, uint32_t index,
+        std::vector<uint32_t> &missIndices);
+    void FillBatchStatResult(const char *key, BResult result, const CacheObjStat &cacheStat, BatchObjStat &stat);
+    BResult DispatchUnderFsBatchStatEntries(const char **keys, BatchObjStat *stats,
+        const std::vector<uint32_t> &missIndices);
+    void GetUnderFsBatchStatEntry(const char *key, BatchObjStat &stat);
+    void PrepareBatchExistEntries(const char **keys, ObjLocation *locations, uint32_t count, bool *results,
+        std::vector<uint32_t> &missIndices);
+    BResult DispatchUnderFsBatchExistEntries(const char **keys, bool *results,
+        const std::vector<uint32_t> &missIndices);
     BResult Delete(DeleteRequest &req);
     BResult AddDisk(AddDiskRequest &req);
     BResult AddDiskImpl(AddDiskRequest &req);
@@ -254,6 +277,9 @@ private:
     bool IsValidSliceAddress(WCacheSlicePtr &sliceP);
 
 private:
+    BResult InitializeBatchGetExecutors();
+    BResult InitializeUnderFsExecutor();
+
     uint64_t mflowNum { 0 };
     ReadWriteLock flowNumLock;
     bool mStarted = false;
@@ -272,6 +298,7 @@ private:
         MemFreeHolderEqual> mHoldersList;
 
     ExecutorServicePtr mBatchGetExecutor{ nullptr };
+    ExecutorServicePtr mUnderFsExecutor{ nullptr };
     BioConfigPtr mBioConfig;
     DEFINE_REF_COUNT_VARIABLE
 };

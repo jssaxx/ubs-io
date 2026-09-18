@@ -141,6 +141,11 @@ public:
         return mMirror->StatObject(key, location, stat);
     }
 
+    inline BResult BatchStat(const char **keys, ObjLocation *locations, uint32_t count, BatchObjStat *stats)
+    {
+        return mMirror->BatchStat(keys, locations, count, stats);
+    }
+
     inline BResult BatchExist(const char *key[], ObjLocation location[], uint32_t count, bool *result)
     {
         return mMirror->DispathBatchExist(key, location, count, result);

@@ -60,6 +60,13 @@ TEST_F(KvTest, PublicApiRejectsInvalidArguments)
     void *buffers[] = {buffer};
     size_t lengths[] = {length};
     int results[] = {result};
+    UbsioKvBatchStat stats[1]{};
+
+    EXPECT_EQ(UbsioKvCacheBatchStat(nullptr, 1, stats, 0), UBSIO_KVC_INVALID_PARAM);
+    EXPECT_EQ(UbsioKvCacheBatchStat(keys, 1, nullptr, 0), UBSIO_KVC_INVALID_PARAM);
+    EXPECT_EQ(UbsioKvCacheBatchStat(keys, 0, stats, 0), UBSIO_KVC_INVALID_PARAM);
+    EXPECT_EQ(UbsioKvCacheBatchStat(keys, TOO_MANY_KEYS, stats, 0), UBSIO_KVC_INVALID_PARAM);
+    EXPECT_EQ(UbsioKvCacheBatchStat(keys, 1, stats, 1), UBSIO_KVC_INVALID_PARAM);
 
     EXPECT_EQ(UbsioKvCacheBatchPut(nullptr, 1, buffers, lengths, results, 0), UBSIO_KVC_INVALID_PARAM);
     EXPECT_EQ(UbsioKvCacheBatchPut(keys, 1, nullptr, lengths, results, 0), UBSIO_KVC_INVALID_PARAM);
@@ -69,8 +76,10 @@ TEST_F(KvTest, PublicApiRejectsInvalidArguments)
     EXPECT_EQ(UbsioKvCacheBatchPut(keys, TOO_MANY_KEYS, buffers, lengths, results, 0), UBSIO_KVC_INVALID_PARAM);
 
     const char *badKeys[] = {nullKey};
+    EXPECT_EQ(UbsioKvCacheBatchStat(badKeys, 1, stats, 0), UBSIO_KVC_INVALID_PARAM);
     EXPECT_EQ(UbsioKvCacheBatchPut(badKeys, 1, buffers, lengths, results, 0), UBSIO_KVC_INVALID_PARAM);
     const char *emptyKeys[] = {emptyKey};
+    EXPECT_EQ(UbsioKvCacheBatchStat(emptyKeys, 1, stats, 0), UBSIO_KVC_INVALID_PARAM);
     EXPECT_EQ(UbsioKvCacheBatchPut(emptyKeys, 1, buffers, lengths, results, 0), UBSIO_KVC_INVALID_PARAM);
     void *nullBuffers[] = {nullptr};
     EXPECT_EQ(UbsioKvCacheBatchPut(keys, 1, nullBuffers, lengths, results, 0), UBSIO_KVC_INVALID_PARAM);
@@ -198,6 +207,12 @@ TEST_F(KvTest, PublicApiHappyPathsUseOnlyBioStub)
     EXPECT_EQ(objectLength, 64U);
 
     const char *keys[] = {"alpha", "beta"};
+    UbsioKvBatchStat stats[2]{};
+    EXPECT_EQ(UbsioKvCacheBatchStat(keys, 2, stats, 0), UBSIO_KVC_OK);
+    EXPECT_STREQ(stats[0].key, keys[0]);
+    EXPECT_EQ(stats[0].size, 64U);
+    EXPECT_EQ(stats[0].result, RET_CACHE_OK);
+
     void *putBuffers[] = {data.data(), data.data()};
     size_t lengths[] = {8, 16};
     int results[] = {-1, -1};
@@ -273,8 +288,13 @@ TEST_F(KvTest, PublicApiMapsBioFailures)
 
     EXPECT_EQ(UbsioKvCacheBatchGet(keys, 1, buffers, lengths, results, 0), UBSIO_KVC_ERR);
     EXPECT_EQ(UbsioKvCacheBatchExist(keys, 1, exists, 0), UBSIO_KVC_ERR);
+    UbsioKvBatchStat stats[1]{};
+    EXPECT_EQ(UbsioKvCacheBatchStat(keys, 1, stats, 0), UBSIO_KVC_BIO_ERR);
 
     FakeBioSetResult("BioCalcLocation", RET_CACHE_OK);
+    FakeBioSetResult("BioBatchStat", RET_CACHE_ERROR);
+    EXPECT_EQ(UbsioKvCacheBatchStat(keys, 1, stats, 0), UBSIO_KVC_BIO_ERR);
+    FakeBioSetResult("BioBatchStat", RET_CACHE_OK);
     FakeBioSetResult("BioBatchGet", RET_CACHE_ERROR);
     EXPECT_EQ(UbsioKvCacheBatchGet(keys, 1, buffers, lengths, results, 0), UBSIO_KVC_ERR);
     FakeBioSetResult("BioBatchExist", RET_CACHE_ERROR);
