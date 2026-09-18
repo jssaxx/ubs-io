@@ -406,6 +406,40 @@ std::vector<bool> PyKvcKvBatchExist(const std::vector<std::string> &keys)
     return result;
 }
 
+py::list PyKvcKvBatchStat(const std::vector<std::string> &keys)
+{
+    if (keys.empty() || keys.size() > MAX_BATCH_OP_COUNT) {
+        LOG_ERROR("Keys count is invalid, count:" << keys.size() << ".");
+        return py::list();
+    }
+
+    std::vector<const char *> keyPtrs;
+    keyPtrs.reserve(keys.size());
+    for (const auto &key : keys) {
+        keyPtrs.emplace_back(key.c_str());
+    }
+    std::vector<UbsioKvBatchStat> stats(keys.size());
+    int32_t ret = 0;
+    {
+        py::gil_scoped_release release;
+        ret = UbsioKvCacheBatchStat(keyPtrs.data(), static_cast<uint32_t>(keys.size()), stats.data(), 0);
+    }
+    if (ret != UBSIO_KVC_OK) {
+        LOG_ERROR("UbsioKvCacheBatchStat failed, ret:" << ret << ", keys count:" << keys.size() << ".");
+        return py::list();
+    }
+
+    py::list result;
+    for (size_t index = 0; index < stats.size(); ++index) {
+        py::dict statInfo;
+        statInfo["key"] = keys[index];
+        statInfo["size"] = stats[index].size;
+        statInfo["result"] = stats[index].result;
+        result.append(std::move(statInfo));
+    }
+    return result;
+}
+
 int PyKvcNdsInit(int device)
 {
     py::gil_scoped_release release;
@@ -461,6 +495,7 @@ PYBIND11_MODULE(c2python_sdk, m)
     m.def("KvBatchPut", &PyKvcKvBatchPutData, py::arg("keys"), py::arg("values"));
     m.def("KvBatchGet", &PyKvcKvBatchGetData, py::arg("keys"), py::arg("values"));
     m.def("KvBatchExist", &PyKvcKvBatchExist, py::arg("keys"));
+    m.def("KvBatchStat", &PyKvcKvBatchStat, py::arg("keys"));
     m.def("KvBatchDelete", &PyKvcKvBatchDelete, py::arg("keys"));
     m.def("KvBatchGetLength", &PyKvcKvBatchGetLength, py::arg("keys"));
     m.def("NdsInit", &PyKvcNdsInit, py::arg("device"));

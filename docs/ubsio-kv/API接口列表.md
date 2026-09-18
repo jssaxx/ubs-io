@@ -504,6 +504,21 @@ batch_delete(keys) -> list
 
 返回值：结果列表，列表长度与 `keys` 一致；每项 `0` 表示对应 key 删除成功，`-1` 表示失败。
 
+### batch_stat
+
+作用：批量查询多个 key 的元数据，当前仅支持 standalone 模式。
+
+```python
+batch_stat(keys) -> list[dict]
+```
+
+| 参数 | 类型/取值范围 | 参数说明 |
+| --- | --- | --- |
+| `keys` | `list[str]`；长度 `1-16384` | key 列表，每个 key 长度 `1-255`。 |
+
+返回值：字典列表，每项包含 `key`、`size` 和 `result`。`result` 为 `0` 时 `size` 有效；
+批量请求失败时返回空列表。
+
 ### batch_get_length
 
 作用：批量查询多个 key 对应 value 的长度。
@@ -620,5 +635,6 @@ nds_batch_read(keys: list[str], buffers: list[list[int]], sizes: list[list[int]]
 | `batch_put` | `UbsioKvCacheBatchPut` |
 | `batch_get` | `UbsioKvCacheBatchGet` |
 | `batch_exist` | `UbsioKvCacheBatchExist` |
+| `batch_stat` | `UbsioKvCacheBatchStat` |
 | `batch_delete` | `UbsioKvCacheBatchDelete` |
 | `batch_get_length` | `UbsioKvCacheBatchGetLength` |
