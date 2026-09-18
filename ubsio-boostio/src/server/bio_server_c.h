@@ -28,9 +28,6 @@ int32_t BioServerInit();
 // No Net/CM/Zookeeper module is created; NodeView/PtView is built locally.
 int32_t BioServerStandaloneInit();
 
-// Set local standalone device information before BioServerStandaloneInit.
-void SetStandaloneDeviceInfo(uint32_t deviceId);
-
 void BioServerExit(void);
 
 // Returns 0 in STANDALONE mode because no NetEngine exists.

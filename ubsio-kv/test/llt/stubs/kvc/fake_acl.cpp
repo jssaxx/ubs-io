@@ -249,14 +249,3 @@ extern "C" int32_t rtGetDeviceInfo(uint32_t deviceId, int32_t, int32_t, int64_t 
     }
     return result;
 }
-
-extern "C" int32_t aclrtGetLogicDevIdByUserDevId(int32_t userDevice, int32_t *logicDevice)
-{
-    auto &state = State();
-    std::lock_guard<std::mutex> lock(state.mutex);
-    auto result = ResultLocked(state, "aclrtGetLogicDevIdByUserDevId");
-    if (result == 0 && logicDevice != nullptr) {
-        *logicDevice = userDevice + 100;
-    }
-    return result;
-}

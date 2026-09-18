@@ -61,21 +61,6 @@ BResult BioClientAgent::Initialize(WorkerMode mode)
                 return BIO_INNER_ERR;
             }
         }
-        if (mMode == STANDALONE) {
-            StandaloneDeviceInfo standaloneDeviceInfo;
-            {
-                std::lock_guard<std::mutex> lock(mStandaloneDeviceLock);
-                standaloneDeviceInfo = mStandaloneDeviceInfo;
-            }
-            if (!standaloneDeviceInfo.configured) {
-                CLIENT_LOG_ERROR("Standalone device info is not set. Call BioSetStandaloneDevice before "
-                    "BioInitialize(STANDALONE).");
-                UnloadServerLibrary();
-                return BIO_INVALID_PARAM;
-            }
-            setStandaloneDeviceInfoOp(standaloneDeviceInfo.deviceId);
-        }
-
         // Start the server inside the current process. STANDALONE selects a
         // shorter server module chain; CONVERGENCE keeps the original one.
         int32_t ret = BIO_INNER_ERR;
@@ -89,18 +74,6 @@ BResult BioClientAgent::Initialize(WorkerMode mode)
         }
     }
     return BIO_OK;
-}
-
-void BioClientAgent::SetStandaloneDevice(uint32_t deviceId)
-{
-    if (handler != nullptr) {
-        CLIENT_LOG_ERROR("BioSetStandaloneDevice must be called before BioInitialize.");
-        return;
-    }
-
-    std::lock_guard<std::mutex> lock(mStandaloneDeviceLock);
-    mStandaloneDeviceInfo.configured = true;
-    mStandaloneDeviceInfo.deviceId = deviceId;
 }
 
 BResult BioClientAgent::RegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)
@@ -129,7 +102,6 @@ void BioClientAgent::Exit()
         exitOp();
     }
     UnloadServerLibrary();
-    ResetStandaloneDeviceInfo();
 }
 
 void BioClientAgent::UnloadServerLibrary()
@@ -145,7 +117,6 @@ void BioClientAgent::ResetLoadedOperations()
     handler = nullptr;
     startOp = nullptr;
     standaloneStartOp = nullptr;
-    setStandaloneDeviceInfoOp = nullptr;
     exitOp = nullptr;
     getRuntimeConfigOp = nullptr;
     getCrcFlag = nullptr;
@@ -183,12 +154,6 @@ void BioClientAgent::ResetLoadedOperations()
     scanKeyOp = nullptr;
 }
 
-void BioClientAgent::ResetStandaloneDeviceInfo()
-{
-    std::lock_guard<std::mutex> lock(mStandaloneDeviceLock);
-    mStandaloneDeviceInfo = {};
-}
-
 BResult BioClientAgent::InitUpgradeOperation()
 {
     if ((notifyUpdateOp = reinterpret_cast<NotifyUpdateFuncPtr>(LoadFunction("NotifyUpdate"))) == nullptr) {
@@ -207,10 +172,6 @@ BResult BioClientAgent::InitOperation()
     }
     if ((standaloneStartOp = reinterpret_cast<BioServerStartFuncPtr>(LoadFunction("BioServerStandaloneInit"))) ==
         nullptr) {
-        return BIO_INNER_ERR;
-    }
-    if ((setStandaloneDeviceInfoOp = reinterpret_cast<SetStandaloneDeviceInfoFuncPtr>(
-        LoadFunction("SetStandaloneDeviceInfo"))) == nullptr) {
         return BIO_INNER_ERR;
     }
     if ((exitOp = reinterpret_cast<BioServerExitFuncPtr>(LoadFunction("BioServerExit"))) == nullptr) {

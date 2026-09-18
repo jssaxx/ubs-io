@@ -27,7 +27,6 @@ struct BioStubState {
     uint64_t diskOffset{0};
     uint64_t diskLength{4096};
     int diskResult{RET_CACHE_OK};
-    uint32_t standaloneDevice{0};
 };
 
 BioStubState &State()
@@ -58,7 +57,6 @@ extern "C" void FakeBioReset()
     state.diskOffset = 0;
     state.diskLength = 4096;
     state.diskResult = RET_CACHE_OK;
-    state.standaloneDevice = 0;
 }
 
 extern "C" void FakeBioSetResult(const char *name, int result)
@@ -113,26 +111,11 @@ extern "C" void FakeBioSetDiskInfo(const char *path, uint64_t offset, uint64_t l
     state.diskResult = result;
 }
 
-extern "C" uint32_t FakeBioGetStandaloneDevice()
-{
-    auto &state = State();
-    std::lock_guard<std::mutex> lock(state.mutex);
-    return state.standaloneDevice;
-}
-
 extern "C" CResult BioInitialize(WorkerMode, ClientOptionsConfig *)
 {
     auto &state = State();
     std::lock_guard<std::mutex> lock(state.mutex);
     return static_cast<CResult>(ResultLocked(state, "BioInitialize"));
-}
-
-extern "C" void BioSetStandaloneDevice(uint32_t deviceId)
-{
-    auto &state = State();
-    std::lock_guard<std::mutex> lock(state.mutex);
-    ++state.calls["BioSetStandaloneDevice"];
-    state.standaloneDevice = deviceId;
 }
 
 extern "C" CResult BioCreateCache(CacheDescriptor)

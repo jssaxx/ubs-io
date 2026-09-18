@@ -79,7 +79,7 @@ TEST_F(TestBioServer, test_build_standalone_modules)
 #ifdef USE_DEBUG_TP_TOOLS
         "Tracepoint",
 #endif
-        "Diagnose", "Tracer", "UnderFs", "StandaloneDeviceIdGather", "Bdm", "StandaloneMem", "Flow",
+        "Diagnose", "Tracer", "UnderFs", "StandaloneSlotLease", "Bdm", "StandaloneMem", "Flow",
         "StandaloneView", "Cache", "MirrorServer"
     };
     EXPECT_EQ(names, expected);
