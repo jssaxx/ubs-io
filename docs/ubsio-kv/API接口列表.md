@@ -1,6 +1,6 @@
 # ubsio-kv API 接口列表
 
-本文档说明 ubsio-kv 面向上层应用提供的标准 KV Cache 接口。C API 定义见 [ubsio_kvc.h](../../ubsio-kv/include/ubsio_kvc.h)，Python SDK 封装见 [pykvc.py](../../ubsio-kv/python_whl/pykvc/pykvc/pykvc.py)。Python 最小样例执行说明见 [examples/ubsio-kv/README.md](../../examples/ubsio-kv/README.md)。
+本文档说明 ubsio-kv 面向上层应用提供的标准 KV Cache 接口。C API 定义见 [ubsio_kvc.h](../../ubsio-kv/include/ubsio_kvc.h)，Python SDK 封装见 [`pykvc.py`](../../ubsio-kv/python_whl/pykvc/pykvc/pykvc.py)。Python 最小样例执行说明见 [examples/ubsio-kv/README.md](../../examples/ubsio-kv/README.md)。
 
 ## 通用约定
 
@@ -10,7 +10,7 @@
 - 批量接口中的 `keys`、`bufs`、`lengths`、`results` 等数组长度需与 `keysCount` 一致，批量数量范围为 `1-16384`。
 - 调用读写类接口前，应先调用 `UbsioKvCacheInit` 完成初始化；进程退出前调用 `UbsioKvCacheExit` 释放资源。
 
-## UbsioKvCacheInit
+## `UbsioKvCacheInit`
 
 作用：初始化 UBS IO KV Cache 客户端。
 
@@ -24,7 +24,7 @@ int32_t UbsioKvCacheInit(int32_t devId);
 
 返回值：`0` 表示初始化成功，非 `0` 表示失败。
 
-## UbsioGetResourceInfo
+## `UbsioGetResourceInfo`
 
 作用：查询当前进程管理的写缓存和磁盘资源。集群模式不查询其他节点；standalone 模式只返回本进程选择并管理的盘和缓存资源。
 
@@ -67,7 +67,7 @@ int32_t UbsioGetResourceInfo(UbsioResourceInfo *info);
 
 调用该接口前应先完成 `UbsioKvCacheInit`。返回 `0` 表示查询成功；`info` 为 `NULL` 时返回 `UBSIO_KVC_INVALID_PARAM`；其他失败返回 `UBSIO_KVC_ERR`。
 
-## UbsioKvCacheRegisterMetaEventCallback
+## `UbsioKvCacheRegisterMetaEventCallback`
 
 作用：注册 UBS IO 元数据事件回调，供上层同步 SSD recovery 或淘汰删除事件。
 
@@ -99,7 +99,7 @@ int32_t UbsioKvCacheRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, 
 
 返回值：`0` 表示注册成功，非 `0` 表示失败。
 
-## UbsioKvCacheExit
+## `UbsioKvCacheExit`
 
 作用：退出 UBS IO KV Cache 客户端并释放相关资源。
 
@@ -111,7 +111,7 @@ void UbsioKvCacheExit(void);
 
 返回值：无。
 
-## UbsioKvCachePut
+## `UbsioKvCachePut`
 
 作用：按 key 写入单个 KV Cache 数据。
 
@@ -128,7 +128,7 @@ int32_t UbsioKvCachePut(const char *key, void *buf, size_t length, uint32_t flag
 
 返回值：`0` 表示写入成功，非 `0` 表示失败。
 
-## UbsioKvCacheBatchPut
+## `UbsioKvCacheBatchPut`
 
 作用：批量写入多个 KV Cache 数据。
 
@@ -152,7 +152,7 @@ int32_t UbsioKvCacheBatchPut(const char **keys,
 
 返回值：`0` 表示接口调用成功；单个 key 的结果以 `results` 为准。
 
-## UbsioKvCacheGet
+## `UbsioKvCacheGet`
 
 作用：按 key 读取单个 KV Cache 数据。
 
@@ -169,7 +169,7 @@ int32_t UbsioKvCacheGet(const char *key, void *buf, size_t length, uint32_t flag
 
 返回值：`0` 表示读取成功，非 `0` 表示失败。
 
-## UbsioKvCacheBatchGet
+## `UbsioKvCacheBatchGet`
 
 作用：批量读取多个 KV Cache 数据。
 
@@ -193,7 +193,7 @@ int32_t UbsioKvCacheBatchGet(const char **keys,
 
 返回值：`0` 表示接口调用成功；单个 key 的结果以 `results` 为准。
 
-## UbsioKvCacheBatchGetDirect
+## `UbsioKvCacheBatchGetDirect`
 
 作用：批量读取多段目标 buffer 形式的数据，适用于一个 key 对应多段输出 buffer 的场景。
 
@@ -221,7 +221,7 @@ int32_t UbsioKvCacheBatchGetDirect(const char **keys,
 
 返回值：`0` 表示接口调用成功；单个 key 的结果以 `results` 为准。
 
-## UbsioKvCacheExist
+## `UbsioKvCacheExist`
 
 作用：查询单个 key 是否存在。
 
@@ -236,7 +236,7 @@ bool UbsioKvCacheExist(const char *key, uint32_t flags);
 
 返回值：`true` 表示 key 存在，`false` 表示 key 不存在或查询失败。
 
-## UbsioKvCacheBatchExist
+## `UbsioKvCacheBatchExist`
 
 作用：批量查询多个 key 是否存在。
 
@@ -256,7 +256,7 @@ int32_t UbsioKvCacheBatchExist(const char **keys,
 
 返回值：`0` 表示查询成功，非 `0` 表示失败。
 
-## UbsioKvCacheDelete
+## `UbsioKvCacheDelete`
 
 作用：按 key 删除单个 KV Cache 数据。
 
@@ -271,7 +271,7 @@ int32_t UbsioKvCacheDelete(const char *key, uint32_t flags);
 
 返回值：`0` 表示删除成功，非 `0` 表示失败。
 
-## UbsioKvCacheBatchDelete
+## `UbsioKvCacheBatchDelete`
 
 作用：批量删除多个 key。
 
@@ -291,7 +291,7 @@ int32_t UbsioKvCacheBatchDelete(const char **keys,
 
 返回值：`0` 表示接口调用成功；单个 key 的结果以 `results` 为准。
 
-## UbsioKvCacheGetLength
+## `UbsioKvCacheGetLength`
 
 作用：查询单个 key 对应 value 的长度。
 
@@ -307,7 +307,7 @@ int32_t UbsioKvCacheGetLength(const char *key, size_t *length, uint32_t flags);
 
 返回值：`0` 表示查询成功，非 `0` 表示失败。
 
-## UbsioKvCacheBatchGetLength
+## `UbsioKvCacheBatchGetLength`
 
 作用：批量查询多个 key 对应 value 的长度。
 
@@ -329,7 +329,7 @@ int32_t UbsioKvCacheBatchGetLength(const char **keys,
 
 返回值：`0` 表示接口调用成功；单个 key 的结果以 `results` 为准。
 
-## UbsioKvCacheBatchFree
+## `UbsioKvCacheBatchFree`
 
 作用：释放批量读取接口返回的共享内存地址。
 
@@ -346,7 +346,7 @@ int32_t UbsioKvCacheBatchFree(void **bufs, uint32_t keysCount);
 
 ## Python SDK 接口
 
-Python SDK 主要是 C API 的轻量封装。接口定义见 [pykvc.py](../../ubsio-kv/python_whl/pykvc/pykvc/pykvc.py)。
+Python SDK 主要是 C API 的轻量封装。接口定义见 [`pykvc.py`](../../ubsio-kv/python_whl/pykvc/pykvc/pykvc.py)。
 
 ### initialize
 
