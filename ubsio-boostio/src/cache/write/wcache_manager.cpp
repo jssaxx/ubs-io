@@ -172,10 +172,18 @@ BResult WCacheManager::MetaReportExecutorInit()
 void WCacheManager::Exit()
 {
     mRunning.store(false);
+    // 先停止全部后台执行器（Stop 会 join 线程并等在飞任务跑完），再析构 WCache 对象；
+    // GC 与 delay-destroy 两个执行器此前从未在 Exit 中停止，析构后仍可能访问 WCacheManager
     mRetryEvictService->Stop();
     mEvictService[WCACHE_MEMORY]->Stop();
     if (mEvictService[WCACHE_DISK] != nullptr) {
         mEvictService[WCACHE_DISK]->Stop();
+    }
+    if (mGcEvictService != nullptr) {
+        mGcEvictService->Stop();
+    }
+    if (mDestroyEvictService != nullptr) {
+        mDestroyEvictService->Stop();
     }
 
     mCacheIndex->Exit();
