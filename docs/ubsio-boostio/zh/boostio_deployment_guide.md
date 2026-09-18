@@ -196,34 +196,18 @@ UBS IO-BoostIO 提供运行包和开发包，具体用途如[表 4](#软件包�
 
 ## 容器镜像部署（可选）
 
-容器环境采用“依赖环境与源码分离”的方式部署：镜像只安装 UBS IO-BoostIO 的构建和运行依赖，`master` 分支源码从宿主机挂载到 `/workspace`，编译产物保留在宿主机源码目录中。这样可以复用同一环境镜像构建不同提交，也便于核对实际运行的源码版本。
+容器环境采用“依赖环境与源码分离”的方式部署：镜像提供 UBS IO-BoostIO 的构建和运行依赖，源码从宿主机挂载到 `/workspace`，编译产物保留在宿主机源码目录中。
+
+获取构建环境有两种方式：
+
+- 直接从镜像仓库拉取预构建镜像（推荐）。
+- 使用仓库中的 Dockerfile 构建本地镜像。
 
 > **说明：**
 >
-> - 本节使用 `hub.oepkgs.net/openeuler/openeuler:24.03-lts-sp3` 作为基础镜像。
-> - 基础镜像为 openEuler 24.03 LTS SP3 通用环境。UBS IO-BoostIO 不依赖 NPU，容器不需要挂载 NPU 驱动和设备。
+> - 本节使用 `swr.cn-north-4.myhuaweicloud.com/ubscore/ubs-io:oe2403-sp3-multiarch`。该镜像同时提供 x86_64 和 aarch64 版本，Docker 会根据宿主机架构选择对应版本。
+> - UBS IO-BoostIO 不依赖 NPU，构建容器不需要挂载 NPU 驱动、NPU 设备或原始磁盘。
 > - 以下命令以宿主机源码目录 `/opt/ubs-io` 为例。该目录应检出 `master` 分支或经过确认的发布提交，并保证所有节点使用相同版本。
-
-### 部署流程概览
-
-```text
-hub.oepkgs.net/openeuler/openeuler:24.03-lts-sp3
-                         │
-                         │ docker build：安装 BoostIO 构建/运行依赖
-                         ▼
-           ubsio-boostio-build:24.03-lts-sp3
-                         │
-                         │ 挂载 master 源码到 /workspace
-                         ▼
-          bash ubsio-boostio/build.sh -t release
-                         │
-                         ▼
-       ubsio-boostio/dist/boostio/{bin,lib,conf,include}
-                         │
-                         │ 挂载配置、日志、Ceph 配置和经核验的缓存盘
-                         ▼
-                    bio_daemon
-```
 
 ### 步骤 1：检查宿主机环境和源码
 
@@ -250,68 +234,102 @@ hub.oepkgs.net/openeuler/openeuler:24.03-lts-sp3
         https://gitcode.com/openeuler/ubs-io.git /opt/ubs-io
     ```
 
-3. 确认宿主机能够访问基础镜像仓库和源码构建期间使用的 GitCode 地址：
+3. 确认宿主机能够访问镜像仓库和源码构建期间使用的 GitCode 地址：
 
     ```bash
-    docker pull hub.oepkgs.net/openeuler/openeuler:24.03-lts-sp3
+    docker pull swr.cn-north-4.myhuaweicloud.com/ubscore/ubs-io:oe2403-sp3-multiarch
     git ls-remote https://gitcode.com/openeuler/ubs-comm.git HEAD
     git ls-remote https://gitcode.com/openeuler/libboundscheck.git HEAD
     ```
 
-### 步骤 2：构建依赖环境镜像
+### 步骤 2：获取镜像
 
-仓库提供的 `ubsio-boostio/docker/Dockerfile` 只打包依赖环境，不复制源码。它同时显式清除了基础镜像的服务入口，容器启动后由使用者选择执行编译命令或 `bio_daemon`。
+先确认宿主机 CPU 架构：
+
+```bash
+uname -m    # x86_64 或 aarch64
+```
+
+**选项一：直接拉取预构建镜像（推荐）**
+
+```bash
+docker pull swr.cn-north-4.myhuaweicloud.com/ubscore/ubs-io:oe2403-sp3-multiarch
+docker image inspect swr.cn-north-4.myhuaweicloud.com/ubscore/ubs-io:oe2403-sp3-multiarch \
+    --format 'image={{.Id}} digest={{index .RepoDigests 0}} arch={{.Architecture}}'
+```
+
+**选项二：从 Dockerfile 构建镜像**
+
+Dockerfile 位于 `ubsio-boostio/docker/Dockerfile`，只复用预构建依赖环境，不复制源码。内容如下：
+
+```dockerfile
+ARG BASE_IMAGE=swr.cn-north-4.myhuaweicloud.com/ubscore/ubs-io:oe2403-sp3-multiarch
+FROM ${BASE_IMAGE}
+
+ARG WORKSPACE_DIR=/workspace
+
+USER root
+
+# 该基础镜像已经提供 UBS IO-BoostIO 的全部直接构建和运行依赖，
+# 不再执行 dnf install，避免重复安装和生成额外软件包层。
+
+WORKDIR ${WORKSPACE_DIR}
+ENTRYPOINT []
+CMD ["/bin/bash"]
+```
 
 在源码根目录执行：
 
 ```bash
 cd /opt/ubs-io
 docker build \
-    --build-arg BASE_IMAGE=hub.oepkgs.net/openeuler/openeuler:24.03-lts-sp3 \
-    -t ubsio-boostio-build:24.03-lts-sp3 \
-    ubsio-boostio/docker
-```
-
-构建完成后记录镜像标识，便于问题定位和多节点一致性检查：
-
-```bash
-docker image inspect ubsio-boostio-build:24.03-lts-sp3 \
+    --build-arg BASE_IMAGE=swr.cn-north-4.myhuaweicloud.com/ubscore/ubs-io:oe2403-sp3-multiarch \
+    -t ubsio-boostio-build:oe2403-sp3 \
+    -f ubsio-boostio/docker/Dockerfile .
+docker image inspect ubsio-boostio-build:oe2403-sp3 \
     --format 'image={{.Id}} created={{.Created}} arch={{.Architecture}}'
-docker image inspect hub.oepkgs.net/openeuler/openeuler:24.03-lts-sp3 \
-    --format '{{index .RepoDigests 0}}'
 ```
 
 > **说明：**
 >
-> - 基础镜像已提供 CA 证书、gzip、procps-ng 和 tar，Dockerfile 不再重复安装。Dockerfile 仅补充 `ubsio-boostio/build/ubs-io.spec`、BoostIO CMake 文件和 `build.sh` 要求但基础镜像缺少的直接依赖；其中 Maven、Autoconf、Automake 和 Libtool 用于首次构建内置 ZooKeeper 客户端。
-> - 首次编译时，如果容器中没有系统安装的 HCOM、libboundscheck 或 ZooKeeper 客户端，CMake 会从 GitCode 拉取并构建对应源码，因此必须保证构建容器能访问 GitCode。
-> - 生产环境建议记录基础镜像的 digest，并在多节点使用同一个 digest，避免同名 tag 更新造成环境不一致。
+> - 经实际检查，该预构建镜像已经提供 UBS IO-BoostIO 所需的全部直接依赖，包括 CMake、GCC/G++、Git、Make、Maven、Autoconf、Automake、Libtool、RDMA、OpenSSL、Ceph、FUSE、libaio、libcurl、libboundscheck 和 numactl 开发包，因此 Dockerfile 不再执行 `dnf install`。
+> - 如果以后更换基础镜像 tag，应先重新核对上述依赖；只在确认存在缺失包后，才将缺失项加入 Dockerfile。
+> - 首次编译时，如果容器中没有系统安装的 HCOM、libboundscheck 或 ZooKeeper 客户端，CMake 会从 GitCode 拉取并构建对应源码，Maven 还会从 Maven Central 获取 ZooKeeper 构建依赖，因此必须保证构建容器能访问这些地址。
+> - 生产环境建议记录镜像 digest，并在多节点使用同一个 digest，避免同名 tag 更新造成环境不一致。
 
 ### 步骤 3：创建构建容器并编译
 
-创建容器。纯编译场景不需要 `--privileged`、NPU 设备或原始磁盘：
+按步骤 2 选择的镜像创建容器。以下命令默认直接使用预构建镜像；若选择 Dockerfile 构建方式，将 `BOOSTIO_IMAGE` 改为 `ubsio-boostio-build:oe2403-sp3`。纯编译场景不需要 `--privileged`、NPU 设备或原始磁盘：
 
 ```bash
-docker run -dit \
+BOOSTIO_IMAGE=swr.cn-north-4.myhuaweicloud.com/ubscore/ubs-io:oe2403-sp3-multiarch
+docker run -d \
     --name ubsio-boostio-build \
     --network host \
     -v /opt/ubs-io:/workspace \
-    ubsio-boostio-build:24.03-lts-sp3 \
-    /bin/bash
+    "${BOOSTIO_IMAGE}" \
+    sleep infinity
 ```
 
-检查源码挂载和实际构建版本：
+进入容器前验证源码挂载成功：
 
 ```bash
 docker exec ubsio-boostio-build \
     test -f /workspace/ubsio-boostio/build.sh
+```
+
+若文件不存在，请检查 `docker run` 的 `-v` 参数以及宿主机源码路径。
+
+检查源码挂载和实际构建版本：
+
+```bash
 docker exec ubsio-boostio-build \
     git -C /workspace status --short --branch
 docker exec ubsio-boostio-build \
     git -C /workspace rev-parse HEAD
 ```
 
-执行 Release 构建：
+进入容器，或直接通过 `docker exec` 执行 Release 构建：
 
 ```bash
 docker exec ubsio-boostio-build \
@@ -391,6 +409,7 @@ cat /proc/mdstat
 将 `/dev/nvmeXnY` 替换为已经完成只读核验的缓存盘：
 
 ```bash
+BOOSTIO_IMAGE=swr.cn-north-4.myhuaweicloud.com/ubscore/ubs-io:oe2403-sp3-multiarch
 docker run -d \
     --name ubsio-boostio \
     --network host \
@@ -402,7 +421,7 @@ docker run -d \
     -v /var/log/boostio:/var/log/boostio \
     -v /etc/ceph:/etc/ceph:ro \
     -e LD_LIBRARY_PATH=/workspace/ubsio-boostio/dist/boostio/lib:/workspace/ubsio-boostio/dist/3rdparty/ubs-comm/lib:/workspace/ubsio-boostio/dist/3rdparty/libboundscheck/lib:/usr/lib64:/usr/lib \
-    ubsio-boostio-build:24.03-lts-sp3 \
+    "${BOOSTIO_IMAGE}" \
     /workspace/ubsio-boostio/dist/boostio/bin/bio_daemon
 ```
 
@@ -437,7 +456,8 @@ tail -n 100 /var/log/boostio/bio.log
 
 ```bash
 git -C /opt/ubs-io rev-parse HEAD
-docker image inspect ubsio-boostio-build:24.03-lts-sp3 --format '{{.Id}}'
+docker image inspect swr.cn-north-4.myhuaweicloud.com/ubscore/ubs-io:oe2403-sp3-multiarch \
+    --format 'image={{.Id}} digest={{index .RepoDigests 0}} arch={{.Architecture}}'
 docker inspect ubsio-boostio --format '{{.HostConfig.NetworkMode}} {{.HostConfig.IpcMode}}'
 docker logs --tail 200 ubsio-boostio
 ```

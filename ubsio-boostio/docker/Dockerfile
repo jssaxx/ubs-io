@@ -1,38 +1,15 @@
-ARG BASE_IMAGE=hub.oepkgs.net/openeuler/openeuler:24.03-lts-sp3
+ARG BASE_IMAGE=swr.cn-north-4.myhuaweicloud.com/ubscore/ubs-io:oe2403-sp3-multiarch
 FROM ${BASE_IMAGE}
 
 ARG WORKSPACE_DIR=/workspace
 
 USER root
 
-# UBS IO-BoostIO development image. The source tree is mounted at runtime and
-# remains outside the image so that the same image can build different commits.
-RUN dnf install -y \
-        autoconf \
-        automake \
-        cmake \
-        dos2unix \
-        fuse-devel \
-        gcc \
-        gcc-c++ \
-        git \
-        hostname \
-        libaio-devel \
-        libboundscheck \
-        libcurl-devel \
-        librados-devel \
-        libtool \
-        make \
-        maven \
-        numactl-devel \
-        openssl-devel \
-        rdma-core-devel \
-    && dnf clean all \
-    && rm -rf /var/cache/dnf
+# The pinned base image already provides every direct UBS IO-BoostIO build and
+# runtime dependency. Do not reinstall packages or create an extra DNF layer.
 
 WORKDIR ${WORKSPACE_DIR}
 
-# Keep this as a shell-based build/runtime environment; the caller chooses the
-# UBS IO-BoostIO process explicitly.
+# The caller explicitly chooses the build command or UBS IO-BoostIO process.
 ENTRYPOINT []
 CMD ["/bin/bash"]
