@@ -14,6 +14,8 @@
 #define BOOSTIO_WCACHE_MANAGER_H
 
 #include <atomic>
+#include <deque>
+#include <map>
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
@@ -74,6 +76,7 @@ public:
     BResult DeleteWCache(uint64_t flowId);
 
     BResult RecoverCache(FlowPtr metaFlow);
+    void StartGlobalEviction();
 
     BResult ServiceUngradeFlush();
 
@@ -181,6 +184,22 @@ private:
     BResult ClearProcCache(uint32_t procId);
 
     void RetryEvictThread();
+    using EvictDomain = std::pair<WCacheTierType, uint16_t>;
+    struct GlobalEvictQueue {
+        std::deque<uint64_t> inactiveFlows;
+        uint64_t cursor = 0;
+        bool scheduled = false;
+        bool pending = false;
+    };
+    void ScheduleGlobalEvict(WCacheTierType type);
+    void ScheduleEvictLocked(const EvictDomain &domain);
+    void RunGlobalEvict(const EvictDomain &domain);
+    bool IsCurrentFlow(const WCachePtr &flow, const std::map<uint16_t, CmPtInfo> &ptView) const;
+    void EnqueueInactiveLocked(const WCachePtr &flow);
+    void RemoveEvictFlowLocked(uint16_t diskId, uint64_t flowId);
+    bool RetireInactiveFlows(const EvictDomain &domain);
+    WCachePtr SelectEvictFlowLocked(const EvictDomain &domain, const std::map<uint16_t, CmPtInfo> &ptView);
+    void RetryGlobalEviction();
     void DestroyEvictThread();
     void ScheduleFlushMetaEvents();
     void FlushMetaEvents();
@@ -196,6 +215,10 @@ private:
     std::atomic<bool> mRunning{ true };
     bool mEnableCrc = false;
     bool mHasDiskCache = true;
+    bool mStandaloneMode = false;
+    std::atomic<bool> mGlobalEvictReady{ false };
+    // Only IDs are queued: worker and SetSlice references, not the scheduling queue, own a WCache lifetime.
+    std::map<EvictDomain, GlobalEvictQueue> mGlobalEvictQueues;
 
     ExecutorServicePtr mEvictService[MAX_WCACHE_TIER]{ nullptr, nullptr };
     ExecutorServicePtr mGcEvictService{ nullptr };

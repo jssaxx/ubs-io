@@ -1244,6 +1244,8 @@ BResult BioServer::BioCacheInit()
     }
 
     mCacheInited = true;
+    // Fault handling must own recovered flows before background eviction can issue disk I/O.
+    WCacheManager::Instance()->StartGlobalEviction();
     return BIO_OK;
 }
 

@@ -47,7 +47,15 @@ struct WFlowMetaDataSlice {
 
 class WFlowTruncateCursor {
 public:
+    explicit WFlowTruncateCursor(uint64_t preTruncateSliceIndex = 0)
+        : mPreTruncateSliceIndex(preTruncateSliceIndex)
+    {}
+
     WCacheSlicePtr GetTruncateSlice(const WCacheSlicePtr &slice);
+
+    WCacheSlicePtr GetTruncateSlice(const WCacheSlicePtr &slice, uint64_t &preTruncateSliceIndex);
+
+    void MarkEvictedIndex(uint64_t indexInFlow);
 
     uint64_t GetPreTruncateSliceIndex();
 
@@ -66,6 +74,7 @@ private:
 
     std::mutex mEvictedSliceListLock;
     std::set<WCacheSlicePtr, WCacheSliceCmp> mEvictedSlices;
+    std::set<uint64_t> mEvictedIndexes;
     DEFINE_REF_COUNT_VARIABLE;
 };
 using WFlowTruncateCursorPtr = Ref<WFlowTruncateCursor>;
@@ -107,6 +116,8 @@ public:
     BResult ReleaseFaultedResources();
 
     BResult Evict(const WCacheSlicePtr &slice);
+
+    void MarkEvictedIndex(uint64_t indexInFlow);
 
     bool IsEmptyEvictSliceQueue();
 

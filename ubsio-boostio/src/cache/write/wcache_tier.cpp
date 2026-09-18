@@ -51,7 +51,9 @@ BResult WCacheTier::Init(WCacheTierType cacheTier, uint64_t flowId, uint16_t dis
 
     LOG_INFO("Data flowId:" << dataFlowId << ", flowType:" << flowType);
 
-    mFlowTruncateCursor = MakeRef<WFlowTruncateCursor>();
+    uint64_t preTruncateSliceIndex =
+        (mMetaFlow->GetTruncateOffset() + mMetaEntrySize - 1) / mMetaEntrySize;
+    mFlowTruncateCursor = MakeRef<WFlowTruncateCursor>(preTruncateSliceIndex);
     ChkTrueNot(mFlowTruncateCursor != nullptr, BIO_ALLOC_FAIL);
 
     return BIO_OK;
@@ -111,7 +113,7 @@ BResult WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice, const Sli
         }
     }
 
-    destSliceRef = MakeRef<WCacheSliceRef>(dataSlice);
+    destSliceRef = MakeRef<WCacheSliceRef>(dataSlice, SLICE_PENDING);
     ChkTrueNot(destSliceRef != nullptr, BIO_INNER_RETRY);
     LOG_DEBUG("Wcache write memory success, key: " << key << ".");
     return BIO_OK;
@@ -307,12 +309,13 @@ BResult WCacheTier::Evict(const WCacheSlicePtr &slice)
         LOG_ERROR("slice is null.");
         return BIO_INNER_ERR;
     }
-    auto truncateSlice = mFlowTruncateCursor->GetTruncateSlice(slice);
+    uint64_t preTruncateSliceIndex = 0;
+    auto truncateSlice = mFlowTruncateCursor->GetTruncateSlice(slice, preTruncateSliceIndex);
     if (truncateSlice == nullptr) {
         return BIO_OK;
     }
 
-    auto ret = mMetaFlow->TruncateOffset((truncateSlice->GetIndexInFlow() + 1) * mMetaEntrySize);
+    auto ret = mMetaFlow->TruncateOffset(preTruncateSliceIndex * mMetaEntrySize);
     ChkTrue(ret == BIO_OK, ret,
         "Failed to truncateOffset in metaFlow, FlowId:" << truncateSlice->GetFlowId() << ", fLowType:" <<
         truncateSlice->GetFlowType() << ", flowOffset:" << truncateSlice->GetOffsetInFlow() << ", flowIndex:" <<
@@ -328,6 +331,11 @@ BResult WCacheTier::Evict(const WCacheSlicePtr &slice)
         truncateSlice->GetLength());
 
     return BIO_OK;
+}
+
+void WCacheTier::MarkEvictedIndex(uint64_t indexInFlow)
+{
+    mFlowTruncateCursor->MarkEvictedIndex(indexInFlow);
 }
 
 inline BResult WCacheTier::GetSlice(const FlowPtr &flow, const SliceKey &sliceKey, WCacheSlicePtr &slice)
@@ -375,32 +383,95 @@ void WCacheTier::SetIsNormal(bool isNormal)
 
 WCacheSlicePtr WFlowTruncateCursor::GetTruncateSlice(const WCacheSlicePtr &slice)
 {
+    uint64_t preTruncateSliceIndex = 0;
+    return GetTruncateSlice(slice, preTruncateSliceIndex);
+}
+
+WCacheSlicePtr WFlowTruncateCursor::GetTruncateSlice(const WCacheSlicePtr &slice,
+    uint64_t &preTruncateSliceIndex)
+{
     std::lock_guard<std::mutex> lock(mEvictedSliceListLock);
+    preTruncateSliceIndex = mPreTruncateSliceIndex;
+    if (slice == nullptr) {
+        LOG_ERROR("Get truncate slice failed, slice is null.");
+        return nullptr;
+    }
     LOG_DEBUG("FlowId:" << slice->GetFlowId() << ", fLowType:" << slice->GetFlowType() << ", flowOffset:" <<
                         slice->GetOffsetInFlow() << ", flowIndex:" << slice->GetIndexInFlow() <<
                         ", len:" << slice->GetLength());
 
     // insert to set and sort by indexInFlow.
-    mEvictedSlices.emplace(slice);
+    uint64_t sliceIndex = slice->GetIndexInFlow();
+    if (sliceIndex == NO_MAX_VALUE64) {
+        LOG_ERROR("Get truncate slice failed, index reaches uint64 max, flowId:" << slice->GetFlowId());
+        return nullptr;
+    }
+    if (sliceIndex >= mPreTruncateSliceIndex) {
+        mEvictedSlices.emplace(slice);
+    } else {
+        LOG_DEBUG("Ignore stale evicted slice, flowId:" << slice->GetFlowId() << ", flowIndex:" << sliceIndex <<
+            ", truncateIndex:" << mPreTruncateSliceIndex);
+    }
 
     // obtain the last truncate slice from the indexInFlow that is truncated last time.
     WCacheSlicePtr truncateSlice = nullptr;
     uint64_t truncateSliceIndex = mPreTruncateSliceIndex;
-    auto evictSliceIt = mEvictedSlices.begin();
-    while (evictSliceIt != mEvictedSlices.end()) {
-        auto evictSlice = evictSliceIt->Get();
-        if (evictSlice->GetIndexInFlow() == truncateSliceIndex) {
-            truncateSlice = evictSlice;
+    size_t maxProcessCount = mEvictedSlices.size() + mEvictedIndexes.size();
+    for (size_t processedCount = 0; processedCount < maxProcessCount; ++processedCount) {
+        auto evictSliceIt = mEvictedSlices.begin();
+        if (evictSliceIt != mEvictedSlices.end() &&
+            evictSliceIt->Get()->GetIndexInFlow() < truncateSliceIndex) {
             mEvictedSlices.erase(evictSliceIt);
-            evictSliceIt = mEvictedSlices.begin();
-            truncateSliceIndex++;
-            mPreTruncateSliceIndex = truncateSliceIndex;
-        } else {
+            continue;
+        }
+
+        auto evictedIndexIt = mEvictedIndexes.begin();
+        if (evictedIndexIt != mEvictedIndexes.end() && *evictedIndexIt < truncateSliceIndex) {
+            mEvictedIndexes.erase(evictedIndexIt);
+            continue;
+        }
+
+        if (truncateSliceIndex == NO_MAX_VALUE64) {
+            LOG_ERROR("Stop advancing truncate cursor at uint64 max.");
             break;
         }
+
+        if (evictSliceIt != mEvictedSlices.end() &&
+            evictSliceIt->Get()->GetIndexInFlow() == truncateSliceIndex) {
+            truncateSlice = evictSliceIt->Get();
+            mEvictedSlices.erase(evictSliceIt);
+            ++truncateSliceIndex;
+            mPreTruncateSliceIndex = truncateSliceIndex;
+            continue;
+        }
+
+        if (evictedIndexIt == mEvictedIndexes.end() || *evictedIndexIt != truncateSliceIndex) {
+            break;
+        }
+        mEvictedIndexes.erase(evictedIndexIt);
+        ++truncateSliceIndex;
+        mPreTruncateSliceIndex = truncateSliceIndex;
     }
 
+    preTruncateSliceIndex = mPreTruncateSliceIndex;
     return truncateSlice;
+}
+
+void WFlowTruncateCursor::MarkEvictedIndex(uint64_t indexInFlow)
+{
+    std::lock_guard<std::mutex> lock(mEvictedSliceListLock);
+    if (indexInFlow == NO_MAX_VALUE64) {
+        LOG_ERROR("Mark evicted index failed, index reaches uint64 max.");
+        return;
+    }
+    if (indexInFlow < mPreTruncateSliceIndex) {
+        return;
+    }
+    mEvictedIndexes.emplace(indexInFlow);
+    while (mPreTruncateSliceIndex != NO_MAX_VALUE64 &&
+        mEvictedIndexes.erase(mPreTruncateSliceIndex) > 0) {
+        ++mPreTruncateSliceIndex;
+    }
 }
 
 inline uint64_t WFlowTruncateCursor::GetPreTruncateSliceIndex()
@@ -415,7 +486,7 @@ void WFlowTruncateCursor::SetGlobMinTruncateIndex(uint64_t globMinTruncateIndex)
 
 inline bool WFlowTruncateCursor::IsEmptyEvictSlices()
 {
-    return mEvictedSlices.empty();
+    return mEvictedSlices.empty() && mEvictedIndexes.empty();
 }
 
 void WFlowTruncateCursor::SetIsNormal(bool isNormal)
