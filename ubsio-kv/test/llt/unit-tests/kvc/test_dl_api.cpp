@@ -27,19 +27,16 @@ TEST_F(KvTest, BioSdkStubLoadsAndCoversAllDelegates)
     ASSERT_EQ(DlBioSdkApi::LoadLibrary(), UBSIO_KVC_OK);
     EXPECT_EQ(DlBioSdkApi::LoadLibrary(), UBSIO_KVC_OK);
 
-    EXPECT_EQ(DlBioSdkApi::KvBioInit(-2), -1);
-    EXPECT_EQ(DlBioSdkApi::KvBioInit(-1), UBSIO_KVC_OK);
-    EXPECT_EQ(FakeBioGetStandaloneDevice(), 0U);
+    EXPECT_EQ(DlBioSdkApi::KvBioInit(), UBSIO_KVC_OK);
 
     FakeBioSetResult("BioCreateCache", RET_CACHE_EXISTS);
-    EXPECT_EQ(DlBioSdkApi::KvBioInit(3), UBSIO_KVC_OK);
-    EXPECT_EQ(FakeBioGetStandaloneDevice(), 3U);
+    EXPECT_EQ(DlBioSdkApi::KvBioInit(), UBSIO_KVC_OK);
 
     FakeBioSetResult("BioInitialize", RET_CACHE_ERROR);
-    EXPECT_EQ(DlBioSdkApi::KvBioInit(0), -1);
+    EXPECT_EQ(DlBioSdkApi::KvBioInit(), -1);
     FakeBioSetResult("BioInitialize", RET_CACHE_OK);
     FakeBioSetResult("BioCreateCache", RET_CACHE_ERROR);
-    EXPECT_EQ(DlBioSdkApi::KvBioInit(0), -1);
+    EXPECT_EQ(DlBioSdkApi::KvBioInit(), -1);
     FakeBioSetResult("BioCreateCache", RET_CACHE_OK);
 
     ObjLocation location{};
@@ -127,7 +124,6 @@ TEST_F(KvTest, AclStubCoversUnavailableLoadAndDelegates)
     EXPECT_EQ(ACLApi::AclrtMemcpy2dAsync(nullptr, 0, nullptr, 0, 0, 0, 0, nullptr), UBSIO_KVC_ERR);
     EXPECT_EQ(ACLApi::AclrtMemset(nullptr, 0, 0, 0), UBSIO_KVC_ERR);
     EXPECT_EQ(ACLApi::RtGetDeviceInfo(0, 0, 0, nullptr), UBSIO_KVC_ERR);
-    EXPECT_EQ(ACLApi::AclrtGetLogicDevIdByUserDevId(0, nullptr), UBSIO_KVC_ERR);
 
     auto ascendHome = AscendHome();
     ASSERT_FALSE(ascendHome.empty());
@@ -181,10 +177,6 @@ TEST_F(KvTest, AclStubCoversUnavailableLoadAndDelegates)
     int64_t info = 0;
     EXPECT_EQ(ACLApi::RtGetDeviceInfo(5, 0, 0, &info), UBSIO_KVC_OK);
     EXPECT_EQ(info, 1005);
-    int32_t logicDevice = -1;
-    EXPECT_EQ(ACLApi::AclrtGetLogicDevIdByUserDevId(6, &logicDevice), UBSIO_KVC_OK);
-    EXPECT_EQ(logicDevice, 106);
-
     EXPECT_EQ(ACLApi::AclrtFree(deviceMemory), UBSIO_KVC_OK);
     EXPECT_EQ(ACLApi::AclrtFreeHost(hostMemory), UBSIO_KVC_OK);
     ACLApi::CleanupLibrary();

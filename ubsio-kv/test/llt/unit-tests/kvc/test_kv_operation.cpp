@@ -25,8 +25,9 @@ void RestoreAscendHome(const std::string &path)
 
 TEST_F(KvTest, KvcInitializationCoversDeviceAndFailurePaths)
 {
+    EXPECT_EQ(UbsioKvCacheInit(-2), UBSIO_KVC_INVALID_PARAM);
+    EXPECT_EQ(KvcOperationInit(-2), UBSIO_KVC_INVALID_PARAM);
     EXPECT_EQ(UbsioKvCacheInit(-1), UBSIO_KVC_OK);
-    EXPECT_EQ(FakeBioGetStandaloneDevice(), 0U);
     EXPECT_EQ(UbsioKvCacheInit(-1), UBSIO_KVC_OK);
     UbsioKvCacheExit();
 
@@ -53,13 +54,6 @@ TEST_F(KvTest, KvcInitializationCoversDeviceAndFailurePaths)
 
     FakeBioReset();
     FakeAclReset();
-    FakeAclSetResult("aclrtGetLogicDevIdByUserDevId", 1);
-    EXPECT_EQ(UbsioKvCacheInit(0), UBSIO_KVC_ERR);
-    UbsioKvCacheExit();
-    ACLApi::CleanupLibrary();
-
-    FakeBioReset();
-    FakeAclReset();
     FakeAclSetResult("aclrtSetDevice", 1);
     EXPECT_EQ(UbsioKvCacheInit(0), UBSIO_KVC_ERR);
     UbsioKvCacheExit();
@@ -75,7 +69,6 @@ TEST_F(KvTest, KvcInitializationCoversDeviceAndFailurePaths)
     FakeBioReset();
     FakeAclReset();
     EXPECT_EQ(UbsioKvCacheInit(5), UBSIO_KVC_OK);
-    EXPECT_EQ(FakeBioGetStandaloneDevice(), 105U);
     EXPECT_NE(KvcStreamManager::GetAclStream(), nullptr);
     EXPECT_EQ(KvcStreamManager::InitAclStream(5), UBSIO_KVC_OK);
     UbsioKvCacheExit();

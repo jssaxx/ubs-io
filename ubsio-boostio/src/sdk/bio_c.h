@@ -217,13 +217,6 @@ typedef struct {
 CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf);
 
 /**
- * @brief: Set standalone local device mapping before BioInitialize(STANDALONE, ...)
- *
- * @param[in]: deviceId: local standalone device/process id of the current process
- */
-void BioSetStandaloneDevice(uint32_t deviceId);
-
-/**
  * @brief Register a same-process UBS IO metadata event callback.
  *
  * The events buffer and key pointers are only valid during the callback; the callee must copy keys if needed.

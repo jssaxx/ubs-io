@@ -20,16 +20,6 @@
 #include "ubsio_kvc_def.h"
 #include "dl_biosdk_api.h"
 
-namespace {
-constexpr int32_t KVC_NO_DEVICE_ID = -1;
-constexpr uint32_t DEFAULT_STANDALONE_DEVICE_ID = 0;
-
-uint32_t GetStandaloneDeviceId(int32_t devId)
-{
-    return devId == KVC_NO_DEVICE_ID ? DEFAULT_STANDALONE_DEVICE_ID : static_cast<uint32_t>(devId);
-}
-}
-
 namespace ock {
 namespace ubsio {
 
@@ -40,7 +30,6 @@ const std::string DlBioSdkApi::gBioSdkLibName = "libbio_sdk.so";
 
 BioExitFunc DlBioSdkApi::pBioExit = nullptr;
 BioInitFunc DlBioSdkApi::pBioInitialize = nullptr;
-BioSetStandaloneDeviceFunc DlBioSdkApi::pBioSetStandaloneDevice = nullptr;
 BioCreateCacheFunc DlBioSdkApi::pBioCreateCache = nullptr;
 BioCalLocationFunc DlBioSdkApi::pBioCalcLocation = nullptr;
 BioGetFunc DlBioSdkApi::pBioGet = nullptr;
@@ -73,7 +62,6 @@ int32_t DlBioSdkApi::LoadLibrary()
     /* load sym */
     DL_LOAD_SYM(pBioExit, BioExitFunc, bioSdkHandle, "BioExit");
     DL_LOAD_SYM(pBioInitialize, BioInitFunc, bioSdkHandle, "BioInitialize");
-    DL_LOAD_SYM(pBioSetStandaloneDevice, BioSetStandaloneDeviceFunc, bioSdkHandle, "BioSetStandaloneDevice");
     DL_LOAD_SYM(pBioGet, BioGetFunc, bioSdkHandle, "BioGet");
     DL_LOAD_SYM(pBioPut, BioPutFunc, bioSdkHandle, "BioPut");
     DL_LOAD_SYM(pBioStat, BioStatFunc, bioSdkHandle, "BioStat");
@@ -104,7 +92,6 @@ void DlBioSdkApi::CleanupLibrary()
 
     pBioExit = nullptr;
     pBioInitialize = nullptr;
-    pBioSetStandaloneDevice = nullptr;
     pBioGet = nullptr;
     pBioPut = nullptr;
     pBioStat = nullptr;
@@ -127,20 +114,9 @@ void DlBioSdkApi::CleanupLibrary()
     gLoaded = false;
 }
 
-int32_t DlBioSdkApi::KvBioInit(int32_t devId)
+int32_t DlBioSdkApi::KvBioInit()
 {
     LOG_INFO("Start boostio begin...");
-    if (devId < KVC_NO_DEVICE_ID) {
-        LOG_ERROR("Invalid device id:" << devId << ".");
-        return -1;
-    }
-
-    auto standaloneDeviceId = GetStandaloneDeviceId(devId);
-    if (devId == KVC_NO_DEVICE_ID) {
-        LOG_INFO("Use default standalone device id:" << standaloneDeviceId << " for kv device id:" << devId << ".");
-    }
-    SetStandaloneDevice(standaloneDeviceId);
-
     ClientOptionsConfig optConf{};
     optConf.logType = (LogType)(1);
     optConf.enable = false;

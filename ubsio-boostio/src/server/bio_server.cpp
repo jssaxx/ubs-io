@@ -32,7 +32,6 @@
 #include "flow_manager.h"
 #include "htracer.h"
 #include "interceptor_server.h"
-#include "standalone_device_id_gather.h"
 #include "standalone_view.h"
 #include "bio_server.h"
 
@@ -134,8 +133,8 @@ std::vector<ModuleDesc> BioServer::BuildStandaloneModules()
         std::bind(&BioServer::BioTraceExit, this));
     modules.emplace_back("UnderFs", std::bind(&BioServer::BioUnderFsInit, this), nullptr, nullptr,
         std::bind(&BioServer::BioUnderFsExit, this));
-    modules.emplace_back("StandaloneDeviceIdGather", std::bind(&BioServer::BioStandaloneDeviceIdGatherInit, this),
-        nullptr, nullptr, nullptr);
+    modules.emplace_back("StandaloneSlotLease", std::bind(&BioServer::BioStandaloneSlotLeaseInit, this),
+        nullptr, nullptr, std::bind(&BioServer::BioStandaloneSlotLeaseExit, this));
     modules.emplace_back("Bdm", std::bind(&BioServer::BioBdmInit, this), nullptr, nullptr,
         std::bind(&BioServer::BioBdmExit, this));
     modules.emplace_back("StandaloneMem", std::bind(&BioServer::BioStandaloneMemInit, this), nullptr, nullptr,
@@ -217,10 +216,9 @@ BResult BioServer::Start()
     BIO_TP_END;
 
     // 1. Initialize infrastructure
+    mStandaloneMode = false;
     auto ret = InitializeRuntime();
     ChkTrue(ret == BIO_OK, ret, "Initialize runtime failed, result:" << ret << ".");
-
-    mStandaloneMode = false;
 
     // 2. Initialize boostio service
     ret = ProcessService(BuildClusterModules());
@@ -245,10 +243,9 @@ BResult BioServer::StartStandalone()
     }
     BIO_TP_END;
 
+    mStandaloneMode = true;
     auto ret = InitializeRuntime();
     ChkTrue(ret == BIO_OK, ret, "Initialize runtime failed, result:" << ret << ".");
-
-    mStandaloneMode = true;
     ret = ProcessService(BuildStandaloneModules());
     ChkTrue(ret == BIO_OK, ret, "Process standalone service failed, result:" << ret << ".");
 
@@ -291,6 +288,7 @@ BResult BioServer::BioConfigInit()
         BIO_LOG_STD_ERR("Create bio configuration instance failed.");
         return BIO_ERR;
     }
+    mConfig->SetStandaloneMode(mStandaloneMode);
 
     BResult result = BIO_INNER_ERR;
     BIO_TP_START(CONFIG_INIT_FAIL, &result, -1);
@@ -360,34 +358,28 @@ void BioServer::BioUnderFsExit()
     UfsHelper::Instance()->Stop();
 }
 
-BResult BioServer::BioStandaloneDeviceIdGatherInit()
+BResult BioServer::BioStandaloneSlotLeaseInit()
 {
     auto &daemonConfig = mConfig->GetDaemonConfig();
     if (!daemonConfig.hasDiskCache) {
         return mConfig->SelectStandaloneDiskByDeviceInfo();
     }
-    if (daemonConfig.standaloneDeviceCount == 0) {
-        LOG_ERROR("Standalone mode with disk cache requires ubsio.standalone.device_count in range [1, " <<
-            DEVICE_SIZE << "]. Legacy device_count=0 disk selection is not supported.");
-        return BIO_INVALID_PARAM;
-    }
-
-    uint32_t logicDeviceId = mConfig->GetStandaloneDeviceId();
-    uint32_t virtualDeviceIndex = 0;
-    uint64_t gatherTimeoutMs =
-        static_cast<uint64_t>(daemonConfig.standaloneDeviceIdGatherTimeoutSec) * NO_1000;
-    auto ret = StandaloneDeviceIdGather::Gather(logicDeviceId, daemonConfig.standaloneDeviceCount,
-        virtualDeviceIndex, gatherTimeoutMs);
-    ChkTrue(ret == BIO_OK, ret, "Gather standalone logic device IDs failed, logicDeviceId:" << logicDeviceId <<
-        ", deviceCount:" << daemonConfig.standaloneDeviceCount << ", timeoutSec:" <<
-        daemonConfig.standaloneDeviceIdGatherTimeoutSec << ", result:" << ret << ".");
-
-    LOG_INFO("Overwrite standalone device ID with virtual index, logicDeviceId:" << logicDeviceId <<
-        ", virtualDeviceIndex:" << virtualDeviceIndex << ".");
-    mConfig->SetStandaloneDeviceInfo(virtualDeviceIndex);
+    ChkTrue(daemonConfig.standaloneDeviceCount > 0, BIO_INVALID_PARAM,
+        "Standalone disk cache requires ubsio.standalone.device_count in range [1," << DEVICE_SIZE << "].");
+    uint32_t slotIndex = UINT32_MAX;
+    auto ret = mStandaloneSlotLease.Acquire(daemonConfig.standaloneDeviceCount, slotIndex);
+    ChkTrue(ret == BIO_OK, ret, "Acquire standalone slot failed, result:" << ret << ".");
+    mConfig->SetStandaloneDeviceInfo(slotIndex);
     ret = mConfig->SelectStandaloneDiskByDeviceInfo();
-    ChkTrue(ret == BIO_OK, ret, "Select standalone disk failed, ret:" << ret << ".");
-    return BIO_OK;
+    if (ret != BIO_OK) {
+        mStandaloneSlotLease.Release();
+    }
+    return ret;
+}
+
+void BioServer::BioStandaloneSlotLeaseExit()
+{
+    mStandaloneSlotLease.Release();
 }
 
 BResult BioServer::BioBdmInit()
@@ -415,7 +407,7 @@ BResult BioServer::BioBdmInit()
                                                            << ".");
     ret = BdmInit();
     ChkTrue(ret == BDM_CODE_OK, BIO_ERR, "Failed to init BDM, result:" << ret << ".");
-    bool useVirtualRegions = mStandaloneMode && daemonConfig.standaloneDeviceCount != 0;
+    bool useVirtualRegions = mStandaloneMode && daemonConfig.hasDiskCache;
     if (!useVirtualRegions) {
         BdmSetDiskStartupInfo(mStandaloneMode ? 1U : 0U, mStandaloneMode ? mConfig->GetStandaloneDeviceId() : 0U);
     }
@@ -444,6 +436,11 @@ BResult BioServer::BioBdmInit()
         ret = BdmStart(&diskList, daemonConfig.segment);
     }
     ChkTrue(ret == BDM_CODE_OK, BIO_ERR, "Failed to start BDM, result:" << ret << ".");
+
+    if (useVirtualRegions) {
+        ret = mStandaloneSlotLease.PublishReady();
+        ChkTrue(ret == BIO_OK, ret, "Publish standalone initialization ready failed, result:" << ret << ".");
+    }
 
     if (useVirtualRegions) {
         for (uint32_t diskId = 0; diskId < diskList.num; ++diskId) {
@@ -1580,16 +1577,6 @@ int32_t BioServerStandaloneInit()
         return BIO_ALLOC_FAIL;
     }
     return bioServer->StartStandalone();
-}
-
-void SetStandaloneDeviceInfo(uint32_t deviceId)
-{
-    auto config = BioConfig::Instance();
-    if (UNLIKELY(config == nullptr)) {
-        LOG_ERROR("Make bio config instance failed.");
-        return;
-    }
-    config->SetStandaloneDeviceInfo(deviceId);
 }
 
 void BioServerExit(void)

@@ -10,6 +10,7 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdlib>
 #include <cstdio>
@@ -83,8 +84,6 @@ void BioConfig::LoadDefaultConf()
         VStrEnum::Create(BDM_IO_URING_SQPOLL_MODE.first, "auto||required||disabled"));
     AddIntConf(BDM_SYNC_WORKER_NUM, VIntRange::Create(BDM_SYNC_WORKER_NUM.first, NO_1, NO_64));
     AddIntConf(STANDALONE_DEVICE_COUNT, VIntRange::Create(STANDALONE_DEVICE_COUNT.first, 0, DEVICE_SIZE));
-    AddIntConf(STANDALONE_DEVICE_ID_GATHER_TIMEOUT_SEC,
-        VIntRange::Create(STANDALONE_DEVICE_ID_GATHER_TIMEOUT_SEC.first, NO_1, INT32_MAX));
     AddStrConf(STANDALONE_FORCE_NEW_DISK, VStrBoolRange::Create(STANDALONE_FORCE_NEW_DISK.first));
     AddIntConf(SDK_MEM_CAPACITY_SIZE_MB);
 
@@ -330,8 +329,6 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
     mDaemonConfig.segment = static_cast<uint32_t>(conf->GetInt(SEGMENT_SIZE_MB.first) * MB_SIZE);
     mDaemonConfig.sdkPoolSize = static_cast<uint64_t>(conf->GetInt(SDK_MEM_CAPACITY_SIZE_MB.first) * MB_SIZE);
     mDaemonConfig.standaloneDeviceCount = static_cast<uint32_t>(conf->GetInt(STANDALONE_DEVICE_COUNT.first));
-    mDaemonConfig.standaloneDeviceIdGatherTimeoutSec =
-        static_cast<uint32_t>(conf->GetInt(STANDALONE_DEVICE_ID_GATHER_TIMEOUT_SEC.first));
     mDaemonConfig.standaloneForceNewDisk = conf->GetStr(STANDALONE_FORCE_NEW_DISK.first) == "true";
     mDaemonConfig.negotiateDelay = static_cast<uint32_t>(conf->GetInt(BIO_WCACHE_NEGOTIATE_DELAY.first) * NO_1000);
     mDaemonConfig.memCap = static_cast<uint64_t>(conf->GetInt(MEM_CAPACITY_SIZE_GB.first) * GB_SIZE);
@@ -392,7 +389,7 @@ BResult BioConfig::AutoConfigDaemonDisk(const ConfigurationPtr &conf)
             DISK_PATH_CONFIG_MAX_NUM << ". " << diskMask);
         return BIO_ERR;
     }
-    bool useStandaloneVirtualDisks = mStandaloneDeviceInfo.configured && mDaemonConfig.standaloneDeviceCount != 0;
+    bool useStandaloneVirtualDisks = mStandaloneMode && mDaemonConfig.standaloneDeviceCount != 0;
     if (useStandaloneVirtualDisks && mDaemonConfig.diskList.size() > DEVICE_SIZE) {
         BIO_LOG_STD_ERR("Standalone virtual disk path num limit:" << DEVICE_SIZE << ", input:" <<
             mDaemonConfig.diskList.size() << ".");
@@ -661,37 +658,7 @@ BResult BioConfig::SelectStandaloneDiskByDeviceInfo()
         return BIO_ERR;
     }
 
-    if (mDaemonConfig.standaloneDeviceCount != 0) {
-        return SelectStandaloneVirtualDisks(diskNum);
-    }
-
-    return SelectStandaloneDiskLegacy(diskNum);
-}
-
-BResult BioConfig::SelectStandaloneDiskLegacy(uint16_t diskNum)
-{
-    uint32_t diskIndex = mStandaloneDeviceInfo.deviceId;
-    if (diskIndex >= diskNum) {
-        LOG_ERROR("Invalid standalone device info, deviceId:" << diskIndex <<
-            ", diskPathNum:" << diskNum << ". The device id must match the index in ubsio.disk.path.");
-        return BIO_INVALID_PARAM;
-    }
-    if (mDaemonConfig.diskCaps[diskIndex] <= 0) {
-        LOG_ERROR("Invalid standalone disk capacity, diskIndex:" << diskIndex << ", cap:" <<
-            mDaemonConfig.diskCaps[diskIndex] << ".");
-        return BIO_INVALID_PARAM;
-    }
-
-    std::string selectedPath = mDaemonConfig.diskList[diskIndex];
-    int64_t selectedCapacity = mDaemonConfig.diskCaps[diskIndex];
-    int64_t selectedPhysicalCapacity = mDaemonConfig.diskPhysicalCaps[diskIndex];
-    mDaemonConfig.diskList.assign(1, selectedPath);
-    mDaemonConfig.diskCaps.assign(1, selectedCapacity);
-    mDaemonConfig.diskPhysicalCaps.assign(1, selectedPhysicalCapacity);
-    mStandaloneDiskIndex = diskIndex;
-    LOG_INFO("Standalone selects cache disk by device info, deviceId:" << diskIndex <<
-        ", configuredDiskNum:" << diskNum << ", selectedPath:" << selectedPath << ".");
-    return BIO_OK;
+    return SelectStandaloneVirtualDisks(diskNum);
 }
 
 BResult BioConfig::SelectStandaloneVirtualDisks(uint16_t diskNum)

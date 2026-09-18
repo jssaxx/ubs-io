@@ -63,9 +63,7 @@ const auto DISK_CONF_PATH = std::make_pair("ubsio.disk.path", "xxx:xxx:xxx");
 const auto BDM_IO_ENGINE = std::make_pair("ubsio.bdm.io_engine", "sync");
 const auto BDM_IO_URING_SQPOLL_MODE = std::make_pair("ubsio.bdm.io_uring.sqpoll_mode", "auto");
 const auto BDM_SYNC_WORKER_NUM = std::make_pair("ubsio.bdm.sync.worker_num", 16);
-const auto STANDALONE_DEVICE_COUNT = std::make_pair("ubsio.standalone.device_count", 0);
-const auto STANDALONE_DEVICE_ID_GATHER_TIMEOUT_SEC =
-    std::make_pair("ubsio.standalone.device_id_gather_timeout_sec", 180);
+const auto STANDALONE_DEVICE_COUNT = std::make_pair("ubsio.standalone.device_count", 1);
 const auto STANDALONE_FORCE_NEW_DISK = std::make_pair("ubsio.standalone.force_new_disk", "false");
 const auto SDK_MEM_CAPACITY_SIZE_MB = std::make_pair("ubsio.sdkmem.size_in_mb", 0);
 
@@ -177,8 +175,7 @@ public:
         std::string bdmIoEngine = "sync";
         std::string bdmIoUringSqpollMode = "auto";
         uint32_t bdmSyncWorkerNum = 16;
-        uint32_t standaloneDeviceCount = 0;
-        uint32_t standaloneDeviceIdGatherTimeoutSec = 180;
+        uint32_t standaloneDeviceCount = 1;
         bool standaloneForceNewDisk = false;
         uint32_t workScene = 0;
         uint32_t workIoAlignSize = 1;
@@ -237,6 +234,11 @@ public:
     BResult Initialize();
 
     BResult Initialize(const std::string &configPath);
+
+    void SetStandaloneMode(bool standaloneMode) noexcept
+    {
+        mStandaloneMode = standaloneMode;
+    }
 
     void LoadDefaultConf() override;
 
@@ -324,8 +326,6 @@ private:
 
     BResult PrepareLogDirectories();
 
-    BResult SelectStandaloneDiskLegacy(uint16_t diskNum);
-
     BResult SelectStandaloneVirtualDisks(uint16_t diskNum);
 
     bool FindDiskInConfig(const std::string &configPath, const std::string &diskPath);
@@ -341,8 +341,8 @@ private:
     DaemonConfig mDaemonConfig;
     ClientConfig mClientConfig;
     UnderFsConfig mUnderFsConfig;
+    bool mStandaloneMode{ false };
     bool mInited{ false };
-    uint32_t mStandaloneDiskIndex{ 0 };
     StandaloneDeviceInfo mStandaloneDeviceInfo;
     std::string mConfigPath;
     std::string mConfigBakPath;
