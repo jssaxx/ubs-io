@@ -11,6 +11,7 @@
  */
 
 #include <stdio.h>
+#include <time.h>
 #include <unistd.h>
 #include "tracepoint_common.h"
 
@@ -18,19 +19,31 @@
 
 static inline unsigned long Rdtsc(void)
 {
+#ifdef __aarch64__
     unsigned long cntvct = 0;
     asm volatile("mrs %0, cntvct_el0" : "=r" (cntvct));
     return cntvct;
+#else
+    struct timespec ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
+        return 0;
+    }
+    return (unsigned long)ts.tv_sec * (unsigned long)NS_PER_SEC + (unsigned long)ts.tv_nsec;
+#endif
 }
 
 TpUint64 DpaxTimeGetnanosec(void)
 {
+#ifdef __aarch64__
     TpUint64 clkFreq;
     TpUint64 nsPerCycle;
 
     asm volatile ("mrs %0, cntfrq_el0":"=r"(clkFreq)::"memory");
     nsPerCycle = (uint64_t)NS_PER_SEC/clkFreq;
     return (TpUint64) (Rdtsc() * nsPerCycle);
+#else
+    return (TpUint64)Rdtsc();
+#endif
 }
 
 TpUint64 DpaxTimeGetmillisec(void)

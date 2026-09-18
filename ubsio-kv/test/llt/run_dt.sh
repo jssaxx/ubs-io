@@ -14,12 +14,23 @@ readonly FINAL_INFO="${REPORT_DIR}/coverage.info"
 readonly MIN_LINE_COVERAGE="85"
 readonly MIN_BRANCH_COVERAGE="60"
 
-for tool in cmake g++ lcov genhtml; do
+for tool in cmake g++; do
     if ! command -v "${tool}" >/dev/null 2>&1; then
         echo "Required tool not found: ${tool}" >&2
         exit 1
     fi
 done
+
+USE_GCOV=0
+if ! command -v lcov >/dev/null 2>&1 || ! command -v genhtml >/dev/null 2>&1; then
+    USE_GCOV=1
+    for tool in gcov python3; do
+        if ! command -v "${tool}" >/dev/null 2>&1; then
+            echo "Required coverage tool not found: ${tool}" >&2
+            exit 1
+        fi
+    done
+fi
 
 echo "=== 1. Clean and build ubsio-kv UT ==="
 rm -rf "${BUILD_DIR}" "${REPORT_DIR}"
@@ -38,11 +49,13 @@ LCOV_RC_OPTS=(
 )
 
 echo "=== 2. Capture coverage baseline ==="
-lcov --capture --initial \
-    --directory "${BUILD_DIR}" \
-    --output-file "${BASELINE_INFO}" \
-    "${LCOV_RC_OPTS[@]}" \
-    --quiet
+if [[ "${USE_GCOV}" -eq 0 ]]; then
+    lcov --capture --initial \
+        --directory "${BUILD_DIR}" \
+        --output-file "${BASELINE_INFO}" \
+        "${LCOV_RC_OPTS[@]}" \
+        --quiet
+fi
 
 echo "=== 3. Run unit tests ==="
 cd "${BUILD_DIR}"
@@ -51,6 +64,15 @@ ASCEND_HOME_PATH="${BUILD_DIR}/incomplete_ascend" \
 ./kv_loader_test --gtest_output="xml:${REPORT_DIR}/loader-report.xml"
 
 ./kv_test --gtest_output="xml:${REPORT_DIR}/report.xml"
+
+if [[ "${USE_GCOV}" -eq 1 ]]; then
+    echo "=== 4. Summarize GCC coverage ==="
+    python3 "${PROJECT_ROOT}/../test/tools/gcov_summary.py" \
+        --project kv --root "${PROJECT_ROOT}" --build "${BUILD_DIR}" \
+        --report "${REPORT_DIR}" --min-line "${MIN_LINE_COVERAGE}" \
+        --min-branch "${MIN_BRANCH_COVERAGE}"
+    exit 0
+fi
 
 echo "=== 4. Capture and filter coverage ==="
 lcov --capture \

@@ -15,7 +15,6 @@
 using namespace ock::bio;
 using namespace ock::bio::tp;
 
-#ifdef __aarch64__
 static uint32_t MY_PID = 102;
 
 void tp::ServerTp::Register() noexcept
@@ -75,8 +74,3 @@ void tp::ServerTp::Deregister() noexcept
     BIO_TP_UNREG(SERVER_SET_OLD_DISK_ID);
     BIO_TP_UNREG(SERVER_NET_ADD_CHANNEL_FAIL);
 }
-#else
-void tp::ServerTp::Register() noexcept {}
-
-void tp::ServerTp::Deregister() noexcept {}
-#endif

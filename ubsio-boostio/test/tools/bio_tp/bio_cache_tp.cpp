@@ -14,7 +14,6 @@
 
 using namespace ock::bio;
 using namespace ock::bio::tp;
-#ifdef __aarch64__
 static uint32_t MY_PID = 102;
 
 void tp::CacheTp::Register() noexcept
@@ -317,8 +316,3 @@ void tp::CacheTp::Deregister() noexcept
     BIO_TP_UNREG(GET_EXTERBAL_OPEN_CRC);
     BIO_TP_UNREG(GET_EXTERBAL_CRC_OK);
 }
-#else
-void tp::CacheTp::Register() noexcept {}
-
-void tp::CacheTp::Deregister() noexcept {}
-#endif

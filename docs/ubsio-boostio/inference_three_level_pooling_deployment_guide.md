@@ -1,10 +1,10 @@
 # 推理三级池化场景安装部署指南
 
-本文档说明推理三级池化场景下 UBSIO-BoostIO 的构建、部署和使用方法。该场景只需要交付运行库，构建完成后使用 `ubsio-boostio/dist/lib` 目录即可。
+本文档说明推理三级池化场景下 UBS IO BoostIO 的构建、部署和使用方法。该场景只需要交付运行库，构建完成后使用 `ubsio-boostio/dist/lib` 目录即可。
 
 ## 适用场景
 
-推理三级池化场景通常由推理服务进程加载 UBSIO 运行库，通过配置文件初始化本地缓存能力。部署时不需要完整 `boostio` 运行目录，也不需要单独安装命令行工具；只需要将 `dist/lib` 下的动态库放到推理服务可访问的位置。
+推理三级池化场景通常由推理服务进程加载 UBS IO 运行库，通过配置文件初始化本地缓存能力。部署时不需要完整 `boostio` 运行目录，也不需要单独安装命令行工具；只需要将 `dist/lib` 下的动态库放到推理服务可访问的位置。
 
 ## 构建环境准备
 
@@ -24,7 +24,7 @@
 
 | 依赖                    | openEuler 包名      | Ubuntu 包名                        |
 | --------------------- | ----------------- | -------------------------------- |
-| RDMA (Verbs + RDMACM) | `rdma-core-devel` | `libibverbs-dev` `librdmacm-dev` |
+| RDMA (Verbs + RDMA CM) | `rdma-core-devel` | `libibverbs-dev` `librdmacm-dev` |
 
 安装命令：
 
@@ -40,9 +40,7 @@ Ubuntu：
 apt-get install -y libibverbs-dev librdmacm-dev
 ```
 
-> **说明**：openEuler 的 `rdma-core-devel` 包含 Verbs 和 RDMACM 开发头文件；Ubuntu 需要分别安装 `libibverbs-dev` 和 `librdmacm-dev`。
-
-
+> **说明**：openEuler 的 `rdma-core-devel` 包含 Verbs 和 RDMA CM 开发头文件；Ubuntu 需要分别安装 `libibverbs-dev` 和 `librdmacm-dev`。
 
 源码目录需要保持以下相对位置：
 
@@ -110,7 +108,7 @@ ubsio-boostio/dist/lib
 
 ## 库包内容
 
-`dist/lib` 中包含推理进程运行所需的 UBSIO 相关库，常见文件如下。
+`dist/lib` 中包含推理进程运行所需的 UBS IO 相关库，常见文件如下。
 
 | 文件                   | 说明                                          |
 | -------------------- | ------------------------------------------- |
@@ -157,7 +155,7 @@ BoostIO 支持默认配置文件路径。未配置 `UBSIO_CONFIG_PATH` 时，推
 /opt/ubsio/conf/ubsio.conf
 ```
 
-单机推理三级池化场景可参考 [UBSIO 单机模式配置参考](../单机模式配置说明.md)。常用配置项如下。
+单机推理三级池化场景可参考 [UBS IO 单机模式配置参考](../standalone_mode_configuration.md)。常用配置项如下。
 
 | 配置项                                 | 说明                        |
 | ----------------------------------- | ------------------------- |
@@ -191,7 +189,7 @@ export LD_LIBRARY_PATH=/opt/ubsio/lib:${LD_LIBRARY_PATH}
 export UBSIO_CONFIG_PATH=/opt/ubsio/conf/ubsio.conf
 ```
 
-然后按业务原有方式启动推理服务。推理进程加载 UBSIO 相关库后，如果设置了 `UBSIO_CONFIG_PATH`，会读取该环境变量指向的配置文件；如果未设置，则读取默认配置文件 `/etc/ubsio/ubsio.conf`。
+然后按业务原有方式启动推理服务。推理进程加载 UBS IO 相关库后，如果设置了 `UBSIO_CONFIG_PATH`，会读取该环境变量指向的配置文件；如果未设置，则读取默认配置文件 `/etc/ubsio/ubsio.conf`。
 
 示例：
 

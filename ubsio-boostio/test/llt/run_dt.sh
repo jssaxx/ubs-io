@@ -33,19 +33,34 @@ LCOV_DIRECTORY_OPTS=(
     --directory "${BUILD_DIR}/src/cache"
 )
 
+USE_GCOV=0
+if ! command -v lcov >/dev/null 2>&1 || ! command -v genhtml >/dev/null 2>&1; then
+    USE_GCOV=1
+fi
+
 echo "=== 3. Capturing Baseline (Initial State) ==="
 # 仅扫描最终覆盖率报告保留的模块，将所有源文件标记为 0% 覆盖
-lcov --capture --initial \
-     "${LCOV_DIRECTORY_OPTS[@]}" \
-     --output-file ${BASELINE_INFO} \
-     ${LCOV_RC_OPTS} \
-     --quiet
+if [ "${USE_GCOV}" -eq 0 ]; then
+    lcov --capture --initial \
+         "${LCOV_DIRECTORY_OPTS[@]}" \
+         --output-file ${BASELINE_INFO} \
+         ${LCOV_RC_OPTS} \
+         --quiet
+fi
 
 echo "=== 4. Running Tests ==="
 cd ${BUILD_DIR}
 \cp -r ${PROJECT_ROOT}/dist/boostio/lib/* ${BUILD_DIR}/
 export LD_LIBRARY_PATH=${BUILD_DIR}:$LD_LIBRARY_PATH
 ./bio_test --gtest_output="xml:${REPORT_DIR}/report.xml"
+
+if [ "${USE_GCOV}" -eq 1 ]; then
+    echo "=== 5. Summarizing GCC coverage ==="
+    python3 "${PROJECT_ROOT}/../test/tools/gcov_summary.py" \
+        --project boostio --root "${PROJECT_ROOT}" --build "${BUILD_DIR}" \
+        --report "${REPORT_DIR}" --min-line 75 --min-branch 40
+    exit 0
+fi
 
 echo "=== 5. Capturing Test Data (Execution State) ==="
 cd ${PROJECT_ROOT}
