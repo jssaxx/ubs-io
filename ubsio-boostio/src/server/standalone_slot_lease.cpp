@@ -35,12 +35,10 @@ namespace {
 
 constexpr uint32_t SLOT_LEASE_MAGIC = 0x5542534CU; // "UBSL"
 constexpr uint32_t SLOT_LEASE_VERSION = 1U;
-constexpr uint64_t FNV_OFFSET_BASIS = 14695981039346656037ULL;
-constexpr uint64_t FNV_PRIME = 1099511628211ULL;
 constexpr uint64_t NANOSECONDS_PER_SECOND = 1000000000ULL;
-constexpr useconds_t LAYOUT_READY_POLL_INTERVAL_US = 10000U;
-constexpr uint64_t LAYOUT_READY_TIMEOUT_SECONDS = 180ULL;
-constexpr uint64_t LAYOUT_READY_TIMEOUT_NS = LAYOUT_READY_TIMEOUT_SECONDS * NANOSECONDS_PER_SECOND;
+constexpr useconds_t INITIALIZATION_READY_POLL_INTERVAL_US = 10000U;
+constexpr uint64_t INITIALIZATION_READY_TIMEOUT_SECONDS = 180ULL;
+constexpr uint64_t INITIALIZATION_READY_TIMEOUT_NS = INITIALIZATION_READY_TIMEOUT_SECONDS * NANOSECONDS_PER_SECOND;
 constexpr uint32_t SHM_OPEN_RETRY_TIMES = 100U;
 // Field numbers follow proc_pid_stat(5); parsing starts after the parenthesized comm field.
 constexpr size_t PROC_STAT_STATE_OFFSET_FROM_COMM_END = 2U;
@@ -55,7 +53,7 @@ constexpr const char *SHM_NAME_PREFIX = "/ubsio_standalone_slot_lease_";
 std::string gShmNameForTest;
 #endif
 
-enum class LayoutState : uint32_t {
+enum class InitializationState : uint32_t {
     READY = 1,
     INITIALIZING = 2,
     FAILED = 3,
@@ -79,8 +77,7 @@ struct SlotLeaseHeader {
     uint32_t version;
     uint32_t structSize;
     uint32_t slotCount;
-    uint64_t layoutFingerprint;
-    uint32_t layoutState;
+    uint32_t initializationState;
     int32_t initializerPid;
     uint64_t initializerStartTime;
     uint64_t nextGeneration;
@@ -211,16 +208,14 @@ bool HeaderValid(const SlotLeaseHeader &header)
         header.structSize == sizeof(SlotLeaseHeader) && header.slotCount > 0 && header.slotCount <= DEVICE_SIZE;
 }
 
-void InitializeHeader(SlotLeaseHeader &header, uint32_t slotCount, uint64_t layoutFingerprint, int32_t pid,
-    uint64_t pidStartTime)
+void InitializeHeader(SlotLeaseHeader &header, uint32_t slotCount, int32_t pid, uint64_t pidStartTime)
 {
     header = {};
     header.magic = SLOT_LEASE_MAGIC;
     header.version = SLOT_LEASE_VERSION;
     header.structSize = sizeof(SlotLeaseHeader);
     header.slotCount = slotCount;
-    header.layoutFingerprint = layoutFingerprint;
-    header.layoutState = static_cast<uint32_t>(LayoutState::INITIALIZING);
+    header.initializationState = static_cast<uint32_t>(InitializationState::INITIALIZING);
     header.initializerPid = pid;
     header.initializerStartTime = pidStartTime;
     header.nextGeneration = 1;
@@ -264,14 +259,49 @@ void UnlockFile(int32_t fd)
     }
 }
 
-void CloseMapping(int32_t fd, void *mapping)
+void CloseLeaseFile(int32_t fd)
 {
-    if (mapping != nullptr) {
-        (void)munmap(mapping, sizeof(SlotLeaseHeader));
-    }
     if (fd >= 0) {
         (void)close(fd);
     }
+}
+
+bool ReadHeader(int32_t fd, SlotLeaseHeader &header)
+{
+    auto *bytes = reinterpret_cast<char *>(&header);
+    size_t offset = 0;
+    while (offset < sizeof(header)) {
+        ssize_t readSize = pread(fd, bytes + offset, sizeof(header) - offset, static_cast<off_t>(offset));
+        if (readSize < 0 && errno == EINTR) {
+            continue;
+        }
+        if (readSize <= 0) {
+            LOG_ERROR("Read standalone slot lease header failed, offset:" << offset << ", result:" << readSize <<
+                ", errno:" << (readSize < 0 ? errno : 0) << ".");
+            return false;
+        }
+        offset += static_cast<size_t>(readSize);
+    }
+    return true;
+}
+
+bool WriteHeader(int32_t fd, const SlotLeaseHeader &header)
+{
+    const auto *bytes = reinterpret_cast<const char *>(&header);
+    size_t offset = 0;
+    while (offset < sizeof(header)) {
+        ssize_t written = pwrite(fd, bytes + offset, sizeof(header) - offset, static_cast<off_t>(offset));
+        if (written < 0 && errno == EINTR) {
+            continue;
+        }
+        if (written <= 0) {
+            LOG_ERROR("Write standalone slot lease header failed, offset:" << offset << ", result:" << written <<
+                ", errno:" << (written < 0 ? errno : 0) << ".");
+            return false;
+        }
+        offset += static_cast<size_t>(written);
+    }
+    return true;
 }
 
 bool IsCurrentSharedMemory(int32_t fd, const std::string &shmName)
@@ -296,14 +326,6 @@ void UnlinkSharedMemory(const std::string &shmName)
     }
 }
 
-void HashBytes(uint64_t &hash, const void *data, size_t size)
-{
-    const auto *bytes = static_cast<const uint8_t *>(data);
-    for (size_t index = 0; index < size; ++index) {
-        hash ^= bytes[index];
-        hash *= FNV_PRIME;
-    }
-}
 
 }
 
@@ -342,37 +364,32 @@ void StandaloneSlotLease::SetShmNameForTest(const std::string &shmName)
 }
 #endif
 
-uint64_t StandaloneSlotLease::BuildLayoutFingerprint(uint32_t slotCount,
-    const std::vector<std::string> &diskPaths, const std::vector<int64_t> &diskCaps, uint64_t segmentSize)
+BResult StandaloneSlotLease::Acquire(uint32_t slotCount, uint32_t &slotIndex)
 {
-    uint64_t hash = FNV_OFFSET_BASIS;
-    HashBytes(hash, &slotCount, sizeof(slotCount));
-    HashBytes(hash, &segmentSize, sizeof(segmentSize));
-    uint64_t diskCount = diskPaths.size();
-    HashBytes(hash, &diskCount, sizeof(diskCount));
-    for (size_t index = 0; index < diskPaths.size(); ++index) {
-        uint64_t pathSize = diskPaths[index].size();
-        HashBytes(hash, &pathSize, sizeof(pathSize));
-        HashBytes(hash, diskPaths[index].data(), diskPaths[index].size());
-        HashBytes(hash, &diskCaps[index], sizeof(diskCaps[index]));
+    for (uint32_t attempt = 0; attempt < SHM_OPEN_RETRY_TIMES; ++attempt) {
+        bool retryStale = false;
+        auto ret = AcquireOnce(slotCount, slotIndex, retryStale);
+        if (!retryStale) {
+            return ret;
+        }
     }
-    return hash;
+    LOG_ERROR("Recover stale standalone slot lease exceeded retry limit.");
+    return BIO_NOT_READY;
 }
 
-BResult StandaloneSlotLease::Acquire(uint32_t slotCount, const std::vector<std::string> &diskPaths,
-    const std::vector<int64_t> &diskCaps, uint64_t segmentSize, uint32_t &slotIndex)
+BResult StandaloneSlotLease::AcquireOnce(uint32_t slotCount, uint32_t &slotIndex, bool &retryStale)
 {
+    retryStale = false;
     if (IsAcquired() && mPid != static_cast<int32_t>(getpid())) {
-        CloseMapping(mFd, mMapping);
+        CloseLeaseFile(mFd);
         ResetLocalState();
     }
     if (IsAcquired()) {
         slotIndex = mSlotIndex;
         return BIO_OK;
     }
-    if (slotCount == 0 || slotCount > DEVICE_SIZE || diskPaths.empty() || diskPaths.size() != diskCaps.size()) {
-        LOG_ERROR("Invalid standalone slot lease config, slotCount:" << slotCount <<
-            ", diskPathCount:" << diskPaths.size() << ", diskCapCount:" << diskCaps.size() << ".");
+    if (slotCount == 0 || slotCount > DEVICE_SIZE) {
+        LOG_ERROR("Invalid standalone slot count:" << slotCount << ".");
         return BIO_INVALID_PARAM;
     }
 
@@ -429,165 +446,204 @@ BResult StandaloneSlotLease::Acquire(uint32_t slotCount, const std::vector<std::
         return BIO_INNER_ERR;
     }
     bool storageCreated = shmStat.st_size == 0;
+    if (!storageCreated && shmStat.st_size != static_cast<off_t>(sizeof(SlotLeaseHeader))) {
+        LOG_WARN("Reset unexpected standalone slot lease shared memory size, actual:" << shmStat.st_size <<
+            ", expected:" << sizeof(SlotLeaseHeader) << ".");
+        if (ftruncate(fd, 0) != 0) {
+            LOG_ERROR("Clear standalone slot lease shared memory failed, errno:" << errno << ".");
+            UnlockFile(fd);
+            (void)close(fd);
+            return BIO_INNER_ERR;
+        }
+        storageCreated = true;
+    }
     if (storageCreated && ftruncate(fd, sizeof(SlotLeaseHeader)) != 0) {
         LOG_ERROR("Resize standalone slot lease shared memory failed, errno:" << errno << ".");
-        UnlockFile(fd);
-        (void)close(fd);
-        return BIO_INNER_ERR;
-    }
-    if (!storageCreated && shmStat.st_size != static_cast<off_t>(sizeof(SlotLeaseHeader))) {
-        LOG_ERROR("Unexpected standalone slot lease shared memory size, actual:" << shmStat.st_size <<
-            ", expected:" << sizeof(SlotLeaseHeader) << ".");
+        if (IsCurrentSharedMemory(fd, shmName)) {
+            UnlinkSharedMemory(shmName);
+        }
         UnlockFile(fd);
         (void)close(fd);
         return BIO_INNER_ERR;
     }
 
-    void *mapping = mmap(nullptr, sizeof(SlotLeaseHeader), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (mapping == MAP_FAILED) {
-        LOG_ERROR("Map standalone slot lease shared memory failed, errno:" << errno << ".");
+    int32_t allocationError = posix_fallocate(fd, 0, sizeof(SlotLeaseHeader));
+    if (allocationError != 0) {
+        LOG_ERROR("Reserve standalone slot lease shared memory failed, error:" << allocationError << ".");
+        if (storageCreated && IsCurrentSharedMemory(fd, shmName)) {
+            UnlinkSharedMemory(shmName);
+        }
         UnlockFile(fd);
         (void)close(fd);
         return BIO_INNER_ERR;
     }
-    auto *header = static_cast<SlotLeaseHeader *>(mapping);
-    uint64_t fingerprint = BuildLayoutFingerprint(slotCount, diskPaths, diskCaps, segmentSize);
+    SlotLeaseHeader header = {};
     uint64_t waitStartNs = MonotonicTimeNs();
+    bool waitedForInitialization = false;
+    bool initializer = false;
 
     while (true) {
-        if (storageCreated || !HeaderValid(*header)) {
-            InitializeHeader(*header, slotCount, fingerprint, mPid, mPidStartTime);
-            mLayoutInitializer = true;
+        if (!IsCurrentSharedMemory(fd, shmName)) {
+            LOG_ERROR("Standalone slot lease shared memory was replaced while acquiring a slot.");
+            UnlockFile(fd);
+            CloseLeaseFile(fd);
+            return BIO_NOT_READY;
+        }
+        if (!storageCreated && !ReadHeader(fd, header)) {
+            UnlockFile(fd);
+            CloseLeaseFile(fd);
+            return BIO_INNER_ERR;
+        }
+        if (storageCreated || !HeaderValid(header)) {
+            InitializeHeader(header, slotCount, mPid, mPidStartTime);
+            initializer = true;
             storageCreated = false;
         } else {
-            uint32_t liveCount = RemoveDeadOwners(*header);
-            if (header->layoutState == static_cast<uint32_t>(LayoutState::FAILED)) {
-                LOG_ERROR("Standalone slot layout initialization failed.");
+            uint32_t liveCount = RemoveDeadOwners(header);
+            if (header.initializationState == static_cast<uint32_t>(InitializationState::FAILED)) {
+                LOG_ERROR("Standalone initialization failed.");
                 if (liveCount == 0 && IsCurrentSharedMemory(fd, shmName)) {
                     UnlinkSharedMemory(shmName);
                 }
+                // Only an already-failed, ownerless generation may be retried. A caller
+                // that waited for this generation must report its initialization failure.
+                retryStale = liveCount == 0 && !waitedForInitialization && !IsCurrentSharedMemory(fd, shmName);
                 UnlockFile(fd);
-                CloseMapping(fd, mapping);
+                CloseLeaseFile(fd);
                 return BIO_NOT_READY;
             }
-            if (header->layoutState == static_cast<uint32_t>(LayoutState::INITIALIZING) &&
-                !InitializerIsAlive(*header)) {
-                LOG_ERROR("Standalone slot layout initializer exited before publishing ready, initializerPid:" <<
-                    header->initializerPid << ".");
-                header->layoutState = static_cast<uint32_t>(LayoutState::FAILED);
-                header->initializerPid = 0;
-                header->initializerStartTime = 0;
+            if (header.initializationState == static_cast<uint32_t>(InitializationState::INITIALIZING) &&
+                !InitializerIsAlive(header)) {
+                LOG_ERROR("Standalone initializer exited before publishing ready, initializerPid:" <<
+                    header.initializerPid << ".");
+                header.initializationState = static_cast<uint32_t>(InitializationState::FAILED);
+                header.initializerPid = 0;
+                header.initializerStartTime = 0;
+                if (!WriteHeader(fd, header)) {
+                    UnlockFile(fd);
+                    CloseLeaseFile(fd);
+                    return BIO_INNER_ERR;
+                }
                 UnlinkSharedMemory(shmName);
                 UnlockFile(fd);
-                CloseMapping(fd, mapping);
+                CloseLeaseFile(fd);
                 return BIO_NOT_READY;
             }
-            bool layoutMatches = header->slotCount == slotCount && header->layoutFingerprint == fingerprint;
-            if (!layoutMatches) {
-                if (liveCount != 0) {
-                    LOG_ERROR("Standalone slot layout mismatch while leases are active, configuredSlotCount:" <<
-                        slotCount << ", activeSlotCount:" << header->slotCount << ".");
+            if (header.slotCount != slotCount) {
+                if (liveCount == 0) {
+                    InitializeHeader(header, slotCount, mPid, mPidStartTime);
+                    initializer = true;
+                } else {
+                    LOG_ERROR("Standalone slot count mismatch while leases are active, configured:" <<
+                        slotCount << ", active:" << header.slotCount << ".");
                     UnlockFile(fd);
-                    CloseMapping(fd, mapping);
+                    CloseLeaseFile(fd);
                     return BIO_INVALID_PARAM;
                 }
-                InitializeHeader(*header, slotCount, fingerprint, mPid, mPidStartTime);
-                mLayoutInitializer = true;
-            } else if (header->layoutState == static_cast<uint32_t>(LayoutState::INITIALIZING)) {
-                if (header->initializerPid != mPid || header->initializerStartTime != mPidStartTime) {
+            } else if (header.initializationState == static_cast<uint32_t>(InitializationState::INITIALIZING)) {
+                if (header.initializerPid != mPid || header.initializerStartTime != mPidStartTime) {
                     uint64_t nowNs = MonotonicTimeNs();
-                    if (waitStartNs == 0 || nowNs == 0 || nowNs - waitStartNs >= LAYOUT_READY_TIMEOUT_NS) {
-                        LOG_ERROR("Wait standalone slot layout initialization timeout, initializerPid:" <<
-                            header->initializerPid << ".");
+                    if (waitStartNs == 0 || nowNs == 0 || nowNs - waitStartNs >= INITIALIZATION_READY_TIMEOUT_NS) {
+                        LOG_ERROR("Wait standalone initialization timeout, initializerPid:" <<
+                            header.initializerPid << ".");
                         UnlockFile(fd);
-                        CloseMapping(fd, mapping);
+                        CloseLeaseFile(fd);
                         return BIO_NOT_READY;
                     }
                     UnlockFile(fd);
-                    (void)usleep(LAYOUT_READY_POLL_INTERVAL_US);
+                    waitedForInitialization = true;
+                    (void)usleep(INITIALIZATION_READY_POLL_INTERVAL_US);
                     if (LockFile(fd) != 0) {
-                        CloseMapping(fd, mapping);
+                        CloseLeaseFile(fd);
                         return BIO_INNER_ERR;
                     }
                     continue;
                 }
-            } else if (header->layoutState != static_cast<uint32_t>(LayoutState::READY)) {
-                LOG_ERROR("Invalid standalone slot layout state:" << header->layoutState << ".");
+            } else if (header.initializationState != static_cast<uint32_t>(InitializationState::READY)) {
+                LOG_ERROR("Invalid standalone slot initialization state:" << header.initializationState << ".");
                 UnlockFile(fd);
-                CloseMapping(fd, mapping);
+                CloseLeaseFile(fd);
                 return BIO_INNER_ERR;
             }
         }
 
-        if (!IsCurrentSharedMemory(fd, shmName)) {
-            LOG_ERROR("Standalone slot lease shared memory was replaced while acquiring a slot.");
-            UnlockFile(fd);
-            CloseMapping(fd, mapping);
-            return BIO_NOT_READY;
-        }
-
         uint32_t freeSlotIndex = UINT32_MAX;
-        for (uint32_t index = 0; index < header->slotCount; ++index) {
-            auto &slot = header->slots[index];
+        uint32_t selectedSlotIndex = UINT32_MAX;
+        for (uint32_t index = 0; index < header.slotCount; ++index) {
+            auto &slot = header.slots[index];
             if (slot.occupied != 0 && slot.pid == mPid && slot.pidStartTime == mPidStartTime) {
-                mSlotIndex = index;
+                selectedSlotIndex = index;
                 break;
             }
             if (slot.occupied == 0 && freeSlotIndex == UINT32_MAX) {
                 freeSlotIndex = index;
             }
         }
-        if (mSlotIndex == UINT32_MAX) {
-            mSlotIndex = freeSlotIndex;
+        if (selectedSlotIndex == UINT32_MAX) {
+            selectedSlotIndex = freeSlotIndex;
         }
-        if (mSlotIndex == UINT32_MAX) {
-            LOG_ERROR("No free standalone disk slot, slotCount:" << header->slotCount << ".");
+        if (selectedSlotIndex == UINT32_MAX) {
+            LOG_ERROR("No free standalone disk slot, slotCount:" << header.slotCount << ".");
             UnlockFile(fd);
-            CloseMapping(fd, mapping);
+            CloseLeaseFile(fd);
             return BIO_NOT_READY;
         }
-        auto &owner = header->slots[mSlotIndex];
+        auto &owner = header.slots[selectedSlotIndex];
         if (owner.occupied == 0) {
             owner.occupied = 1;
             owner.pid = mPid;
             owner.pidStartTime = mPidStartTime;
-            owner.generation = header->nextGeneration++;
-            if (header->nextGeneration == 0) {
-                header->nextGeneration = 1;
+            owner.generation = header.nextGeneration++;
+            if (header.nextGeneration == 0) {
+                header.nextGeneration = 1;
             }
         }
-        slotIndex = mSlotIndex;
+        if (!WriteHeader(fd, header)) {
+            UnlockFile(fd);
+            CloseLeaseFile(fd);
+            return BIO_INNER_ERR;
+        }
+        slotIndex = selectedSlotIndex;
         mFd = fd;
-        mMapping = mapping;
+        mSlotIndex = selectedSlotIndex;
+        mInitializer = initializer;
         mShmName = shmName;
         LOG_INFO("Acquired standalone disk slot, slotIndex:" << slotIndex << ", slotCount:" << slotCount <<
             ", pid:" << mPid << ", generation:" << owner.generation <<
-            ", layoutInitializer:" << (mLayoutInitializer ? 1 : 0) << ".");
+            ", initializer:" << (mInitializer ? 1 : 0) << ".");
         UnlockFile(fd);
         return BIO_OK;
     }
 }
 
-BResult StandaloneSlotLease::PublishLayoutReady()
+BResult StandaloneSlotLease::PublishReady()
 {
-    if (!IsAcquired() || !mLayoutInitializer) {
+    if (!IsAcquired() || !mInitializer) {
         return BIO_OK;
     }
     if (LockFile(mFd) != 0) {
         return BIO_INNER_ERR;
     }
-    auto *header = static_cast<SlotLeaseHeader *>(mMapping);
-    if (!HeaderValid(*header) || header->layoutState != static_cast<uint32_t>(LayoutState::INITIALIZING) ||
-        header->initializerPid != mPid || header->initializerStartTime != mPidStartTime) {
+    SlotLeaseHeader header = {};
+    if (!ReadHeader(mFd, header)) {
         UnlockFile(mFd);
         return BIO_INNER_ERR;
     }
-    header->layoutState = static_cast<uint32_t>(LayoutState::READY);
-    header->initializerPid = 0;
-    header->initializerStartTime = 0;
-    mLayoutInitializer = false;
+    if (!HeaderValid(header) || header.initializationState != static_cast<uint32_t>(InitializationState::INITIALIZING) ||
+        header.initializerPid != mPid || header.initializerStartTime != mPidStartTime) {
+        UnlockFile(mFd);
+        return BIO_INNER_ERR;
+    }
+    header.initializationState = static_cast<uint32_t>(InitializationState::READY);
+    header.initializerPid = 0;
+    header.initializerStartTime = 0;
+    if (!WriteHeader(mFd, header)) {
+        UnlockFile(mFd);
+        return BIO_INNER_ERR;
+    }
+    mInitializer = false;
     UnlockFile(mFd);
-    LOG_INFO("Published standalone disk layout ready, slotIndex:" << mSlotIndex << ".");
+    LOG_INFO("Published standalone initialization ready, slotIndex:" << mSlotIndex << ".");
     return BIO_OK;
 }
 
@@ -597,42 +653,45 @@ void StandaloneSlotLease::Release()
         return;
     }
     if (mPid != static_cast<int32_t>(getpid())) {
-        CloseMapping(mFd, mMapping);
+        CloseLeaseFile(mFd);
         ResetLocalState();
         return;
     }
     if (LockFile(mFd) == 0) {
-        auto *header = static_cast<SlotLeaseHeader *>(mMapping);
-        if (HeaderValid(*header) && mSlotIndex < header->slotCount) {
-            auto &owner = header->slots[mSlotIndex];
+        SlotLeaseHeader header = {};
+        if (ReadHeader(mFd, header) && HeaderValid(header) && mSlotIndex < header.slotCount) {
+            auto &owner = header.slots[mSlotIndex];
             if (owner.occupied != 0 && owner.pid == mPid && owner.pidStartTime == mPidStartTime) {
                 owner = {};
             }
-            if (mLayoutInitializer && header->layoutState == static_cast<uint32_t>(LayoutState::INITIALIZING) &&
-                header->initializerPid == mPid && header->initializerStartTime == mPidStartTime) {
-                header->layoutState = static_cast<uint32_t>(LayoutState::FAILED);
-                header->initializerPid = 0;
-                header->initializerStartTime = 0;
+            if (mInitializer && header.initializationState == static_cast<uint32_t>(InitializationState::INITIALIZING) &&
+                header.initializerPid == mPid && header.initializerStartTime == mPidStartTime) {
+                header.initializationState = static_cast<uint32_t>(InitializationState::FAILED);
+                header.initializerPid = 0;
+                header.initializerStartTime = 0;
             }
-            if (RemoveDeadOwners(*header) == 0) {
+            uint32_t liveCount = RemoveDeadOwners(header);
+            if (!WriteHeader(mFd, header)) {
+                LOG_ERROR("Persist standalone slot lease release failed, slotIndex:" << mSlotIndex << ".");
+            }
+            if (liveCount == 0 && IsCurrentSharedMemory(mFd, mShmName)) {
                 UnlinkSharedMemory(mShmName);
             }
         }
         UnlockFile(mFd);
     }
     LOG_INFO("Released standalone disk slot, slotIndex:" << mSlotIndex << ", pid:" << mPid << ".");
-    CloseMapping(mFd, mMapping);
+    CloseLeaseFile(mFd);
     ResetLocalState();
 }
 
 void StandaloneSlotLease::ResetLocalState()
 {
     mFd = -1;
-    mMapping = nullptr;
     mSlotIndex = UINT32_MAX;
     mPid = -1;
     mPidStartTime = 0;
-    mLayoutInitializer = false;
+    mInitializer = false;
     mShmName.clear();
 }
 

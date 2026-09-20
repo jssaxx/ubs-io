@@ -13,9 +13,9 @@
 #ifndef STANDALONE_SLOT_LEASE_H
 #define STANDALONE_SLOT_LEASE_H
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
-#include <vector>
 
 #include "bio_err.h"
 
@@ -30,9 +30,8 @@ public:
     StandaloneSlotLease(const StandaloneSlotLease &) = delete;
     StandaloneSlotLease &operator=(const StandaloneSlotLease &) = delete;
 
-    BResult Acquire(uint32_t slotCount, const std::vector<std::string> &diskPaths,
-        const std::vector<int64_t> &diskCaps, uint64_t segmentSize, uint32_t &slotIndex);
-    BResult PublishLayoutReady();
+    BResult Acquire(uint32_t slotCount, uint32_t &slotIndex);
+    BResult PublishReady();
     void Release();
 
     bool IsAcquired() const noexcept
@@ -46,21 +45,19 @@ public:
     }
 
 private:
+    BResult AcquireOnce(uint32_t slotCount, uint32_t &slotIndex, bool &retryStale);
     static BResult BuildShmName(std::string &shmName);
 #ifdef DEBUG_UT
     static void SetShmNameForTest(const std::string &shmName);
 #endif
-    static uint64_t BuildLayoutFingerprint(uint32_t slotCount, const std::vector<std::string> &diskPaths,
-        const std::vector<int64_t> &diskCaps, uint64_t segmentSize);
     void ResetLocalState();
 
 private:
     int32_t mFd{ -1 };
-    void *mMapping{ nullptr };
     uint32_t mSlotIndex{ UINT32_MAX };
     int32_t mPid{ -1 };
     uint64_t mPidStartTime{ 0 };
-    bool mLayoutInitializer{ false };
+    bool mInitializer{ false };
     std::string mShmName;
 };
 

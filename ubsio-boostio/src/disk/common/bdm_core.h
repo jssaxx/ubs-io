@@ -146,6 +146,8 @@ int32_t BdmSetIoEngine(const char *engineName);
 
 BdmIoEngine BdmGetIoEngine(void);
 
+void BdmSetDiskStartupInfo(uint32_t isStandalone, uint32_t deviceId);
+
 int32_t BdmStart(DiskDevices *diskList, uint64_t chunkSize);
 
 int32_t BdmStartVirtual(DiskDevices *diskList, uint64_t chunkSize, uint32_t slotIndex, uint32_t slotCount);

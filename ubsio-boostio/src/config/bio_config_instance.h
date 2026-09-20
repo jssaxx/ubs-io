@@ -255,6 +255,14 @@ public:
         return mUnderFsConfig;
     }
 
+    // Internal virtual device index assigned by the standalone slot lease.
+    void SetStandaloneDeviceInfo(uint32_t deviceId);
+    BResult SelectStandaloneDiskByDeviceInfo();
+    uint32_t GetStandaloneDeviceId() const noexcept
+    {
+        return mStandaloneDeviceInfo.deviceId;
+    }
+
     BResult UpdateStandaloneDiskCapacity(uint32_t diskId, int64_t capacity);
 
     uint64_t ModifyConfigEvictWaterLevel(uint8_t tier, uint64_t level);
@@ -293,7 +301,14 @@ private:
     BResult AutoConfigClient(const ConfigurationPtr &conf);
 
     BResult AutoConfigUnderFs(const ConfigurationPtr &conf);
+
+    BResult SelectStandaloneVirtualDisks(uint16_t diskNum);
 private:
+    struct StandaloneDeviceInfo {
+        bool configured{ false };
+        uint32_t deviceId{ 0 };
+    };
+
     NetConfig mNetConfig;
     CmConfig mCmConfig;
     DaemonConfig mDaemonConfig;
@@ -301,6 +316,7 @@ private:
     UnderFsConfig mUnderFsConfig;
     bool mStandaloneMode{ false };
     bool mInited{ false };
+    StandaloneDeviceInfo mStandaloneDeviceInfo;
 };
 }
 }
