@@ -23,6 +23,44 @@
 namespace ock {
 namespace ubsio {
 
+namespace {
+constexpr LogLevel BIO_TO_KVC_LOG_LEVEL[BIO_LOG_LEVEL_BUTT] = {
+    DEBUG_LEVEL, DEBUG_LEVEL, INFO_LEVEL, WARN_LEVEL, ERROR_LEVEL
+};
+
+inline bool IsBioLogLevelValid(int32_t level)
+{
+    return level >= static_cast<int32_t>(BIO_LOG_LEVEL_TRACE) &&
+        level < static_cast<int32_t>(BIO_LOG_LEVEL_BUTT);
+}
+
+void SetKvcLogLevel(LogLevel level)
+{
+    int32_t ret = UbsioLog::Instance().SetLogLevel(level);
+    if (UNLIKELY(ret != 0)) {
+        LOG_WARN("Set KVC log level failed, ret:" << ret << ", level:" << static_cast<int32_t>(level) << ".");
+    }
+}
+
+void SyncKvcLogLevel()
+{
+    BioLogLevel bioLogLevel = BIO_LOG_LEVEL_INFO;
+    CResult ret = DlBioSdkApi::GetLogLevel(&bioLogLevel);
+    if (UNLIKELY(ret != RET_CACHE_OK)) {
+        LOG_WARN("Get effective boostio log level failed, ret:" << ret << ". Use default KVC log level.");
+        SetKvcLogLevel(INFO_LEVEL);
+        return;
+    }
+    int32_t levelIndex = static_cast<int32_t>(bioLogLevel);
+    if (UNLIKELY(!IsBioLogLevelValid(levelIndex))) {
+        LOG_WARN("Get invalid boostio log level, level:" << levelIndex << ". Use default KVC log level.");
+        SetKvcLogLevel(INFO_LEVEL);
+        return;
+    }
+    SetKvcLogLevel(BIO_TO_KVC_LOG_LEVEL[static_cast<size_t>(levelIndex)]);
+}
+}
+
 bool DlBioSdkApi::gLoaded = false;
 std::mutex DlBioSdkApi::gMutex;
 void *DlBioSdkApi::bioSdkHandle = nullptr;
@@ -30,6 +68,7 @@ const std::string DlBioSdkApi::gBioSdkLibName = "libbio_sdk.so";
 
 BioExitFunc DlBioSdkApi::pBioExit = nullptr;
 BioInitFunc DlBioSdkApi::pBioInitialize = nullptr;
+BioGetLogLevelFunc DlBioSdkApi::pBioGetLogLevel = nullptr;
 BioCreateCacheFunc DlBioSdkApi::pBioCreateCache = nullptr;
 BioCalLocationFunc DlBioSdkApi::pBioCalcLocation = nullptr;
 BioGetFunc DlBioSdkApi::pBioGet = nullptr;
@@ -63,6 +102,7 @@ int32_t DlBioSdkApi::LoadLibrary()
     /* load sym */
     DL_LOAD_SYM(pBioExit, BioExitFunc, bioSdkHandle, "BioExit");
     DL_LOAD_SYM(pBioInitialize, BioInitFunc, bioSdkHandle, "BioInitialize");
+    pBioGetLogLevel = reinterpret_cast<BioGetLogLevelFunc>(dlsym(bioSdkHandle, "BioGetLogLevel"));
     DL_LOAD_SYM(pBioGet, BioGetFunc, bioSdkHandle, "BioGet");
     DL_LOAD_SYM(pBioPut, BioPutFunc, bioSdkHandle, "BioPut");
     DL_LOAD_SYM(pBioStat, BioStatFunc, bioSdkHandle, "BioStat");
@@ -94,6 +134,7 @@ void DlBioSdkApi::CleanupLibrary()
 
     pBioExit = nullptr;
     pBioInitialize = nullptr;
+    pBioGetLogLevel = nullptr;
     pBioGet = nullptr;
     pBioPut = nullptr;
     pBioStat = nullptr;
@@ -131,6 +172,7 @@ int32_t DlBioSdkApi::KvBioInit()
         LOG_ERROR("boostio initialize failed, ret: " << ret);
         return -1;
     }
+    SyncKvcLogLevel();
     LOG_INFO("Start boostio success.");
 
     LOG_INFO("boostio createcache...");

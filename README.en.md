@@ -43,7 +43,7 @@ Key capabilities:
 
 | Category | Documents |
 | --- | --- |
-| BoostIO APIs | [API reference](docs/ubsio-boostio/UBS-IO%20API参考.md) |
+| BoostIO APIs | [API reference](docs/ubsio-boostio/boostio_api_reference.md) |
 | UBSIO-KV APIs | [KV API reference](docs/ubsio-kv/api_reference.md) |
 | CLI | [ubsio-common CLI command reference](docs/ubsio-common/CLI命令说明.md) |
 | Ecosystem | [Mooncake patch guide](patches/mooncake/mooncake.md) |

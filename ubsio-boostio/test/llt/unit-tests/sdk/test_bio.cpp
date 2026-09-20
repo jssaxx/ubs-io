@@ -75,6 +75,22 @@ TEST_F(TestBio, test_bio_show_cache_resource_not_num_fail)
     ock::bio::BioClient::Instance()->SetStartWorker(false);
     ret = BioService::BioShowCacheResource(nodeDescription);
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
+    ock::bio::BioClient::Instance()->SetStartWorker(true);
+}
+
+TEST_F(TestBio, test_bio_get_log_level)
+{
+    EXPECT_EQ(BioGetLogLevel(nullptr), RET_CACHE_EPERM);
+
+    auto &client = ock::bio::BioClient::Instance();
+    BioLogLevel level = BIO_LOG_LEVEL_BUTT;
+    client->SetStartWorker(false);
+    EXPECT_EQ(BioGetLogLevel(&level), RET_CACHE_NOT_READY);
+
+    client->SetStartWorker(true);
+    EXPECT_EQ(BioGetLogLevel(&level), RET_CACHE_OK);
+    EXPECT_GE(level, BIO_LOG_LEVEL_TRACE);
+    EXPECT_LT(level, BIO_LOG_LEVEL_BUTT);
 }
 
 TEST_F(TestBio, test_bio_show_cache_resource_not_cache_fail)

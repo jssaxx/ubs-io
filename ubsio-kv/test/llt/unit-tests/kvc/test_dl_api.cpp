@@ -29,6 +29,20 @@ TEST_F(KvTest, BioSdkStubLoadsAndCoversAllDelegates)
 
     EXPECT_EQ(DlBioSdkApi::KvBioInit(), UBSIO_KVC_OK);
 
+    FakeBioSetResult("BioGetLogLevel", RET_CACHE_ERROR);
+    EXPECT_EQ(DlBioSdkApi::KvBioInit(), UBSIO_KVC_OK);
+    EXPECT_EQ(UbsioLog::Instance().GetLogLevel(), INFO_LEVEL);
+    FakeBioSetResult("BioGetLogLevel", RET_CACHE_OK);
+
+    FakeBioSetLogLevel(BIO_LOG_LEVEL_BUTT);
+    EXPECT_EQ(DlBioSdkApi::KvBioInit(), UBSIO_KVC_OK);
+    EXPECT_EQ(UbsioLog::Instance().GetLogLevel(), INFO_LEVEL);
+
+    FakeBioSetLogLevel(BIO_LOG_LEVEL_ERROR);
+    EXPECT_EQ(DlBioSdkApi::KvBioInit(), UBSIO_KVC_OK);
+    EXPECT_EQ(UbsioLog::Instance().GetLogLevel(), ERROR_LEVEL);
+    FakeBioSetLogLevel(BIO_LOG_LEVEL_INFO);
+
     FakeBioSetResult("BioCreateCache", RET_CACHE_EXISTS);
     EXPECT_EQ(DlBioSdkApi::KvBioInit(), UBSIO_KVC_OK);
 
