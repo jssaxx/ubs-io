@@ -86,7 +86,7 @@ UBS IO 的性能收益来自 KV Cache 层级容量扩展和本地访问路径收
 ## 📑学习教程
 
 - [ubsio-boostio API 接口列表说明](docs/ubsio-boostio/UBS-IO%20API参考.md)
-- [ubsio-kv API 接口列表说明](docs/ubsio-kv/API接口列表.md)
+- [ubsio-kv API 接口列表说明](docs/ubsio-kv/api_reference.md)
 - [ubsio-common(cli) 命令说明](docs/ubsio-common/CLI命令说明.md)
 
 ## 📦软件硬件配套说明
