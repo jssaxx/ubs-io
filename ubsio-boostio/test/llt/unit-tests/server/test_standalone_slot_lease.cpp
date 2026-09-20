@@ -38,12 +38,9 @@ using namespace ock::bio;
 
 namespace {
 
-const std::vector<std::string> DISK_PATHS = { "/dev/test0" };
-const std::vector<int64_t> DISK_CAPS = { 1024 * 1024 };
-constexpr uint64_t SEGMENT_SIZE = 1024;
 constexpr uint32_t SLOT_LEASE_MAGIC = 0x5542534CU;
 constexpr uint32_t SLOT_LEASE_VERSION = 1U;
-constexpr uint32_t LAYOUT_STATE_FAILED = 3U;
+constexpr uint32_t INITIALIZATION_STATE_FAILED = 3U;
 constexpr size_t PROC_STAT_STATE_OFFSET_FROM_COMM_END = 2U;
 
 struct TestSlotOwner {
@@ -58,8 +55,7 @@ struct TestSlotLeaseHeader {
     uint32_t version;
     uint32_t structSize;
     uint32_t slotCount;
-    uint64_t layoutFingerprint;
-    uint32_t layoutState;
+    uint32_t initializationState;
     int32_t initializerPid;
     uint64_t initializerStartTime;
     uint64_t nextGeneration;
@@ -142,9 +138,9 @@ std::vector<LeaseChildResult> RunLeaseProcesses(uint32_t processCount, uint32_t 
             (void)close(releasePipe[1]);
             StandaloneSlotLease lease;
             LeaseChildResult result = { index, BIO_ERR, UINT32_MAX };
-            result.result = lease.Acquire(slotCount, DISK_PATHS, DISK_CAPS, SEGMENT_SIZE, result.slotIndex);
+            result.result = lease.Acquire(slotCount, result.slotIndex);
             if (result.result == BIO_OK) {
-                result.result = lease.PublishLayoutReady();
+                result.result = lease.PublishReady();
             }
             ssize_t written = write(resultPipe[1], &result, sizeof(result));
             char release = 0;
@@ -189,15 +185,48 @@ TEST(TestStandaloneSlotLease, single_lazy_process_does_not_wait_for_slot_count)
     CleanupLeaseShm();
     StandaloneSlotLease lease;
     uint32_t slotIndex = UINT32_MAX;
-    EXPECT_EQ(lease.Acquire(4, DISK_PATHS, DISK_CAPS, SEGMENT_SIZE, slotIndex), BIO_OK);
+    EXPECT_EQ(lease.Acquire(4, slotIndex), BIO_OK);
     EXPECT_EQ(slotIndex, 0U);
-    EXPECT_EQ(lease.PublishLayoutReady(), BIO_OK);
+    EXPECT_EQ(lease.PublishReady(), BIO_OK);
     lease.Release();
     int32_t shmFd = shm_open(GetLeaseShmName().c_str(), O_RDWR, 0);
     EXPECT_EQ(shmFd, -1);
     if (shmFd >= 0) {
         (void)close(shmFd);
     }
+    CleanupLeaseShm();
+}
+
+TEST(TestStandaloneSlotLease, truncated_header_returns_error_without_crashing)
+{
+    CleanupLeaseShm();
+    StandaloneSlotLease lease;
+    uint32_t slotIndex = UINT32_MAX;
+    ASSERT_EQ(lease.Acquire(1, slotIndex), BIO_OK);
+    ASSERT_EQ(ftruncate(lease.mFd, 0), 0);
+    EXPECT_EQ(lease.PublishReady(), BIO_INNER_ERR);
+    lease.Release();
+    CleanupLeaseShm();
+}
+
+TEST(TestStandaloneSlotLease, first_process_resets_unexpected_sized_storage)
+{
+    CleanupLeaseShm();
+    const std::string shmName = GetLeaseShmName();
+    int32_t fd = shm_open(shmName.c_str(), O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    ASSERT_GE(fd, 0);
+    constexpr size_t incompatibleSize = sizeof(TestSlotLeaseHeader) + sizeof(uint64_t);
+    ASSERT_EQ(ftruncate(fd, incompatibleSize), 0);
+    ASSERT_EQ(close(fd), 0);
+
+    auto results = RunLeaseProcesses(4, 4);
+    ASSERT_EQ(results.size(), 4U);
+    std::set<uint32_t> slots;
+    for (const auto &result : results) {
+        EXPECT_EQ(result.result, BIO_OK);
+        slots.insert(result.slotIndex);
+    }
+    EXPECT_EQ(slots, (std::set<uint32_t>{ 0, 1, 2, 3 }));
     CleanupLeaseShm();
 }
 
@@ -242,9 +271,9 @@ TEST(TestStandaloneSlotLease, reclaims_slot_after_owner_process_dies)
         (void)close(readyPipe[0]);
         StandaloneSlotLease lease;
         uint32_t slotIndex = UINT32_MAX;
-        int32_t ret = lease.Acquire(1, DISK_PATHS, DISK_CAPS, SEGMENT_SIZE, slotIndex);
+        int32_t ret = lease.Acquire(1, slotIndex);
         if (ret == BIO_OK) {
-            ret = lease.PublishLayoutReady();
+            ret = lease.PublishReady();
         }
         (void)write(readyPipe[1], &ret, sizeof(ret));
         pause();
@@ -260,7 +289,7 @@ TEST(TestStandaloneSlotLease, reclaims_slot_after_owner_process_dies)
 
     StandaloneSlotLease lease;
     uint32_t slotIndex = UINT32_MAX;
-    EXPECT_EQ(lease.Acquire(1, DISK_PATHS, DISK_CAPS, SEGMENT_SIZE, slotIndex), BIO_OK);
+    EXPECT_EQ(lease.Acquire(1, slotIndex), BIO_OK);
     EXPECT_EQ(slotIndex, 0U);
     lease.Release();
     CleanupLeaseShm();
@@ -277,9 +306,9 @@ TEST(TestStandaloneSlotLease, reclaims_slot_from_zombie_owner)
         (void)close(readyPipe[0]);
         StandaloneSlotLease lease;
         uint32_t slotIndex = UINT32_MAX;
-        int32_t ret = lease.Acquire(1, DISK_PATHS, DISK_CAPS, SEGMENT_SIZE, slotIndex);
+        int32_t ret = lease.Acquire(1, slotIndex);
         if (ret == BIO_OK) {
-            ret = lease.PublishLayoutReady();
+            ret = lease.PublishReady();
         }
         (void)write(readyPipe[1], &ret, sizeof(ret));
         _exit(0);
@@ -295,7 +324,7 @@ TEST(TestStandaloneSlotLease, reclaims_slot_from_zombie_owner)
 
     StandaloneSlotLease lease;
     uint32_t slotIndex = UINT32_MAX;
-    EXPECT_EQ(lease.Acquire(1, DISK_PATHS, DISK_CAPS, SEGMENT_SIZE, slotIndex), BIO_OK);
+    EXPECT_EQ(lease.Acquire(1, slotIndex), BIO_OK);
     EXPECT_EQ(slotIndex, 0U);
     lease.Release();
     ASSERT_EQ(waitpid(child, nullptr, 0), child);
@@ -316,9 +345,9 @@ TEST(TestStandaloneSlotLease, keeps_slot_while_other_threads_remain_alive)
         (void)close(releasePipe[1]);
         auto *lease = new StandaloneSlotLease;
         uint32_t slotIndex = UINT32_MAX;
-        int32_t ret = lease->Acquire(1, DISK_PATHS, DISK_CAPS, SEGMENT_SIZE, slotIndex);
+        int32_t ret = lease->Acquire(1, slotIndex);
         if (ret == BIO_OK) {
-            ret = lease->PublishLayoutReady();
+            ret = lease->PublishReady();
         }
         pthread_t worker = {};
         auto *workerContext = new LeaseWorkerContext{ releasePipe[0], lease };
@@ -353,7 +382,7 @@ TEST(TestStandaloneSlotLease, keeps_slot_while_other_threads_remain_alive)
     if (leaderIsZombie) {
         StandaloneSlotLease contender;
         uint32_t contenderSlot = UINT32_MAX;
-        EXPECT_EQ(contender.Acquire(1, DISK_PATHS, DISK_CAPS, SEGMENT_SIZE, contenderSlot), BIO_NOT_READY);
+        EXPECT_EQ(contender.Acquire(1, contenderSlot), BIO_NOT_READY);
     }
 
     (void)close(releasePipe[1]);
@@ -366,7 +395,7 @@ TEST(TestStandaloneSlotLease, keeps_slot_while_other_threads_remain_alive)
     CleanupLeaseShm();
 }
 
-TEST(TestStandaloneSlotLease, returns_not_ready_when_layout_initializer_dies)
+TEST(TestStandaloneSlotLease, returns_not_ready_when_initializer_dies)
 {
     CleanupLeaseShm();
     int32_t readyPipe[2] = { -1, -1 };
@@ -377,7 +406,7 @@ TEST(TestStandaloneSlotLease, returns_not_ready_when_layout_initializer_dies)
         (void)close(readyPipe[0]);
         StandaloneSlotLease lease;
         uint32_t slotIndex = UINT32_MAX;
-        int32_t ret = lease.Acquire(2, DISK_PATHS, DISK_CAPS, SEGMENT_SIZE, slotIndex);
+        int32_t ret = lease.Acquire(2, slotIndex);
         (void)write(readyPipe[1], &ret, sizeof(ret));
         pause();
         _exit(1);
@@ -392,40 +421,40 @@ TEST(TestStandaloneSlotLease, returns_not_ready_when_layout_initializer_dies)
 
     StandaloneSlotLease observerLease;
     uint32_t observerSlot = UINT32_MAX;
-    EXPECT_EQ(observerLease.Acquire(2, DISK_PATHS, DISK_CAPS, SEGMENT_SIZE, observerSlot), BIO_NOT_READY);
+    EXPECT_EQ(observerLease.Acquire(2, observerSlot), BIO_NOT_READY);
 
     StandaloneSlotLease nextGenerationLease;
     uint32_t nextGenerationSlot = UINT32_MAX;
-    EXPECT_EQ(nextGenerationLease.Acquire(2, DISK_PATHS, DISK_CAPS, SEGMENT_SIZE, nextGenerationSlot), BIO_OK);
-    EXPECT_EQ(nextGenerationLease.PublishLayoutReady(), BIO_OK);
+    EXPECT_EQ(nextGenerationLease.Acquire(2, nextGenerationSlot), BIO_OK);
+    EXPECT_EQ(nextGenerationLease.PublishReady(), BIO_OK);
     nextGenerationLease.Release();
     CleanupLeaseShm();
 }
 
-TEST(TestStandaloneSlotLease, cleans_up_failed_layout_without_live_owner)
+TEST(TestStandaloneSlotLease, cleans_up_failed_initialization_without_live_owner)
 {
     CleanupLeaseShm();
     const std::string shmName = GetLeaseShmName();
     int32_t fd = shm_open(shmName.c_str(), O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
     ASSERT_GE(fd, 0);
     ASSERT_EQ(ftruncate(fd, sizeof(TestSlotLeaseHeader)), 0);
-    void *mapping = mmap(nullptr, sizeof(TestSlotLeaseHeader), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    ASSERT_NE(mapping, MAP_FAILED);
-    auto *header = static_cast<TestSlotLeaseHeader *>(mapping);
-    *header = {};
-    header->magic = SLOT_LEASE_MAGIC;
-    header->version = SLOT_LEASE_VERSION;
-    header->structSize = sizeof(TestSlotLeaseHeader);
-    header->slotCount = 1;
-    header->layoutFingerprint = StandaloneSlotLease::BuildLayoutFingerprint(
-        1, DISK_PATHS, DISK_CAPS, SEGMENT_SIZE);
-    header->layoutState = LAYOUT_STATE_FAILED;
-    ASSERT_EQ(munmap(mapping, sizeof(TestSlotLeaseHeader)), 0);
+    TestSlotLeaseHeader header = {};
+    header.magic = SLOT_LEASE_MAGIC;
+    header.version = SLOT_LEASE_VERSION;
+    header.structSize = sizeof(TestSlotLeaseHeader);
+    header.slotCount = 4;
+    header.initializationState = INITIALIZATION_STATE_FAILED;
+    ASSERT_EQ(pwrite(fd, &header, sizeof(header), 0), static_cast<ssize_t>(sizeof(header)));
     ASSERT_EQ(close(fd), 0);
 
-    StandaloneSlotLease observerLease;
-    uint32_t observerSlot = UINT32_MAX;
-    EXPECT_EQ(observerLease.Acquire(1, DISK_PATHS, DISK_CAPS, SEGMENT_SIZE, observerSlot), BIO_NOT_READY);
+    auto results = RunLeaseProcesses(4, 4);
+    ASSERT_EQ(results.size(), 4U);
+    std::set<uint32_t> slots;
+    for (const auto &result : results) {
+        EXPECT_EQ(result.result, BIO_OK);
+        slots.insert(result.slotIndex);
+    }
+    EXPECT_EQ(slots, (std::set<uint32_t>{ 0, 1, 2, 3 }));
     int32_t staleFd = shm_open(shmName.c_str(), O_RDWR, 0);
     EXPECT_EQ(staleFd, -1);
     if (staleFd >= 0) {
@@ -434,26 +463,77 @@ TEST(TestStandaloneSlotLease, cleans_up_failed_layout_without_live_owner)
 
     StandaloneSlotLease nextGenerationLease;
     uint32_t nextGenerationSlot = UINT32_MAX;
-    EXPECT_EQ(nextGenerationLease.Acquire(1, DISK_PATHS, DISK_CAPS, SEGMENT_SIZE, nextGenerationSlot), BIO_OK);
-    EXPECT_EQ(nextGenerationLease.PublishLayoutReady(), BIO_OK);
+    EXPECT_EQ(nextGenerationLease.Acquire(1, nextGenerationSlot), BIO_OK);
+    EXPECT_EQ(nextGenerationLease.PublishReady(), BIO_OK);
     nextGenerationLease.Release();
     CleanupLeaseShm();
 }
 
-TEST(TestStandaloneSlotLease, rejects_layout_change_while_a_slot_is_owned)
+TEST(TestStandaloneSlotLease, failed_initialization_with_live_owner_is_not_retried)
+{
+    CleanupLeaseShm();
+    StandaloneSlotLease initializer;
+    uint32_t slot = UINT32_MAX;
+    ASSERT_EQ(initializer.Acquire(2, slot), BIO_OK);
+    TestSlotLeaseHeader header = {};
+    ASSERT_EQ(pread(initializer.mFd, &header, sizeof(header), 0), static_cast<ssize_t>(sizeof(header)));
+    header.initializationState = INITIALIZATION_STATE_FAILED;
+    ASSERT_EQ(pwrite(initializer.mFd, &header, sizeof(header), 0), static_cast<ssize_t>(sizeof(header)));
+    StandaloneSlotLease contender;
+    EXPECT_EQ(contender.Acquire(2, slot), BIO_NOT_READY);
+    EXPECT_FALSE(contender.IsAcquired());
+    initializer.Release();
+    CleanupLeaseShm();
+}
+
+TEST(TestStandaloneSlotLease, waiting_process_does_not_retry_failed_generation)
+{
+    CleanupLeaseShm();
+    StandaloneSlotLease initializer;
+    uint32_t slot = UINT32_MAX;
+    ASSERT_EQ(initializer.Acquire(2, slot), BIO_OK);
+    int32_t readyPipe[2] = { -1, -1 };
+    ASSERT_EQ(pipe(readyPipe), 0);
+    pid_t child = fork();
+    ASSERT_GE(child, 0);
+    if (child == 0) {
+        (void)close(readyPipe[0]);
+        char ready = 1;
+        (void)write(readyPipe[1], &ready, sizeof(ready));
+        (void)close(readyPipe[1]);
+        StandaloneSlotLease waiter;
+        uint32_t childSlot = UINT32_MAX;
+        auto ret = waiter.Acquire(2, childSlot);
+        _exit(ret == BIO_NOT_READY ? 0 : 1);
+    }
+    (void)close(readyPipe[1]);
+    char ready = 0;
+    EXPECT_EQ(read(readyPipe[0], &ready, sizeof(ready)), static_cast<ssize_t>(sizeof(ready)));
+    (void)close(readyPipe[0]);
+    // The child has no other blocking operation after announcing that it is ready.
+    EXPECT_TRUE(WaitForProcessState(child, 'S'));
+    initializer.Release();
+    int32_t status = 0;
+    EXPECT_EQ(waitpid(child, &status, 0), child);
+    ASSERT_TRUE(WIFEXITED(status));
+    EXPECT_EQ(WEXITSTATUS(status), 0);
+    CleanupLeaseShm();
+}
+
+TEST(TestStandaloneSlotLease, rejects_slot_count_change_while_a_slot_is_owned)
 {
     CleanupLeaseShm();
     StandaloneSlotLease firstLease;
     uint32_t slotIndex = UINT32_MAX;
-    ASSERT_EQ(firstLease.Acquire(2, DISK_PATHS, DISK_CAPS, SEGMENT_SIZE, slotIndex), BIO_OK);
-    ASSERT_EQ(firstLease.PublishLayoutReady(), BIO_OK);
+    ASSERT_EQ(firstLease.Acquire(2, slotIndex), BIO_OK);
+    ASSERT_EQ(firstLease.PublishReady(), BIO_OK);
 
     pid_t child = fork();
     ASSERT_GE(child, 0);
     if (child == 0) {
         StandaloneSlotLease changedLease;
         uint32_t changedSlot = UINT32_MAX;
-        int32_t ret = changedLease.Acquire(3, DISK_PATHS, DISK_CAPS, SEGMENT_SIZE, changedSlot);
+        int32_t ret = changedLease.Acquire(3, changedSlot);
         _exit(ret == BIO_INVALID_PARAM ? 0 : 1);
     }
     int32_t status = 0;
@@ -464,20 +544,47 @@ TEST(TestStandaloneSlotLease, rejects_layout_change_while_a_slot_is_owned)
     CleanupLeaseShm();
 }
 
+TEST(TestStandaloneSlotLease, replacement_process_reuses_free_slot_with_surviving_owner)
+{
+    CleanupLeaseShm();
+    StandaloneSlotLease survivor;
+    uint32_t survivorSlot = UINT32_MAX;
+    ASSERT_EQ(survivor.Acquire(2, survivorSlot), BIO_OK);
+    ASSERT_EQ(survivor.PublishReady(), BIO_OK);
+    constexpr uint32_t JOIN_ATTEMPTS = 2U;
+    for (uint32_t attempt = 0; attempt < JOIN_ATTEMPTS; ++attempt) {
+        pid_t child = fork();
+        ASSERT_GE(child, 0);
+        if (child == 0) {
+            StandaloneSlotLease joiningLease;
+            uint32_t joiningSlot = UINT32_MAX;
+            auto ret = joiningLease.Acquire(2, joiningSlot);
+            // Exit without Release: the next process must reclaim only this slot.
+            _exit(ret == BIO_OK && joiningSlot != survivorSlot ? 0 : 1);
+        }
+        int32_t status = 0;
+        ASSERT_EQ(waitpid(child, &status, 0), child);
+        ASSERT_TRUE(WIFEXITED(status));
+        EXPECT_EQ(WEXITSTATUS(status), 0);
+    }
+    survivor.Release();
+    CleanupLeaseShm();
+}
+
 TEST(TestStandaloneSlotLease, forked_child_cannot_release_parent_slot)
 {
     CleanupLeaseShm();
     StandaloneSlotLease parentLease;
     uint32_t parentSlot = UINT32_MAX;
-    ASSERT_EQ(parentLease.Acquire(1, DISK_PATHS, DISK_CAPS, SEGMENT_SIZE, parentSlot), BIO_OK);
-    ASSERT_EQ(parentLease.PublishLayoutReady(), BIO_OK);
+    ASSERT_EQ(parentLease.Acquire(1, parentSlot), BIO_OK);
+    ASSERT_EQ(parentLease.PublishReady(), BIO_OK);
 
     pid_t child = fork();
     ASSERT_GE(child, 0);
     if (child == 0) {
         parentLease.Release();
         uint32_t childSlot = UINT32_MAX;
-        int32_t ret = parentLease.Acquire(1, DISK_PATHS, DISK_CAPS, SEGMENT_SIZE, childSlot);
+        int32_t ret = parentLease.Acquire(1, childSlot);
         _exit(ret == BIO_NOT_READY ? 0 : 1);
     }
     int32_t status = 0;

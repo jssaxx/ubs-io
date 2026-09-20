@@ -539,6 +539,13 @@ BResult BioConfig::Initialize(const std::string &configPath)
     return BIO_OK;
 }
 
+void BioConfig::SetStandaloneDeviceInfo(uint32_t deviceId)
+{
+    mStandaloneDeviceInfo.configured = true;
+    mStandaloneDeviceInfo.deviceId = deviceId;
+    LOG_INFO("Set standalone device info, deviceId:" << deviceId << ".");
+}
+
 BResult BioConfig::UpdateStandaloneDiskCapacity(uint32_t diskId, int64_t capacity)
 {
     if (diskId >= mDaemonConfig.diskCaps.size() || capacity <= 0) {
@@ -546,6 +553,51 @@ BResult BioConfig::UpdateStandaloneDiskCapacity(uint32_t diskId, int64_t capacit
         return BIO_INVALID_PARAM;
     }
     mDaemonConfig.diskCaps[diskId] = capacity;
+    return BIO_OK;
+}
+
+BResult BioConfig::SelectStandaloneDiskByDeviceInfo()
+{
+    if (!mDaemonConfig.hasDiskCache) {
+        LOG_INFO("Disk cache is disabled, skip standalone disk selection.");
+        return BIO_OK;
+    }
+
+    uint16_t diskNum = static_cast<uint16_t>(mDaemonConfig.diskList.size());
+    if (diskNum == 0 || !mStandaloneDeviceInfo.configured) {
+        LOG_ERROR("Invalid standalone config, diskNum:" << diskNum <<
+            ", deviceConfigured:" << mStandaloneDeviceInfo.configured <<
+            ". Standalone mode requires cache disks and BioSetStandaloneDevice before BioInitialize(STANDALONE).");
+        return BIO_INVALID_PARAM;
+    }
+    if (mDaemonConfig.diskCaps.size() != mDaemonConfig.diskList.size()) {
+        LOG_ERROR("Standalone disk config is inconsistent, disk path num:" << mDaemonConfig.diskList.size() <<
+            ", disk cap num:" << mDaemonConfig.diskCaps.size() << ".");
+        return BIO_ERR;
+    }
+    return SelectStandaloneVirtualDisks(diskNum);
+}
+
+BResult BioConfig::SelectStandaloneVirtualDisks(uint16_t diskNum)
+{
+    uint32_t deviceCount = mDaemonConfig.standaloneDeviceCount;
+    if (deviceCount == 0 || deviceCount > DEVICE_SIZE || mStandaloneDeviceInfo.deviceId >= deviceCount ||
+        diskNum > DEVICE_SIZE) {
+        LOG_ERROR("Invalid standalone virtual disk input, deviceId:" << mStandaloneDeviceInfo.deviceId <<
+            ", deviceCount:" << deviceCount << ", diskPathNum:" << diskNum << ".");
+        return BIO_INVALID_PARAM;
+    }
+
+    for (uint32_t diskIndex = 0; diskIndex < mDaemonConfig.diskCaps.size(); ++diskIndex) {
+        if (mDaemonConfig.diskCaps[diskIndex] <= 0) {
+            LOG_ERROR("Invalid standalone virtual disk capacity, diskIndex:" << diskIndex << ", cap:" <<
+                mDaemonConfig.diskCaps[diskIndex] << ".");
+            return BIO_INVALID_PARAM;
+        }
+    }
+
+    LOG_INFO("Standalone uses virtual disk regions, deviceId:" << mStandaloneDeviceInfo.deviceId <<
+        ", deviceCount:" << deviceCount << ", blockDeviceNum:" << diskNum << ".");
     return BIO_OK;
 }
 

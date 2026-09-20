@@ -38,11 +38,25 @@ static uint32_t g_bdmDiskHeadPad = 0UL;
 static uint32_t g_bdmVirtualSlotIndex = 0UL;
 static uint32_t g_bdmVirtualSlotCount = 0UL;
 
+static uint32_t BdmBuildDiskHeadPad(uint32_t isStandalone, uint32_t deviceId)
+{
+    if (isStandalone == 0) {
+        return 0;
+    }
+    return BDM_DISK_HEAD_STANDALONE_MAGIC | (deviceId & BDM_DISK_HEAD_SLOT_INDEX_MASK);
+}
+
 static uint32_t BdmBuildVirtualDiskHeadPad(uint32_t slotIndex, uint32_t slotCount)
 {
     return (BDM_DISK_HEAD_VIRTUAL_LAYOUT_VERSION << BDM_DISK_HEAD_LAYOUT_VERSION_SHIFT) |
         ((slotCount << BDM_DISK_HEAD_SLOT_COUNT_SHIFT) & BDM_DISK_HEAD_SLOT_COUNT_MASK) |
         BDM_DISK_HEAD_STANDALONE_MAGIC | (slotIndex & BDM_DISK_HEAD_SLOT_INDEX_MASK);
+}
+
+void BdmSetDiskStartupInfo(uint32_t isStandalone, uint32_t deviceId)
+{
+    g_bdmDiskHeadPad = BdmBuildDiskHeadPad(isStandalone, deviceId);
+    BDM_LOGINFO(0, "Set bdm disk startup info, standalone(%u), deviceId(%u).", isStandalone, deviceId);
 }
 
 int32_t BdmAlloc(uint32_t bdmId, uint64_t bucketId, uint64_t bucketOffset, uint64_t len, uint64_t *chunkId)

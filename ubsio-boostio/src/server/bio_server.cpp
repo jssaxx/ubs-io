@@ -393,16 +393,19 @@ BResult BioServer::BioStandaloneSlotLeaseInit()
 {
     auto &daemonConfig = mConfig->GetDaemonConfig();
     if (!daemonConfig.hasDiskCache) {
-        return BIO_OK;
+        return mConfig->SelectStandaloneDiskByDeviceInfo();
     }
     ChkTrue(daemonConfig.standaloneDeviceCount > 0, BIO_INVALID_PARAM,
         "Standalone disk cache requires ubsio.standalone.device_count in range [1," << DEVICE_SIZE << "].");
     uint32_t slotIndex = UINT32_MAX;
-    auto ret = mStandaloneSlotLease.Acquire(daemonConfig.standaloneDeviceCount, daemonConfig.diskList,
-        daemonConfig.diskCaps, daemonConfig.segment, slotIndex);
-    ChkTrue(ret == BIO_OK, ret, "Acquire standalone disk slot failed, slotCount:" <<
-        daemonConfig.standaloneDeviceCount << ", result:" << ret << ".");
-    return BIO_OK;
+    auto ret = mStandaloneSlotLease.Acquire(daemonConfig.standaloneDeviceCount, slotIndex);
+    ChkTrue(ret == BIO_OK, ret, "Acquire standalone slot failed, result:" << ret << ".");
+    mConfig->SetStandaloneDeviceInfo(slotIndex);
+    ret = mConfig->SelectStandaloneDiskByDeviceInfo();
+    if (ret != BIO_OK) {
+        mStandaloneSlotLease.Release();
+    }
+    return ret;
 }
 
 void BioServer::BioStandaloneSlotLeaseExit()
@@ -428,6 +431,9 @@ BResult BioServer::BioBdmInit()
     ret = BdmInit();
     ChkTrue(ret == BDM_CODE_OK, BIO_ERR, "Failed to init BDM, result:" << ret << ".");
     bool useVirtualRegions = mStandaloneMode && daemonConfig.hasDiskCache;
+    if (!useVirtualRegions) {
+        BdmSetDiskStartupInfo(mStandaloneMode ? 1U : 0U, mStandaloneMode ? mConfig->GetStandaloneDeviceId() : 0U);
+    }
     DiskDevices diskList = {};
     if (daemonConfig.diskList.size() > DISK_DEV_NUM) {
         LOG_ERROR("BDM disk num limit:" << DISK_DEV_NUM << ", input:" << daemonConfig.diskList.size() << ".");
@@ -446,7 +452,8 @@ BResult BioServer::BioBdmInit()
     bool forceNewDisk = mStandaloneMode && daemonConfig.standaloneForceNewDisk;
     BdmDiskSetForceNew(forceNewDisk ? 1U : 0U);
     if (useVirtualRegions) {
-        ret = BdmStartVirtual(&diskList, daemonConfig.segment, mStandaloneSlotLease.SlotIndex(),
+        // StandaloneDeviceIdGather has converted deviceId from a logic device ID to its sorted virtual index.
+        ret = BdmStartVirtual(&diskList, daemonConfig.segment, mConfig->GetStandaloneDeviceId(),
             daemonConfig.standaloneDeviceCount);
     } else {
         ret = BdmStart(&diskList, daemonConfig.segment);
@@ -454,7 +461,7 @@ BResult BioServer::BioBdmInit()
     ChkTrue(ret == BDM_CODE_OK, BIO_ERR, "Failed to start BDM, result:" << ret << ".");
 
     if (useVirtualRegions) {
-        ret = mStandaloneSlotLease.PublishLayoutReady();
+        ret = mStandaloneSlotLease.PublishReady();
         ChkTrue(ret == BIO_OK, ret, "Publish standalone disk layout ready failed, result:" << ret << ".");
     }
 

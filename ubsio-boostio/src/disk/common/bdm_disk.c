@@ -1830,13 +1830,6 @@ static int32_t BdmDiskCheckItem(const BdmDiskHead *head, const BdmDiskItem *item
     if (head->pad == item->pad) {
         return BDM_CODE_OK;
     }
-    if (BdmDiskHeadHasVirtualLayout(head->pad) && BdmDiskHeadHasVirtualLayout(item->pad) &&
-        BdmDiskHeadSlotCount(head->pad) == BdmDiskHeadSlotCount(item->pad)) {
-        BDM_LOGINFO(0, "Reuse virtual disk metadata with a new owner, device(%s), bdmId(%u), "
-            "storedSlotIndex(%u), currentSlotIndex(%u), slotCount(%u).", item->name, item->bdmId,
-            BdmDiskHeadSlotIndex(head->pad), BdmDiskHeadSlotIndex(item->pad), BdmDiskHeadSlotCount(item->pad));
-        return BDM_CODE_OK;
-    }
     if (UNLIKELY(!BdmDiskHeadHasStandaloneInfo(head->pad) && !BdmDiskHeadHasStandaloneInfo(item->pad))) {
         BDM_LOGWARN(0, "Disk metadata without standalone startup info, device(%s), bdmId(%u), currentSlotIndex(%u).",
             item->name, item->bdmId, BdmDiskHeadSlotIndex(item->pad));
