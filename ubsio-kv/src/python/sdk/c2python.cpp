@@ -221,35 +221,39 @@ private:
 
 py::list PyKvcKvScanKey()
 {
-    const UbsioKvKeyInfo *items = nullptr;
-    uint64_t count = 0;
-    int32_t ret = 0;
-    {
-        py::gil_scoped_release release;
-        ret = UbsioKvCacheScanKey(&items, &count);
-    }
-    ScanKeyResultGuard resultGuard(items);
-    if (ret != 0) {
-        LOG_ERROR("UbsioKvCacheScanKey failed, ret:" << ret);
-        return py::list();
-    }
-    if ((count == 0 && items != nullptr) || (count != 0 && items == nullptr)) {
-        LOG_ERROR("UbsioKvCacheScanKey returned inconsistent result, count:" << count);
-        return py::list();
-    }
-
     py::list result;
-    for (uint64_t index = 0; index < count; ++index) {
-        const auto &item = items[index];
-        if (item.keyLen >= UBSIO_KV_MAX_KEY_SIZE) {
-            LOG_ERROR("UbsioKvCacheScanKey returned invalid key length:" << item.keyLen);
+    bool hasMore = false;
+    do {
+        const UbsioKvKeyInfo *items = nullptr;
+        uint64_t count = 0;
+        int32_t ret = 0;
+        {
+            py::gil_scoped_release release;
+            ret = UbsioKvCacheScanKey(&items, &count, &hasMore);
+        }
+        ScanKeyResultGuard resultGuard(items);
+        if (ret != 0) {
+            LOG_ERROR("UbsioKvCacheScanKey failed, ret:" << ret);
             return py::list();
         }
-        py::dict keyInfo;
-        keyInfo["key"] = std::string(item.key, item.keyLen);
-        keyInfo["valueLen"] = item.valueLen;
-        result.append(std::move(keyInfo));
-    }
+        if ((count == 0 && items != nullptr) || (count != 0 && items == nullptr) || (hasMore && count == 0)) {
+            LOG_ERROR("UbsioKvCacheScanKey returned inconsistent result, count:" << count <<
+                ", hasMore:" << hasMore << ".");
+            return py::list();
+        }
+
+        for (uint64_t index = 0; index < count; ++index) {
+            const auto &item = items[index];
+            if (item.keyLen >= UBSIO_KV_MAX_KEY_SIZE) {
+                LOG_ERROR("UbsioKvCacheScanKey returned invalid key length:" << item.keyLen);
+                return py::list();
+            }
+            py::dict keyInfo;
+            keyInfo["key"] = std::string(item.key, item.keyLen);
+            keyInfo["valueLen"] = item.valueLen;
+            result.append(std::move(keyInfo));
+        }
+    } while (hasMore);
     return result;
 }
 

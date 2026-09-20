@@ -478,8 +478,9 @@ CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **objs, uint64
  *
  * The returned snapshot includes objects recovered from BDM and objects written to disk after startup.
  * The caller must release the result with BioFreeScanKeyResult. Result ordering is unspecified.
+ * If *hasMore is true, release the current result and call BioScanKey again for the remaining objects.
  */
-CResult BioScanKey(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *count);
+CResult BioScanKey(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *count, bool *hasMore);
 
 void BioFreeScanKeyResult(const UbsioKvKeyInfo **items);
 

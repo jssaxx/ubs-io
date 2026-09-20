@@ -111,8 +111,10 @@ TEST_F(KvTest, BioSdkStubLoadsAndCoversAllDelegates)
 
     const UbsioKvKeyInfo *items = nullptr;
     uint64_t count = 0;
-    EXPECT_EQ(DlBioSdkApi::ScanKey(1, &items, &count), RET_CACHE_OK);
+    bool hasMore = true;
+    EXPECT_EQ(DlBioSdkApi::ScanKey(1, &items, &count, &hasMore), RET_CACHE_OK);
     EXPECT_EQ(count, 2U);
+    EXPECT_FALSE(hasMore);
     ASSERT_NE(items, nullptr);
     EXPECT_STREQ(items[0].key, "key-0");
     DlBioSdkApi::FreeScanKeyResult(&items);

@@ -45,8 +45,10 @@ TEST_F(KvTest, PublicApiRejectsInvalidArguments)
     EXPECT_EQ(UbsioGetResourceInfo(nullptr), UBSIO_KVC_INVALID_PARAM);
     const UbsioKvKeyInfo *scanItems = nullptr;
     uint64_t scanCount = 0;
-    EXPECT_EQ(UbsioKvCacheScanKey(nullptr, &scanCount), UBSIO_KVC_INVALID_PARAM);
-    EXPECT_EQ(UbsioKvCacheScanKey(&scanItems, nullptr), UBSIO_KVC_INVALID_PARAM);
+    bool scanHasMore = false;
+    EXPECT_EQ(UbsioKvCacheScanKey(nullptr, &scanCount, &scanHasMore), UBSIO_KVC_INVALID_PARAM);
+    EXPECT_EQ(UbsioKvCacheScanKey(&scanItems, nullptr, &scanHasMore), UBSIO_KVC_INVALID_PARAM);
+    EXPECT_EQ(UbsioKvCacheScanKey(&scanItems, &scanCount, nullptr), UBSIO_KVC_INVALID_PARAM);
     UbsioKvCacheFreeScanKeyResult(nullptr);
     UbsioKvCacheFreeScanKeyResult(&scanItems);
 
@@ -189,8 +191,10 @@ TEST_F(KvTest, PublicApiHappyPathsUseOnlyBioStub)
 
     const UbsioKvKeyInfo *items = nullptr;
     uint64_t count = 0;
-    EXPECT_EQ(UbsioKvCacheScanKey(&items, &count), UBSIO_KVC_OK);
+    bool hasMore = true;
+    EXPECT_EQ(UbsioKvCacheScanKey(&items, &count, &hasMore), UBSIO_KVC_OK);
     ASSERT_EQ(count, 2U);
+    EXPECT_FALSE(hasMore);
     EXPECT_STREQ(items[1].key, "key-1");
     UbsioKvCacheFreeScanKeyResult(&items);
     EXPECT_EQ(items, nullptr);
@@ -256,6 +260,7 @@ TEST_F(KvTest, PublicApiMapsBioFailures)
 
     const UbsioKvKeyInfo *items = nullptr;
     uint64_t count = 0;
+    bool hasMore = false;
     const std::array<std::pair<int, int>, 7> scanMappings{{
         {RET_CACHE_EPERM, UBSIO_KVC_INVALID_PARAM},
         {RET_CACHE_NOT_READY, UBSIO_KVC_EAGAIN},
@@ -268,7 +273,9 @@ TEST_F(KvTest, PublicApiMapsBioFailures)
     for (const auto &mapping : scanMappings) {
         FakeBioSetResult("BioScanKey", mapping.first);
         FakeBioSetScanCount(0);
-        EXPECT_EQ(UbsioKvCacheScanKey(&items, &count), mapping.second);
+        hasMore = true;
+        EXPECT_EQ(UbsioKvCacheScanKey(&items, &count, &hasMore), mapping.second);
+        EXPECT_FALSE(hasMore);
     }
 
     char data[8]{};

@@ -45,7 +45,7 @@ using BioBatchGetKeyDiskAddrFunc = CResult (*)(uint64_t tenantId, const char **k
                                                 const uint32_t count, KeyAddrInfo *infos);
 using BioRegisterMetaEventCallbackFunc = CResult (*)(UbsioMetaEventCallbackC callback, void *context);
 using BioShowLocalCacheResourceFunc = CResult (*)(CacheResourcesDesc *nodeDesc);
-using BioScanKeyFunc = CResult (*)(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *count);
+using BioScanKeyFunc = CResult (*)(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *count, bool *hasMore);
 using BioFreeScanKeyResultFunc = void (*)(const UbsioKvKeyInfo **items);
 
 class DlBioSdkApi {
@@ -147,9 +147,9 @@ public:
         return static_cast<CResult>(pBioShowLocalCacheResource(nodeDesc));
     }
 
-    static CResult ScanKey(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *count)
+    static CResult ScanKey(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *count, bool *hasMore)
     {
-        return static_cast<CResult>(pBioScanKey(tenantId, items, count));
+        return static_cast<CResult>(pBioScanKey(tenantId, items, count, hasMore));
     }
 
     static void FreeScanKeyResult(const UbsioKvKeyInfo **items)

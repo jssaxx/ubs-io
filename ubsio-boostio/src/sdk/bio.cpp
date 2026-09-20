@@ -1211,13 +1211,14 @@ CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **objs, uint64
     return RET_CACHE_OK;
 }
 
-CResult BioScanKey(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *count)
+CResult BioScanKey(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *count, bool *hasMore)
 {
-    if (items == nullptr || count == nullptr) {
+    if (items == nullptr || count == nullptr || hasMore == nullptr) {
         return RET_CACHE_EPERM;
     }
     *items = nullptr;
     *count = 0;
+    *hasMore = false;
 
     {
         std::unique_lock<std::mutex> locker(g_lock);
@@ -1233,7 +1234,7 @@ CResult BioScanKey(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *co
     if (agentPtr == nullptr) {
         return RET_CACHE_ERROR;
     }
-    auto ret = agentPtr->ScanKey(items, count);
+    auto ret = agentPtr->ScanKey(items, count, hasMore);
     if (ret == BIO_ALLOC_FAIL) {
         return RET_CACHE_NO_SPACE;
     }

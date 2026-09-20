@@ -63,7 +63,8 @@ int32_t UbsioRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *c
 
 // Return a caller-owned snapshot of all valid objects in the local write-cache disk tier.
 // The caller releases the snapshot with BioFreeScanKeyResult from libbio_sdk.
-int32_t UbsioScanKey(const UbsioKvKeyInfo **items, uint64_t *count);
+// hasMore is true when the caller must release the current result and call again.
+int32_t UbsioScanKey(const UbsioKvKeyInfo **items, uint64_t *count, bool *hasMore);
 
 uint32_t GetNegoWorkIoTimeOut();
 

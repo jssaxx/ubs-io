@@ -115,12 +115,14 @@ int32_t UbsioKvCacheRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, 
  * reside in memory, have been deleted, or have been evicted from the disk tier are not returned. The returned array
  * is read-only and must be released with UbsioKvCacheFreeScanKeyResult before UbsioKvCacheExit.
  * Result ordering is unspecified. If no object is found, *items is NULL and *count is 0.
+ * If *hasMore is true, release the current result and call this interface again to obtain the remaining objects.
  *
  * @param items            [out] Read-only snapshot allocated by UBS-IO
  * @param count            [out] Number of entries in items
+ * @param hasMore          [out] true if more keys remain and the interface must be called again; otherwise false
  * @return 0 if successful
  */
-int32_t UbsioKvCacheScanKey(const UbsioKvKeyInfo **items, uint64_t *count);
+int32_t UbsioKvCacheScanKey(const UbsioKvKeyInfo **items, uint64_t *count, bool *hasMore);
 
 /**
  * @brief Release a snapshot returned by UbsioKvCacheScanKey.

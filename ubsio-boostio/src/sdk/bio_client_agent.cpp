@@ -88,12 +88,12 @@ BResult BioClientAgent::RegisterMetaEventCallback(UbsioMetaEventCallbackC callba
     return static_cast<BResult>(registerMetaEventCallbackOp(callback, context));
 }
 
-BResult BioClientAgent::ScanKey(const UbsioKvKeyInfo **items, uint64_t *count)
+BResult BioClientAgent::ScanKey(const UbsioKvKeyInfo **items, uint64_t *count, bool *hasMore)
 {
     if (!IsDirectMode() || scanKeyOp == nullptr) {
         return BIO_NOT_READY;
     }
-    return static_cast<BResult>(scanKeyOp(items, count));
+    return static_cast<BResult>(scanKeyOp(items, count, hasMore));
 }
 
 void BioClientAgent::Exit()

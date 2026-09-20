@@ -1244,6 +1244,8 @@ BResult BioServer::BioCacheInit()
     }
 
     mCacheInited = true;
+    // Fault handling must own recovered flows before background eviction can issue disk I/O.
+    WCacheManager::Instance()->StartGlobalEviction();
     return BIO_OK;
 }
 
@@ -1625,13 +1627,14 @@ extern "C" int32_t UbsioRegisterMetaEventCallback(UbsioMetaEventCallbackC callba
     return BIO_OK;
 }
 
-extern "C" int32_t UbsioScanKey(const UbsioKvKeyInfo **items, uint64_t *count)
+extern "C" int32_t UbsioScanKey(const UbsioKvKeyInfo **items, uint64_t *count, bool *hasMore)
 {
-    if (items == nullptr || count == nullptr) {
+    if (items == nullptr || count == nullptr || hasMore == nullptr) {
         return BIO_INVALID_PARAM;
     }
     *items = nullptr;
     *count = 0;
+    *hasMore = false;
 
     std::unordered_map<std::string, uint64_t> diskItems;
     auto ret = Cache::Instance().ScanDiskKeys(diskItems);
