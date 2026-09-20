@@ -446,18 +446,22 @@ BResult StandaloneSlotLease::AcquireOnce(uint32_t slotCount, uint32_t &slotIndex
         return BIO_INNER_ERR;
     }
     bool storageCreated = shmStat.st_size == 0;
+    if (!storageCreated && shmStat.st_size != static_cast<off_t>(sizeof(SlotLeaseHeader))) {
+        LOG_WARN("Reset unexpected standalone slot lease shared memory size, actual:" << shmStat.st_size <<
+            ", expected:" << sizeof(SlotLeaseHeader) << ".");
+        if (ftruncate(fd, 0) != 0) {
+            LOG_ERROR("Clear standalone slot lease shared memory failed, errno:" << errno << ".");
+            UnlockFile(fd);
+            (void)close(fd);
+            return BIO_INNER_ERR;
+        }
+        storageCreated = true;
+    }
     if (storageCreated && ftruncate(fd, sizeof(SlotLeaseHeader)) != 0) {
         LOG_ERROR("Resize standalone slot lease shared memory failed, errno:" << errno << ".");
         if (IsCurrentSharedMemory(fd, shmName)) {
             UnlinkSharedMemory(shmName);
         }
-        UnlockFile(fd);
-        (void)close(fd);
-        return BIO_INNER_ERR;
-    }
-    if (!storageCreated && shmStat.st_size != static_cast<off_t>(sizeof(SlotLeaseHeader))) {
-        LOG_ERROR("Unexpected standalone slot lease shared memory size, actual:" << shmStat.st_size <<
-            ", expected:" << sizeof(SlotLeaseHeader) << ".");
         UnlockFile(fd);
         (void)close(fd);
         return BIO_INNER_ERR;
