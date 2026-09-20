@@ -237,6 +237,33 @@ CResult BioInitialize\(WorkerMode mode, ClientOptionsConfig \*optConf\)
 </tbody>
 </table>
 
+## BioGetLogLevel
+
+**函数定义**
+
+查询客户端当前实际生效的日志等级。该接口应在 `BioInitialize` 成功后调用。
+
+**实现方法**
+
+```c
+CResult BioGetLogLevel(BioLogLevel *level);
+```
+
+**参数说明**
+
+| 参数名 | 数据类型 | 参数类型 | 描述 |
+| --- | --- | --- | --- |
+| `level` | `BioLogLevel *` | 出参 | 返回 `BIO_LOG_LEVEL_TRACE`、`BIO_LOG_LEVEL_DEBUG`、`BIO_LOG_LEVEL_INFO`、`BIO_LOG_LEVEL_WARN` 或 `BIO_LOG_LEVEL_ERROR`。 |
+
+**返回值**
+
+| 返回值 | 描述 |
+| --- | --- |
+| `RET_CACHE_OK` | 查询成功。 |
+| `RET_CACHE_EPERM` | `level` 为空。 |
+| `RET_CACHE_NOT_READY` | UBS IO尚未完成初始化。 |
+| `RET_CACHE_ERROR` | 当前日志等级无效。 |
+
 ## BioExit<a name="ZH-CN_TOPIC_0000002552860615"></a>
 
 **函数定义<a name="section4349141610276"></a>**

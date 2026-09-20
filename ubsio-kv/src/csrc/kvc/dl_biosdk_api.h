@@ -27,6 +27,7 @@ namespace ubsio {
 
 using BioExitFunc = void (*)(void);
 using BioInitFunc = CResult (*)(WorkerMode mode, ClientOptionsConfig *optConf);
+using BioGetLogLevelFunc = CResult (*)(BioLogLevel *level);
 using BioCreateCacheFunc = CResult (*)(CacheDescriptor desc);
 using BioCalLocationFunc = CResult (*)(uint64_t tenantId, uint64_t objectId, ObjLocation *location);
 using BioGetFunc = CResult (*)(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location,
@@ -56,6 +57,14 @@ public:
     static CResult Initialize(WorkerMode mode, ClientOptionsConfig *optConf)
     {
         return static_cast<CResult>(pBioInitialize(mode, optConf));
+    }
+
+    static CResult GetLogLevel(BioLogLevel *level)
+    {
+        if (pBioGetLogLevel == nullptr) {
+            return RET_CACHE_NOT_READY;
+        }
+        return static_cast<CResult>(pBioGetLogLevel(level));
     }
 
     static CResult CreateCache(CacheDescriptor desc)
@@ -156,6 +165,7 @@ private:
 
     static BioExitFunc pBioExit;
     static BioInitFunc pBioInitialize;
+    static BioGetLogLevelFunc pBioGetLogLevel;
     static BioGetFunc pBioGet;
     static BioPutFunc pBioPut;
     static BioStatFunc pBioStat;

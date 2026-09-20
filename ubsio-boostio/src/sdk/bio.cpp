@@ -743,6 +743,24 @@ CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf)
     return BioService::Initialize(mode, *optConf);
 }
 
+CResult BioGetLogLevel(BioLogLevel *level)
+{
+    if (UNLIKELY(level == nullptr)) {
+        return RET_CACHE_EPERM;
+    }
+    if (UNLIKELY(gClient == nullptr || !gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+
+    int32_t currentLevel = BioClientLog::Instance()->GetMinLogLevel();
+    if (UNLIKELY(currentLevel < static_cast<int32_t>(BIO_LOG_LEVEL_TRACE) ||
+        currentLevel >= static_cast<int32_t>(BIO_LOG_LEVEL_BUTT))) {
+        return RET_CACHE_ERROR;
+    }
+    *level = static_cast<BioLogLevel>(currentLevel);
+    return RET_CACHE_OK;
+}
+
 CResult BioRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)
 {
     auto agentPtr = ock::bio::agent::BioClientAgent::Instance();

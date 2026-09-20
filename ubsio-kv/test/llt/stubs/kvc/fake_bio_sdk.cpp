@@ -23,6 +23,7 @@ struct BioStubState {
     int batchItemResult{RET_CACHE_OK};
     uint16_t resourceDiskCount{2};
     uint32_t scanCount{2};
+    BioLogLevel logLevel{BIO_LOG_LEVEL_INFO};
     std::string diskPath{"/fake/disk0"};
     uint64_t diskOffset{0};
     uint64_t diskLength{4096};
@@ -53,6 +54,7 @@ extern "C" void FakeBioReset()
     state.batchItemResult = RET_CACHE_OK;
     state.resourceDiskCount = 2;
     state.scanCount = 2;
+    state.logLevel = BIO_LOG_LEVEL_INFO;
     state.diskPath = "/fake/disk0";
     state.diskOffset = 0;
     state.diskLength = 4096;
@@ -101,6 +103,13 @@ extern "C" void FakeBioSetScanCount(uint32_t count)
     state.scanCount = count;
 }
 
+extern "C" void FakeBioSetLogLevel(int32_t level)
+{
+    auto &state = State();
+    std::lock_guard<std::mutex> lock(state.mutex);
+    state.logLevel = static_cast<BioLogLevel>(level);
+}
+
 extern "C" void FakeBioSetDiskInfo(const char *path, uint64_t offset, uint64_t length, int result)
 {
     auto &state = State();
@@ -116,6 +125,17 @@ extern "C" CResult BioInitialize(WorkerMode, ClientOptionsConfig *)
     auto &state = State();
     std::lock_guard<std::mutex> lock(state.mutex);
     return static_cast<CResult>(ResultLocked(state, "BioInitialize"));
+}
+
+extern "C" CResult BioGetLogLevel(BioLogLevel *level)
+{
+    auto &state = State();
+    std::lock_guard<std::mutex> lock(state.mutex);
+    auto result = ResultLocked(state, "BioGetLogLevel");
+    if (result == RET_CACHE_OK && level != nullptr) {
+        *level = state.logLevel;
+    }
+    return static_cast<CResult>(result);
 }
 
 extern "C" CResult BioCreateCache(CacheDescriptor)

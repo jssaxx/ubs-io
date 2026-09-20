@@ -66,6 +66,15 @@ typedef enum {
     STDERR_TYPE
 } LogType;
 
+typedef enum {
+    BIO_LOG_LEVEL_TRACE = 0,
+    BIO_LOG_LEVEL_DEBUG = 1,
+    BIO_LOG_LEVEL_INFO = 2,
+    BIO_LOG_LEVEL_WARN = 3,
+    BIO_LOG_LEVEL_ERROR = 4,
+    BIO_LOG_LEVEL_BUTT
+} BioLogLevel;
+
 #define MAX_KEY_SIZE (256)
 #define LOCATION_SIZE (2)
 #define NODE_DESC_SIZE (16)
@@ -226,6 +235,14 @@ typedef struct {
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
 CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf);
+
+/**
+ * @brief Get the effective SDK log level after initialization.
+ *
+ * @param level [out] Effective SDK log level.
+ * @return RET_CACHE_OK on success; otherwise, an error code.
+ */
+CResult BioGetLogLevel(BioLogLevel *level);
 
 /**
  * @brief Register a same-process UBS IO metadata event callback.
