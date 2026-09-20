@@ -28,7 +28,7 @@ Key capabilities:
 
 | Component | Description | Entry |
 | --- | --- | --- |
-| UBSIO-KV | Standard KV APIs such as `put`, `get`, `batch_put`, and `batch_get`; adapter layer between upper-layer applications and BoostIO. | [KV API reference](docs/ubsio-kv/API接口列表.md) |
+| UBSIO-KV | Standard KV APIs such as `put`, `get`, `batch_put`, and `batch_get`; adapter layer between upper-layer applications and BoostIO. | [KV API reference](docs/ubsio-kv/api_reference.md) |
 | UBSIO-BoostIO | Local cache runtime, daemon, standalone mode, offline build, and packaging capability. | [BoostIO README](ubsio-boostio/README.md), [deployment guide](docs/ubsio-boostio/inference_three_level_pooling_deployment_guide.md) |
 | Mooncake patch | Mooncake Store backend integration patch for vLLM-Ascend. | [Mooncake patch guide](patches/mooncake/mooncake.md) |
 | ubsio-common CLI | CLI server/client and BoostIO diagnose commands. | [CLI command reference](docs/ubsio-common/CLI命令说明.md) |
@@ -44,7 +44,7 @@ Key capabilities:
 | Category | Documents |
 | --- | --- |
 | BoostIO APIs | [API reference](docs/ubsio-boostio/UBS-IO%20API参考.md) |
-| UBSIO-KV APIs | [KV API reference](docs/ubsio-kv/API接口列表.md) |
+| UBSIO-KV APIs | [KV API reference](docs/ubsio-kv/api_reference.md) |
 | CLI | [ubsio-common CLI command reference](docs/ubsio-common/CLI命令说明.md) |
 | Ecosystem | [Mooncake patch guide](patches/mooncake/mooncake.md) |
 | Notices | [Third-party notices](THIRD_PARTY_NOTICES.md) |
