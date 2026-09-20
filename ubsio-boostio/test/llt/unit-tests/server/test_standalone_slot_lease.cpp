@@ -209,6 +209,27 @@ TEST(TestStandaloneSlotLease, truncated_header_returns_error_without_crashing)
     CleanupLeaseShm();
 }
 
+TEST(TestStandaloneSlotLease, first_process_resets_unexpected_sized_storage)
+{
+    CleanupLeaseShm();
+    const std::string shmName = GetLeaseShmName();
+    int32_t fd = shm_open(shmName.c_str(), O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    ASSERT_GE(fd, 0);
+    constexpr size_t incompatibleSize = sizeof(TestSlotLeaseHeader) + sizeof(uint64_t);
+    ASSERT_EQ(ftruncate(fd, incompatibleSize), 0);
+    ASSERT_EQ(close(fd), 0);
+
+    auto results = RunLeaseProcesses(4, 4);
+    ASSERT_EQ(results.size(), 4U);
+    std::set<uint32_t> slots;
+    for (const auto &result : results) {
+        EXPECT_EQ(result.result, BIO_OK);
+        slots.insert(result.slotIndex);
+    }
+    EXPECT_EQ(slots, (std::set<uint32_t>{ 0, 1, 2, 3 }));
+    CleanupLeaseShm();
+}
+
 TEST(TestStandaloneSlotLease, concurrent_processes_claim_unique_slots)
 {
     CleanupLeaseShm();
