@@ -27,12 +27,15 @@ namespace ubsio {
 
 using BioExitFunc = void (*)(void);
 using BioInitFunc = CResult (*)(WorkerMode mode, ClientOptionsConfig *optConf);
+using BioGetLogLevelFunc = CResult (*)(BioLogLevel *level);
 using BioCreateCacheFunc = CResult (*)(CacheDescriptor desc);
 using BioCalLocationFunc = CResult (*)(uint64_t tenantId, uint64_t objectId, ObjLocation *location);
 using BioGetFunc = CResult (*)(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location,
                            char *value, uint64_t *realLength);
 using BioPutFunc = CResult (*)(uint64_t tenantId, const char *key, const char *value, uint64_t length, ObjLocation location);
 using BioStatFunc = CResult (*)(uint64_t tenantId, const char *key, ObjLocation location, ObjStat *stat);
+using BioBatchStatFunc = CResult (*)(uint64_t tenantId, const char **keys, ObjLocation *locations, uint32_t count,
+    BatchObjStat *stats);
 using BioBatchGetFunc = CResult (*)(uint64_t tenantId, const char **keys, const uint32_t count, uint64_t *offsets,
                                 uint64_t *lengths, ObjLocation *locations, uintptr_t *valueAddrs, uint64_t *realLengths, int32_t *results);
 using BioBatchExistFunc = CResult (*)(uint64_t tenantId, const char *key[], ObjLocation location[], uint32_t count, bool result[]);
@@ -42,7 +45,7 @@ using BioBatchGetKeyDiskAddrFunc = CResult (*)(uint64_t tenantId, const char **k
                                                 const uint32_t count, KeyAddrInfo *infos);
 using BioRegisterMetaEventCallbackFunc = CResult (*)(UbsioMetaEventCallbackC callback, void *context);
 using BioShowLocalCacheResourceFunc = CResult (*)(CacheResourcesDesc *nodeDesc);
-using BioScanKeyFunc = CResult (*)(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *count);
+using BioScanKeyFunc = CResult (*)(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *count, bool *hasMore);
 using BioFreeScanKeyResultFunc = void (*)(const UbsioKvKeyInfo **items);
 
 class DlBioSdkApi {
@@ -54,6 +57,14 @@ public:
     static CResult Initialize(WorkerMode mode, ClientOptionsConfig *optConf)
     {
         return static_cast<CResult>(pBioInitialize(mode, optConf));
+    }
+
+    static CResult GetLogLevel(BioLogLevel *level)
+    {
+        if (pBioGetLogLevel == nullptr) {
+            return RET_CACHE_NOT_READY;
+        }
+        return static_cast<CResult>(pBioGetLogLevel(level));
     }
 
     static CResult CreateCache(CacheDescriptor desc)
@@ -80,6 +91,12 @@ public:
     static CResult Stat(uint64_t tenantId, const char *key, ObjLocation location, ObjStat *stat)
     {
         return static_cast<CResult>(pBioStat(tenantId, key, location, stat));
+    }
+
+    static CResult BatchStat(uint64_t tenantId, const char **keys, ObjLocation *locations, uint32_t count,
+        BatchObjStat *stats)
+    {
+        return static_cast<CResult>(pBioBatchStat(tenantId, keys, locations, count, stats));
     }
 
     static CResult BatchExist(uint64_t tenantId, const char *key[], ObjLocation location[], uint32_t count, bool result[])
@@ -130,9 +147,9 @@ public:
         return static_cast<CResult>(pBioShowLocalCacheResource(nodeDesc));
     }
 
-    static CResult ScanKey(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *count)
+    static CResult ScanKey(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *count, bool *hasMore)
     {
-        return static_cast<CResult>(pBioScanKey(tenantId, items, count));
+        return static_cast<CResult>(pBioScanKey(tenantId, items, count, hasMore));
     }
 
     static void FreeScanKeyResult(const UbsioKvKeyInfo **items)
@@ -148,9 +165,11 @@ private:
 
     static BioExitFunc pBioExit;
     static BioInitFunc pBioInitialize;
+    static BioGetLogLevelFunc pBioGetLogLevel;
     static BioGetFunc pBioGet;
     static BioPutFunc pBioPut;
     static BioStatFunc pBioStat;
+    static BioBatchStatFunc pBioBatchStat;
     static BioCreateCacheFunc pBioCreateCache;
     static BioCalLocationFunc pBioCalcLocation;
     static BioBatchGetFunc pBioBatchGet;

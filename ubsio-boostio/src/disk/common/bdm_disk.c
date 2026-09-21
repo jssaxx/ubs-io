@@ -171,6 +171,7 @@ typedef struct {
     bool slotAcquired;
     int32_t traceId;
     uint64_t traceStartNs;
+    uint64_t queueTraceStartNs;
     BdmIoCb cb;
     void *ctx;
     void *item;
@@ -1525,6 +1526,7 @@ static int32_t BdmDiskPrepareAsyncContext(BdmAsyncOpsReq *req, bool isRead, bool
     bdmIo->traceId = useUring ? (isRead ? BDM_DISK_TRACE_READ_ASYNC_C : BDM_DISK_TRACE_WRITE_ASYNC_C) :
                                (isRead ? BDM_DISK_TRACE_READ_SYNC_C : BDM_DISK_TRACE_WRITE_SYNC_C);
     bdmIo->traceStartNs = 0;
+    bdmIo->queueTraceStartNs = 0;
     if (HTracerIsEnableC()) {
         bdmIo->traceStartNs = HTracerNowNsC();
         const char *traceName = useUring ? (isRead ? "BDM_DISK_TRACE_READ_ASYNC" : "BDM_DISK_TRACE_WRITE_ASYNC") :
@@ -1556,10 +1558,20 @@ static int32_t BdmDiskExecuteSyncBatch(void **argList, uint32_t argNum, void *ct
         }
         BdmDiskItem *item = (BdmDiskItem *)bdmIo->item;
         uint64_t rwOffset = item->offset + item->dataOffset + item->minChunkSize * bdmIo->chunkId + bdmIo->offset;
+        if (bdmIo->isRead) {
+            HTRACER_C_DELAY_END(BDM_DISK_TRACE_READ_QUEUE_WAIT_C, bdmIo->queueTraceStartNs, BDM_CODE_OK);
+        }
+        uint64_t preadTraceStartNs = 0;
+        if (bdmIo->isRead && HTracerIsEnableC()) {
+            preadTraceStartNs = HTracerNowNsC();
+            HTracerDelayBeginC(BDM_DISK_TRACE_READ_PREAD_C, "BDM_DISK_TRACE_READ_PREAD");
+        }
         int32_t ret = BdmDiskIsRangeAligned(bdmIo->len, rwOffset) ?
-                          BdmDiskInnerReadWriteDirect(
-                              item, (char *)bdmIo->buf, bdmIo->len, rwOffset, bdmIo->isRead) :
-                          BdmDiskInnerReadWrite(item, (char *)bdmIo->buf, bdmIo->len, rwOffset, bdmIo->isRead);
+            BdmDiskInnerReadWriteDirect(item, (char *)bdmIo->buf, bdmIo->len, rwOffset, bdmIo->isRead) :
+            BdmDiskInnerReadWrite(item, (char *)bdmIo->buf, bdmIo->len, rwOffset, bdmIo->isRead);
+        if (bdmIo->isRead) {
+            HTRACER_C_DELAY_END(BDM_DISK_TRACE_READ_PREAD_C, preadTraceStartNs, ret);
+        }
         HTRACER_C_DELAY_END(bdmIo->traceId, bdmIo->traceStartNs, ret);
         bdmIo->cb(bdmIo->ctx, ret);
     }
@@ -1575,8 +1587,15 @@ static int32_t BdmDiskHandleSyncBatch(BdmAsyncOpsReq *reqs, uint32_t reqNum, boo
             BdmDiskCompleteReq(&reqs[i], ret);
             continue;
         }
+        if (isRead && HTracerIsEnableC()) {
+            bdmIo->queueTraceStartNs = HTracerNowNsC();
+            HTracerDelayBeginC(BDM_DISK_TRACE_READ_QUEUE_WAIT_C, "BDM_DISK_TRACE_READ_QUEUE_WAIT");
+        }
         ret = BdmThreadPoolAdd(g_bdmSyncThreadPool, NULL, (void *)bdmIo);
         if (UNLIKELY(ret != BDM_CODE_OK)) {
+            if (isRead) {
+                HTRACER_C_DELAY_END(BDM_DISK_TRACE_READ_QUEUE_WAIT_C, bdmIo->queueTraceStartNs, ret);
+            }
             BdmDiskCleanupPreparedAsyncContext(bdmIo, ret);
             BdmDiskCompleteReq(&reqs[i], ret);
         }

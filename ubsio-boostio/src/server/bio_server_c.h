@@ -63,7 +63,8 @@ int32_t UbsioRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *c
 
 // Return a caller-owned snapshot of all valid objects in the local write-cache disk tier.
 // The caller releases the snapshot with BioFreeScanKeyResult from libbio_sdk.
-int32_t UbsioScanKey(const UbsioKvKeyInfo **items, uint64_t *count);
+// hasMore is true when the caller must release the current result and call again.
+int32_t UbsioScanKey(const UbsioKvKeyInfo **items, uint64_t *count, bool *hasMore);
 
 uint32_t GetNegoWorkIoTimeOut();
 
@@ -103,6 +104,8 @@ int32_t BatchGet(BatchGetRequest *req, BatchGetResponse *rsp);
 
 int32_t BatchExist(BatchExistRequest *req, BatchExistResponse *rsp);
 
+int32_t BatchExistStandalone(const char **keys, ObjLocation *locations, uint32_t count, bool *results);
+
 int32_t Delete(DeleteRequest *req);
 
 // Variable-length direct-call response. Server allocates *rsp with new[];
@@ -110,6 +113,8 @@ int32_t Delete(DeleteRequest *req);
 int32_t List(ListRequest *req, ListResponse **rsp);
 
 int32_t Stat(StatRequest *req, StatResponse *rsp);
+
+int32_t BatchStat(const char **keys, ObjLocation *locations, uint32_t count, BatchObjStat *stats);
 
 int32_t Load(LoadRequest *req);
 

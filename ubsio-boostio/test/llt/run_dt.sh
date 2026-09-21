@@ -24,16 +24,25 @@ echo "=== 2. Building Project ==="
 bash ${PROJECT_ROOT}/build.sh -t debug --ut
 
 LCOV_RC_OPTS="--rc lcov_branch_coverage=1 --rc lcov_excl_br_line=LCOV_EXCL_BR_LINE|NET_LOG*|CLIENT_LOG*|LOG*|BIO_TP_START*|ChkTrue*"
+LCOV_DIRECTORY_OPTS=(
+    --directory "${BUILD_DIR}/src/common"
+    --directory "${BUILD_DIR}/src/config"
+    --directory "${BUILD_DIR}/src/flow"
+    --directory "${BUILD_DIR}/src/htracer"
+    --directory "${BUILD_DIR}/src/disk"
+    --directory "${BUILD_DIR}/src/cache"
+)
+
 USE_GCOV=0
 if ! command -v lcov >/dev/null 2>&1 || ! command -v genhtml >/dev/null 2>&1; then
     USE_GCOV=1
 fi
 
 echo "=== 3. Capturing Baseline (Initial State) ==="
-# 扫描所有生成的 .gcno 文件，将所有源文件标记为 0% 覆盖
+# 仅扫描最终覆盖率报告保留的模块，将所有源文件标记为 0% 覆盖
 if [ "${USE_GCOV}" -eq 0 ]; then
     lcov --capture --initial \
-         --directory ${PROJECT_ROOT}/Build \
+         "${LCOV_DIRECTORY_OPTS[@]}" \
          --output-file ${BASELINE_INFO} \
          ${LCOV_RC_OPTS} \
          --quiet
@@ -57,7 +66,7 @@ echo "=== 5. Capturing Test Data (Execution State) ==="
 cd ${PROJECT_ROOT}
 # 扫描 .gcda 文件，获取实际执行情况
 lcov --capture \
-     --directory ${PROJECT_ROOT}/Build \
+     "${LCOV_DIRECTORY_OPTS[@]}" \
      --output-file ${TEST_INFO} \
      ${LCOV_RC_OPTS} \
      --quiet

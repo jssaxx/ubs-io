@@ -15,11 +15,11 @@
 
 #include <string>
 #include <unordered_map>
-#include <memory>
 #include <functional>
 #include <dlfcn.h>
 #include "bio_err.h"
 #include "underfs_c.h"
+#include "bio_trace.h"
 
 namespace ock {
 namespace bio {
@@ -68,6 +68,7 @@ namespace bio {
             underFsConfigInfo.cephConfig.poolName = config.cephConfig.pools.at(0).c_str();
             underFsConfigInfo.hdfsConfig.nameNode = config.hdfsConfig.nameNode.c_str();
             underFsConfigInfo.hdfsConfig.workingPath = config.hdfsConfig.workingPath.c_str();
+            underFsConfigInfo.localConfig.rootPath = config.localConfig.rootPath.c_str();
             initUnderFsConfigOp(underFsConfigInfo);
             auto ret = initOp();
             if (ret != BIO_OK) {
@@ -88,7 +89,9 @@ namespace bio {
 
         BResult Put(const char *key, const char *value, const size_t len)
         {
+            BIO_TRACE_START(UFS_TRACE_PUT);
             auto ret = putOp(key, value, len);
+            BIO_TRACE_END(UFS_TRACE_PUT, ret);
             if (UNLIKELY(ret != BIO_OK)) {
                 LOG_ERROR("UfsHelper put failed, ret: " << ret << ", key: " << key << ", len: " << len << ".");
                 return ret;
@@ -99,7 +102,9 @@ namespace bio {
 
         BResult Get(const char *key, char *value, const size_t len, const uint64_t off)
         {
+            BIO_TRACE_START(UFS_TRACE_GET);
             auto ret = getOp(key, value, len, off);
+            BIO_TRACE_END(UFS_TRACE_GET, ret);
             if (UNLIKELY(ret != BIO_OK)) {
                 LOG_ERROR("UfsHelper get failed, ret" << ret << ", key: " << key << ", len: " <<
                                                       len << ", offset" << off << ".");
@@ -109,9 +114,26 @@ namespace bio {
             return ret;
         }
 
+        BResult GetWithRealLen(const char *key, char *value, const size_t len, const uint64_t off, size_t &realLen)
+        {
+            BIO_TRACE_START(UFS_TRACE_GET);
+            auto ret = getWithRealLenOp(key, value, len, off, &realLen);
+            BIO_TRACE_END(UFS_TRACE_GET, ret);
+            if (UNLIKELY(ret != BIO_OK)) {
+                LOG_ERROR("UfsHelper get with real length failed, ret:" << ret << ", key:" << key <<
+                    ", len:" << len << ", offset:" << off << ".");
+                return ret;
+            }
+            LOG_DEBUG("UfsHelper get with real length success, key:" << key << ", len:" << len <<
+                ", realLen:" << realLen << ", offset:" << off << ".");
+            return ret;
+        }
+
         BResult Delete(const char *key)
         {
+            BIO_TRACE_START(UFS_TRACE_DEL);
             auto ret = deleteOp(key);
+            BIO_TRACE_END(UFS_TRACE_DEL, ret);
             if (UNLIKELY(ret != BIO_OK)) {
                 LOG_ERROR("UfsHelper delete failed, ret" << ret << ", key: " << key << ".");
                 return ret;
@@ -120,10 +142,23 @@ namespace bio {
             return ret;
         }
 
+        BResult Exist(const char *key)
+        {
+            BIO_TRACE_START(UFS_TRACE_EXIST);
+            BResult ret = existOp(key);
+            BIO_TRACE_END(UFS_TRACE_EXIST, ret);
+            if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
+                LOG_ERROR("UfsHelper exist failed, ret:" << ret << ", key:" << key << ".");
+            }
+            return ret;
+        }
+
         BResult Stat(const char *key, ObjStat &objStat)
         {
             ObjStatInfo statInfo;
+            BIO_TRACE_START(UFS_TRACE_STAT);
             auto ret = statOp(key, &statInfo);
+            BIO_TRACE_END(UFS_TRACE_STAT, ret);
             if (UNLIKELY(ret != BIO_OK)) {
                 LOG_ERROR("UfsHelper stat failed, ret: " << ret << ", key: " << key << ".");
                 return ret;
@@ -138,7 +173,9 @@ namespace bio {
         {
             ObjStatInfo *listObjs;
             int size = 0;
+            BIO_TRACE_START(UFS_TRACE_LIST);
             auto ret = listOp(prefix, &listObjs, &size);
+            BIO_TRACE_END(UFS_TRACE_LIST, ret);
             if (UNLIKELY(ret != BIO_OK)) {
                 LOG_ERROR("UfsHelper list failed, ret" << ret << ", prefix: " << prefix << ".");
                 return ret;
@@ -181,7 +218,14 @@ namespace bio {
             if ((getOp = reinterpret_cast<GetFuncPtr>(LoadFunction("UfsGet"))) == nullptr) {
                 return BIO_INNER_ERR;
             }
+            if ((getWithRealLenOp = reinterpret_cast<GetWithRealLenFuncPtr>(LoadFunction("UfsGetWithRealLen"))) ==
+                nullptr) {
+                return BIO_INNER_ERR;
+            }
             if ((deleteOp = reinterpret_cast<DeleteFuncPtr>(LoadFunction("UfsDelete"))) == nullptr) {
+                return BIO_INNER_ERR;
+            }
+            if ((existOp = reinterpret_cast<ExistFuncPtr>(LoadFunction("UfsExist"))) == nullptr) {
                 return BIO_INNER_ERR;
             }
             if ((statOp = reinterpret_cast<StatFuncPtr>(LoadFunction("UfsStat"))) == nullptr) {
@@ -201,7 +245,9 @@ namespace bio {
         using StopFuncPtr = void (*)();
         using PutFuncPtr = int (*)(const char *, const char *, size_t);
         using GetFuncPtr = int (*)(const char *, char *, const size_t, const uint64_t);
+        using GetWithRealLenFuncPtr = int (*)(const char *, char *, const size_t, const uint64_t, size_t *);
         using DeleteFuncPtr = int (*)(const char *);
+        using ExistFuncPtr = int (*)(const char *);
         using StatFuncPtr = int32_t (*)(const char *, ObjStatInfo *);
         using ListFuncPtr = int (*)(const char *, ObjStatInfo **, int *);
         using InitUnderFsConfigFuncPtr = void (*)(UnderFsConfigInfo);
@@ -211,7 +257,9 @@ namespace bio {
         StopFuncPtr stopOp = nullptr;
         PutFuncPtr putOp = nullptr;
         GetFuncPtr getOp = nullptr;
+        GetWithRealLenFuncPtr getWithRealLenOp = nullptr;
         DeleteFuncPtr deleteOp = nullptr;
+        ExistFuncPtr existOp = nullptr;
         StatFuncPtr statOp = nullptr;
         ListFuncPtr listOp = nullptr;
         InitUnderFsConfigFuncPtr  initUnderFsConfigOp = nullptr;

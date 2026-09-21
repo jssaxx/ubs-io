@@ -34,9 +34,14 @@ typedef struct {
 }HdfsConfig;
 
 typedef struct {
+    const char *rootPath;
+}LocalConfig;
+
+typedef struct {
     const char *underFsType;
     CephConfig cephConfig;
     HdfsConfig hdfsConfig;
+    LocalConfig localConfig;
 }UnderFsConfigInfo;
 
 int32_t UfsInit();
@@ -47,7 +52,11 @@ int32_t UfsPut(const char *key, const char *value, const size_t len);
 
 int32_t UfsGet(const char *key, char *value, const size_t len, const uint64_t off);
 
+int32_t UfsGetWithRealLen(const char *key, char *value, const size_t len, const uint64_t off, size_t *realLen);
+
 int32_t UfsDelete(const char *key);
+
+int32_t UfsExist(const char *key);
 
 int32_t UfsStat(const char *key, ObjStatInfo *objStat);
 

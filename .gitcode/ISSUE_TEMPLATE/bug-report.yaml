@@ -1,5 +1,5 @@
 name: 🐛 Bug report
-description: 反馈程序 Bug 
+description: 反馈程序 Bug
 title: "[Bug]: "
 labels: ["bug"]
 
@@ -17,7 +17,7 @@ body:
       - ...
 
       在分享配置信息或代码示例时，请将敏感信息脱敏处理，或使用 `<TOKEN>` 等占位符替代原有内容。
-    
+
 - type: textarea
   attributes:
     label: "**缺陷描述**"
@@ -47,9 +47,9 @@ body:
     description: ""
     value: |
       【问题复现步骤】
-      1. 
-      2. 
-      3. 
+      1.
+      2.
+      3.
 
       【实际结果】请描述出问题的结果和影响
 

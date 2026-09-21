@@ -8,9 +8,9 @@
 
 本文档主要适用于以下工程师：
 
--   技术支持工程师
--   二次开发工程师
--   维护工程师
+- 技术支持工程师
+- 二次开发工程师
+- 维护工程师
 
 **符号约定<a name="section133020216410"></a>**
 
@@ -49,53 +49,23 @@
 
 本文主要介绍UBS IO对外提供的API接口。
 
--   编程语言
+- 编程语言
 
     UBS IO主体使用C/C++语言开发，对外提供C API。
 
--   功能架构
+- 功能架构
 
     UBS IO结合JuiceFS实现计算侧分布式缓存，降低IO读写时延，提升端到端的整体性能。
 
--   API参考
+- API参考
 
     介绍应用开发过程中最常用和基础的API，建议使用UBS IO的开发者对这些API都有所了解。
 
--   错误码
+- 错误码
 
     介绍UBS IO的错误码名称、取值及部分常见错误码的处理方法。
 
 # API参考<a name="ZH-CN_TOPIC_0000002552740629"></a>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## BioInitialize<a name="ZH-CN_TOPIC_0000002521860640"></a>
 
@@ -236,6 +206,33 @@ CResult BioInitialize\(WorkerMode mode, ClientOptionsConfig \*optConf\)
 </tr>
 </tbody>
 </table>
+
+## BioGetLogLevel
+
+**函数定义**
+
+查询客户端当前实际生效的日志等级。该接口应在 `BioInitialize` 成功后调用。
+
+**实现方法**
+
+```c
+CResult BioGetLogLevel(BioLogLevel *level);
+```
+
+**参数说明**
+
+| 参数名 | 数据类型 | 参数类型 | 描述 |
+| --- | --- | --- | --- |
+| `level` | `BioLogLevel *` | 出参 | 返回 `BIO_LOG_LEVEL_TRACE`、`BIO_LOG_LEVEL_DEBUG`、`BIO_LOG_LEVEL_INFO`、`BIO_LOG_LEVEL_WARN` 或 `BIO_LOG_LEVEL_ERROR`。 |
+
+**返回值**
+
+| 返回值 | 描述 |
+| --- | --- |
+| `RET_CACHE_OK` | 查询成功。 |
+| `RET_CACHE_EPERM` | `level` 为空。 |
+| `RET_CACHE_NOT_READY` | UBS IO尚未完成初始化。 |
+| `RET_CACHE_ERROR` | 当前日志等级无效。 |
 
 ## BioExit<a name="ZH-CN_TOPIC_0000002552860615"></a>
 

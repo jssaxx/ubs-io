@@ -47,6 +47,13 @@ int32_t KvcBatchGetData(const std::vector<std::string> &key,
                         std::vector<int> &results,
                         uint32_t flags);
 
+int32_t KvcBatchGetData(const char **keys,
+                        uint32_t keysCount,
+                        void **bufs,
+                        size_t *lengths,
+                        int *results,
+                        uint32_t flags);
+
 int32_t KvcBatchExistKey(const std::vector<std::string> &key, bool *results, uint32_t flags);
 
 int32_t KvcBatchFreeGetAddress(void **bufs, uint32_t keys_count);

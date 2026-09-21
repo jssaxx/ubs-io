@@ -13,8 +13,11 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <cstring>
-#include <vector>
+#include <functional>
 #include <memory>
+#include <new>
+#include <string_view>
+#include <vector>
 #include "bio_c.h"
 #include "ubsio_kvc_log.h"
 #include "ubsio_kvc_err.h"
@@ -27,6 +30,14 @@ namespace ubsio {
 KvOperation *KvOperation::gInstance = nullptr;
 std::mutex KvOperation::gLock;
 constexpr uint32_t BATCH_LIMIT = 1000;
+
+namespace {
+struct BatchGetWorkspace {
+    std::vector<ObjLocation> locations;
+    std::vector<uint64_t> realLengths;
+    std::vector<uint64_t> offsets;
+};
+}
 
 int32_t KvOperation::Initialize(const std::string &path)
 {
@@ -141,6 +152,34 @@ int32_t KvOperation::BatchKvGetData(const std::vector<std::string> &key, void **
 
     return DlBioSdkApi::BatchGet(tenantId, keys.data(), keysCount, offsets.data(), lengths.data(), locationVec.data(),
         reinterpret_cast<uintptr_t *>(bufs), realLength.data(), results.data());
+}
+
+int32_t KvOperation::BatchKvGetData(const char **keys, uint32_t keysCount, void **bufs, size_t *lengths,
+    int *results)
+{
+    static_assert(sizeof(size_t) == sizeof(uint64_t), "Size_t must be 64-bit.");
+    static_assert(sizeof(int) == sizeof(int32_t), "Int must be 32-bit.");
+    static thread_local BatchGetWorkspace workspace;
+    try {
+        workspace.locations.resize(keysCount);
+        workspace.realLengths.resize(keysCount);
+        workspace.offsets.assign(keysCount, 0);
+        for (uint32_t i = 0; i < keysCount; ++i) {
+            uint64_t objectId = static_cast<uint64_t>(std::hash<std::string_view>{}(std::string_view(keys[i])));
+            CResult status = DlBioSdkApi::CalcLocation(tenantId, objectId, &workspace.locations[i]);
+            if (UNLIKELY(status != CResult::RET_CACHE_OK)) {
+                LOG_ERROR("Calc location failed, status:" << status << ", index:" << i << ".");
+                return UBSIO_KVC_ERR;
+            }
+        }
+    } catch (const std::bad_alloc &) {
+        LOG_ERROR("Allocate batch get workspace failed, keys count:" << keysCount << ".");
+        return UBSIO_KVC_ERR;
+    }
+
+    return DlBioSdkApi::BatchGet(tenantId, keys, keysCount, workspace.offsets.data(),
+        reinterpret_cast<uint64_t *>(lengths), workspace.locations.data(), reinterpret_cast<uintptr_t *>(bufs),
+        workspace.realLengths.data(), reinterpret_cast<int32_t *>(results));
 }
 
 int32_t KvOperation::BatchKvExistKey(const std::vector<std::string> &key, bool *results)

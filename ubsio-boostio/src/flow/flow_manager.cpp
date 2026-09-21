@@ -45,7 +45,7 @@ BResult FlowManager::Init()
         LOG_ERROR("Failed to start flow task pool, probably out of memory");
         return BIO_ERR;
     }
-    ret = mTaskPool[FLOW_DISK]->Start(NO_64, NO_4096);
+    ret = mTaskPool[FLOW_DISK]->Start(NO_8, NO_4096);
     if (ret != BIO_OK) {
         return ret;
     }

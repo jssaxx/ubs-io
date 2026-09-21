@@ -30,6 +30,10 @@ struct WFlowSliceMeta {
     uint64_t hasEvict;
 };
 
+struct WFlowCompactSliceMeta {
+    char key[NO_256];
+};
+
 enum WCacheTierType {
     WCACHE_MEMORY,
     WCACHE_DISK,
@@ -43,7 +47,15 @@ struct WFlowMetaDataSlice {
 
 class WFlowTruncateCursor {
 public:
+    explicit WFlowTruncateCursor(uint64_t preTruncateSliceIndex = 0)
+        : mPreTruncateSliceIndex(preTruncateSliceIndex)
+    {}
+
     WCacheSlicePtr GetTruncateSlice(const WCacheSlicePtr &slice);
+
+    WCacheSlicePtr GetTruncateSlice(const WCacheSlicePtr &slice, uint64_t &preTruncateSliceIndex);
+
+    void MarkEvictedIndex(uint64_t indexInFlow);
 
     uint64_t GetPreTruncateSliceIndex();
 
@@ -62,6 +74,7 @@ private:
 
     std::mutex mEvictedSliceListLock;
     std::set<WCacheSlicePtr, WCacheSliceCmp> mEvictedSlices;
+    std::set<uint64_t> mEvictedIndexes;
     DEFINE_REF_COUNT_VARIABLE;
 };
 using WFlowTruncateCursorPtr = Ref<WFlowTruncateCursor>;
@@ -69,7 +82,7 @@ using WFlowTruncateCursorPtr = Ref<WFlowTruncateCursor>;
 class WCacheTier {
 public:
 
-    BResult Init(WCacheTierType cacheTier, uint64_t flowId, uint16_t diskId);
+    BResult Init(WCacheTierType cacheTier, uint64_t flowId, uint16_t diskId, bool useCompactMeta = false);
 
     BResult Write(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader,
         WCacheSliceRefPtr &destSliceRef);
@@ -104,6 +117,8 @@ public:
 
     BResult Evict(const WCacheSlicePtr &slice);
 
+    void MarkEvictedIndex(uint64_t indexInFlow);
+
     bool IsEmptyEvictSliceQueue();
 
     WCacheSliceRefPtr GetEvictSlice();
@@ -134,6 +149,8 @@ private:
 
     SpinLock mEvictSliceQueueLock;
     std::list<WCacheSliceRefPtr> mEvictSliceQueue;
+    uint64_t mMetaEntrySize{ sizeof(WFlowSliceMeta) };
+    bool mUseCompactMeta{ false };
 
     DEFINE_REF_COUNT_VARIABLE;
 };

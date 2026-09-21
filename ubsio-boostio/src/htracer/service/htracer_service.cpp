@@ -177,7 +177,7 @@ void HTracerService::GenerateTraceStream(std::stringstream &ss, bool needTotal)
 void HTracerService::DumpTraceInfos()
 {
     std::stringstream ss;
-    GenerateTraceStream(ss);
+    GenerateTraceStream(ss, true);
     WriteTraceInfo(ss);
 }
 

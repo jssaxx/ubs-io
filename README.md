@@ -60,7 +60,7 @@ UBS IO 当前围绕单机推理 standalone 主路径组织核心组件：
   - 提供 BoostIO SDK 与 standalone 本地缓存运行时，承接 UBSIO-KV 转发的对象读写、存在性检查和批量读取请求。
   - standalone 场景下通过 BioClient / MirrorClient / BioClientAgent 在推理进程内直调本地 BioServer / MirrorServer，当前主路径不依赖独立集群网络。
   - Cache / Flow 负责 WCache / RCache、slice 映射和缓存对象生命周期管理，协调内存与 SSD 层的数据流转。
-  - 相关文档：[BoostIO README](ubsio-boostio/README.md)、[特性指南](docs/ubsio-boostio/UBS-IO%20特性指南.md)
+  - 相关文档：[BoostIO README](ubsio-boostio/README.md)、[特性指南](docs/ubsio-boostio/boostio_feature_guide.md)
 
 - **UBSIO-BDM**：
   - 作为 BoostIO 的本地块设备后端，负责 NVMe SSD chunk 分配、元数据恢复、同步/异步磁盘 I/O 和磁盘状态管理。
@@ -85,8 +85,8 @@ UBS IO 的性能收益来自 KV Cache 层级容量扩展和本地访问路径收
 
 ## 📑学习教程
 
-- [ubsio-boostio API 接口列表说明](docs/ubsio-boostio/UBS-IO%20API参考.md)
-- [ubsio-kv API 接口列表说明](docs/ubsio-kv/API接口列表.md)
+- [ubsio-boostio API 接口列表说明](docs/ubsio-boostio/boostio_api_reference.md)
+- [ubsio-kv API 接口列表说明](docs/ubsio-kv/api_reference.md)
 - [ubsio-common(cli) 命令说明](docs/ubsio-common/CLI命令说明.md)
 
 ## 📦软件硬件配套说明

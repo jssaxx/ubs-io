@@ -29,6 +29,20 @@ TEST_F(KvTest, BioSdkStubLoadsAndCoversAllDelegates)
 
     EXPECT_EQ(DlBioSdkApi::KvBioInit(), UBSIO_KVC_OK);
 
+    FakeBioSetResult("BioGetLogLevel", RET_CACHE_ERROR);
+    EXPECT_EQ(DlBioSdkApi::KvBioInit(), UBSIO_KVC_OK);
+    EXPECT_EQ(UbsioLog::Instance().GetLogLevel(), INFO_LEVEL);
+    FakeBioSetResult("BioGetLogLevel", RET_CACHE_OK);
+
+    FakeBioSetLogLevel(BIO_LOG_LEVEL_BUTT);
+    EXPECT_EQ(DlBioSdkApi::KvBioInit(), UBSIO_KVC_OK);
+    EXPECT_EQ(UbsioLog::Instance().GetLogLevel(), INFO_LEVEL);
+
+    FakeBioSetLogLevel(BIO_LOG_LEVEL_ERROR);
+    EXPECT_EQ(DlBioSdkApi::KvBioInit(), UBSIO_KVC_OK);
+    EXPECT_EQ(UbsioLog::Instance().GetLogLevel(), ERROR_LEVEL);
+    FakeBioSetLogLevel(BIO_LOG_LEVEL_INFO);
+
     FakeBioSetResult("BioCreateCache", RET_CACHE_EXISTS);
     EXPECT_EQ(DlBioSdkApi::KvBioInit(), UBSIO_KVC_OK);
 
@@ -55,6 +69,12 @@ TEST_F(KvTest, BioSdkStubLoadsAndCoversAllDelegates)
     EXPECT_EQ(stat.size, 64U);
 
     const char *keys[] = {"a", "b"};
+    BatchObjStat batchStats[2]{};
+    EXPECT_EQ(DlBioSdkApi::BatchStat(1, keys, nullptr, 2, batchStats), RET_CACHE_OK);
+    EXPECT_STREQ(batchStats[0].key, keys[0]);
+    EXPECT_EQ(batchStats[0].size, 64U);
+    EXPECT_EQ(batchStats[0].result, RET_CACHE_OK);
+
     uint64_t offsets[] = {0, 0};
     uint64_t lengths[] = {4, 8};
     ObjLocation locations[2]{};
@@ -91,8 +111,10 @@ TEST_F(KvTest, BioSdkStubLoadsAndCoversAllDelegates)
 
     const UbsioKvKeyInfo *items = nullptr;
     uint64_t count = 0;
-    EXPECT_EQ(DlBioSdkApi::ScanKey(1, &items, &count), RET_CACHE_OK);
+    bool hasMore = true;
+    EXPECT_EQ(DlBioSdkApi::ScanKey(1, &items, &count, &hasMore), RET_CACHE_OK);
     EXPECT_EQ(count, 2U);
+    EXPECT_FALSE(hasMore);
     ASSERT_NE(items, nullptr);
     EXPECT_STREQ(items[0].key, "key-0");
     DlBioSdkApi::FreeScanKeyResult(&items);

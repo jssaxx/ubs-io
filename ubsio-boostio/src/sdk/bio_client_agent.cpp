@@ -88,12 +88,12 @@ BResult BioClientAgent::RegisterMetaEventCallback(UbsioMetaEventCallbackC callba
     return static_cast<BResult>(registerMetaEventCallbackOp(callback, context));
 }
 
-BResult BioClientAgent::ScanKey(const UbsioKvKeyInfo **items, uint64_t *count)
+BResult BioClientAgent::ScanKey(const UbsioKvKeyInfo **items, uint64_t *count, bool *hasMore)
 {
     if (!IsDirectMode() || scanKeyOp == nullptr) {
         return BIO_NOT_READY;
     }
-    return static_cast<BResult>(scanKeyOp(items, count));
+    return static_cast<BResult>(scanKeyOp(items, count, hasMore));
 }
 
 void BioClientAgent::Exit()
@@ -142,9 +142,11 @@ void BioClientAgent::ResetLoadedOperations()
     getOp = nullptr;
     batchGetOp = nullptr;
     batchExistOp = nullptr;
+    batchExistStandaloneOp = nullptr;
     deleteOp = nullptr;
     addDiskOp = nullptr;
     statOp = nullptr;
+    batchStatOp = nullptr;
     listOp = nullptr;
     loadOp = nullptr;
     cacheHitOp = nullptr;
@@ -247,6 +249,10 @@ BResult BioClientAgent::InitOperation()
     if ((batchExistOp = reinterpret_cast<BatchExistFuncPtr>(LoadFunction("BatchExist"))) == nullptr) {
         return BIO_INNER_ERR;
     }
+    if ((batchExistStandaloneOp = reinterpret_cast<BatchExistStandaloneFuncPtr>(
+        LoadFunction("BatchExistStandalone"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
     if ((deleteOp = reinterpret_cast<DeleteFuncPtr>(LoadFunction("Delete"))) == nullptr) {
         return BIO_INNER_ERR;
     }
@@ -257,6 +263,9 @@ BResult BioClientAgent::InitOperation()
         return BIO_INNER_ERR;
     }
     if ((statOp = reinterpret_cast<StatFuncPtr>(LoadFunction("Stat"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
+    if ((batchStatOp = reinterpret_cast<BatchStatFuncPtr>(LoadFunction("BatchStat"))) == nullptr) {
         return BIO_INNER_ERR;
     }
     if ((loadOp = reinterpret_cast<LoadFuncPtr>(LoadFunction("Load"))) == nullptr) {
@@ -905,10 +914,8 @@ void BioClientAgent::BatchGetLocal(BatchGetRequest *req,  uint32_t reqLen, Callb
         return;
     }
     if (mMode == STANDALONE) {
-        BatchGetResponse rsp {};
-        BIO_TRACE_START(SDK_TRACE_BATCH_GET_LOCAL_SYNC);
-        auto ret = batchGetOp(req, &rsp);
-        BIO_TRACE_END(SDK_TRACE_BATCH_GET_LOCAL_SYNC, ret);
+        BatchGetResponse rsp;
+        BResult ret = BatchGetLocalSync(req, rsp);
         callback.cb(callback.cbCtx, &rsp, sizeof(BatchGetResponse), ret);
     } else {
         BIO_TRACE_START(SDK_TRACE_BATCH_GET_LOCAL_SEND);
@@ -916,6 +923,19 @@ void BioClientAgent::BatchGetLocal(BatchGetRequest *req,  uint32_t reqLen, Callb
                                                      static_cast<void *>(req), reqLen, callback);
         BIO_TRACE_END(SDK_TRACE_BATCH_GET_LOCAL_SEND, BIO_OK);
     }
+}
+
+BResult BioClientAgent::BatchGetLocalSync(BatchGetRequest *req, BatchGetResponse &rsp)
+{
+    if (UNLIKELY(mMode != STANDALONE || req == nullptr)) {
+        CLIENT_LOG_ERROR("Invalid standalone batch get request.");
+        return BIO_INVALID_PARAM;
+    }
+
+    BIO_TRACE_START(SDK_TRACE_BATCH_GET_LOCAL_SYNC);
+    BResult ret = static_cast<BResult>(batchGetOp(req, &rsp));
+    BIO_TRACE_END(SDK_TRACE_BATCH_GET_LOCAL_SYNC, ret);
+    return ret;
 }
 
 BResult BioClientAgent::GetLocal(GetRequest &req, char *value, Callback callback)
@@ -1073,6 +1093,26 @@ BResult BioClientAgent::StatLocal(StatRequest &req, ObjStat &objInfo)
     } else {
         return SendStatRequestLocal(req, objInfo);
     }
+}
+
+BResult BioClientAgent::BatchStatLocalSync(const char **keys, ObjLocation *locations, uint32_t count,
+    BatchObjStat *stats)
+{
+    if (UNLIKELY(mMode != STANDALONE || batchStatOp == nullptr)) {
+        CLIENT_LOG_ERROR("Batch stat only supports standalone direct mode.");
+        return BIO_NOT_READY;
+    }
+    return static_cast<BResult>(batchStatOp(keys, locations, count, stats));
+}
+
+BResult BioClientAgent::BatchExistStandaloneLocalSync(const char **keys, ObjLocation *locations, uint32_t count,
+    bool *results)
+{
+    if (UNLIKELY(mMode != STANDALONE || batchExistStandaloneOp == nullptr)) {
+        CLIENT_LOG_ERROR("Batch exist only supports standalone direct mode.");
+        return BIO_NOT_READY;
+    }
+    return static_cast<BResult>(batchExistStandaloneOp(keys, locations, count, results));
 }
 
 void BioClientAgent::BatchExistLocal(uint32_t reqLen, BatchExistRequest *req, Callback &callback)

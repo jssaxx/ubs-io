@@ -451,12 +451,43 @@ CResult Bio::Stat(const char *key, const ObjLocation &location, ObjStat &stat)
     return ToCResult(ret);
 }
 
+CResult Bio::BatchStat(const char **keys, ObjLocation *locations, uint32_t count, BatchObjStat *stats)
+{
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+    if (UNLIKELY(gClient->GetMode() != STANDALONE)) {
+        CLIENT_LOG_ERROR("BioBatchStat only supports standalone mode.");
+        return RET_CACHE_EPERM;
+    }
+    if (UNLIKELY(keys == nullptr || locations == nullptr || stats == nullptr || count == 0 ||
+        count > STANDALONE_BATCH_GET_MAX_COUNT)) {
+        return RET_CACHE_EPERM;
+    }
+    for (uint32_t index = 0; index < count; ++index) {
+        if (UNLIKELY(!KeyValid(keys[index]))) {
+            CLIENT_LOG_ERROR("Invalid batch stat key, index:" << index << ".");
+            return RET_CACHE_EPERM;
+        }
+    }
+
+    BResult ret = gClient->BatchStat(keys, locations, count, stats);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ToCResult(ret);
+    }
+    for (uint32_t index = 0; index < count; ++index) {
+        stats[index].result = static_cast<int32_t>(ToCResult(stats[index].result));
+    }
+    return RET_CACHE_OK;
+}
+
 CResult Bio::BatchExist(const char *key[], ObjLocation location[], uint32_t count, bool *result)
 {
     if (UNLIKELY(!gClient->Ready())) {
         return RET_CACHE_NOT_READY;
     }
-    if (UNLIKELY(key == nullptr || result == nullptr || location == nullptr || count == 0)) {
+    if (UNLIKELY(key == nullptr || result == nullptr || location == nullptr || count == 0 ||
+        (gClient->GetMode() == STANDALONE && count > STANDALONE_BATCH_GET_MAX_COUNT))) {
         return RET_CACHE_EPERM;
     }
     for (uint32_t i = 0; i < count; i++) {
@@ -710,6 +741,24 @@ CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf)
         return RET_CACHE_EPERM;
     }
     return BioService::Initialize(mode, *optConf);
+}
+
+CResult BioGetLogLevel(BioLogLevel *level)
+{
+    if (UNLIKELY(level == nullptr)) {
+        return RET_CACHE_EPERM;
+    }
+    if (UNLIKELY(gClient == nullptr || !gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+
+    int32_t currentLevel = BioClientLog::Instance()->GetMinLogLevel();
+    if (UNLIKELY(currentLevel < static_cast<int32_t>(BIO_LOG_LEVEL_TRACE) ||
+        currentLevel >= static_cast<int32_t>(BIO_LOG_LEVEL_BUTT))) {
+        return RET_CACHE_ERROR;
+    }
+    *level = static_cast<BioLogLevel>(currentLevel);
+    return RET_CACHE_OK;
 }
 
 CResult BioRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)
@@ -1162,13 +1211,14 @@ CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **objs, uint64
     return RET_CACHE_OK;
 }
 
-CResult BioScanKey(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *count)
+CResult BioScanKey(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *count, bool *hasMore)
 {
-    if (items == nullptr || count == nullptr) {
+    if (items == nullptr || count == nullptr || hasMore == nullptr) {
         return RET_CACHE_EPERM;
     }
     *items = nullptr;
     *count = 0;
+    *hasMore = false;
 
     {
         std::unique_lock<std::mutex> locker(g_lock);
@@ -1184,7 +1234,7 @@ CResult BioScanKey(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *co
     if (agentPtr == nullptr) {
         return RET_CACHE_ERROR;
     }
-    auto ret = agentPtr->ScanKey(items, count);
+    auto ret = agentPtr->ScanKey(items, count, hasMore);
     if (ret == BIO_ALLOC_FAIL) {
         return RET_CACHE_NO_SPACE;
     }
@@ -1233,6 +1283,21 @@ CResult BioStat(uint64_t tenantId, const char *key, ObjLocation location, ObjSta
         *stat = statInfo;
     }
     return ret;
+}
+
+CResult BioBatchStat(uint64_t tenantId, const char **keys, ObjLocation *locations, uint32_t count,
+    BatchObjStat *stats)
+{
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(g_lock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+    return bioInstance->BatchStat(keys, locations, count, stats);
 }
 
 CResult BioBatchExist(uint64_t tenantId, const char *key[], ObjLocation location[], uint32_t count, bool result[])
