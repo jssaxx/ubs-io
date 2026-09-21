@@ -724,7 +724,8 @@ BResult WCache::Recover(RecoverCallback recoverCallback)
             continue;
         }
 
-        if (sliceMeta.offset < dataRangeStart || sliceMeta.offset + sliceMeta.length > dataRangeEnd) {
+        if (sliceMeta.length == 0 || sliceMeta.length > UINT32_MAX || sliceMeta.offset < dataRangeStart ||
+            sliceMeta.offset > dataRangeEnd || sliceMeta.length > dataRangeEnd - sliceMeta.offset) {
             diskCache->MarkEvictedIndex(flowIndex);
             continue;
         }
@@ -732,7 +733,7 @@ BResult WCache::Recover(RecoverCallback recoverCallback)
         SliceKey sliceKey(mFlowId, sliceMeta.offset, FLOW_DISK, sliceMeta.length, flowIndex);
 
         WCacheSlicePtr dataSlice = nullptr;
-        ret = diskCache->GetDataSlice(sliceKey, dataSlice);
+        ret = diskCache->GetDataSlice(sliceKey, dataSlice, true);
         ChkTrue(ret == BIO_OK, ret, "Failed to get data slice:" << ret);
 
         auto sliceRef = MakeRef<WCacheSliceRef>(dataSlice,

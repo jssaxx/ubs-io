@@ -122,6 +122,8 @@ int32_t BdmCreate(BdmCreatePara *createPara, uint32_t *bdmId);
 int32_t BdmDestroy(uint32_t bdmId);
 
 int32_t BdmAlloc(uint32_t bdmId, uint64_t bucketId, uint64_t bucketOffset, uint64_t len, uint64_t *chunkId);
+/* Initialize the entire chunk before persisting its new ownership. */
+int32_t BdmAllocZeroed(uint32_t bdmId, uint64_t bucketId, uint64_t bucketOffset, uint64_t len, uint64_t *chunkId);
 
 int32_t BdmFree(uint32_t bdmId, uint64_t len, uint64_t chunkId);
 

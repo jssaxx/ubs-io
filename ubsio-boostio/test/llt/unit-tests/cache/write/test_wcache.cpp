@@ -1044,10 +1044,21 @@ TEST_F(TestWCache, test_get_slice_wcache_hold_wait_err_return_fail)
     BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "WCACHE_HOLD_WAIT_FAIL", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "WCACHE_STATE_NORMAL", 0, 1, userParam);
-    auto ret = GetSlice(g_flowId, 0, NO_MAX_VALUE64-1);
+    // Keep the length representable by Flow so the request reaches the HoldWait fault injection.
+    auto ret = GetSlice(g_flowId, 0, UINT32_MAX - 1);
     BioHvsDeactiveTracePoint(0, "WCACHE_STATE_NORMAL");
     BioHvsDeactiveTracePoint(0, "WCACHE_HOLD_WAIT_FAIL");
     EXPECT_EQ(ret, BIO_ERR);
+}
+
+TEST_F(TestWCache, test_get_slice_length_exceeds_uint32_return_invalid_param)
+{
+    LOG_INFO("test_get_slice_length_exceeds_uint32_return_invalid_param");
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "WCACHE_STATE_NORMAL", 0, 1, userParam);
+    auto ret = GetSlice(g_flowId, 0, static_cast<uint64_t>(UINT32_MAX) + 1);
+    BioHvsDeactiveTracePoint(0, "WCACHE_STATE_NORMAL");
+    EXPECT_EQ(ret, BIO_INVALID_PARAM);
 }
 
 TEST_F(TestWCache, test_bio_server_put_write_slice_null_reply_ok)

@@ -49,6 +49,12 @@ FIFO 的顺序是运行时进入历史队列的顺序。恢复时沿已有扫描
 
 恢复 truncate 游标从 Meta Flow 已释放位置后的完整记录开始。magic 不匹配或 data 范围无效的记录登记为已处理空洞，以便连续截断跨过这些索引。截断仍按每 Flow 独立推进，空间释放仍按完整 segment 执行。
 
+`ubsio.standalone.force_new_disk=true` 重建 allocator 并使原缓存失效，`false` 尝试恢复兼容的旧缓存盘。新分配的 WCache metadata chunk 在持久化 BDM 分配归属前清零，避免相同 flow ID 匹配到旧轮次记录。清零覆盖整个新 chunk（包括预分配范围），在 allocator 写锁内完成；失败不发布新归属。普通 data chunk 和恢复已有 chunk 不清零。
+
+恢复和已有 metadata 查询只解析已分配地址，不推进写入位置或触发预分配。BDM 未保存精确写入高水位，Flow 重建时用已分配末尾初始化 `mWrittenOffset`，作为可截断上界；该初始化不调度分配，也不表示范围内所有记录有效。新 Put 仍保留原有预分配行为。
+
+该方案保留磁盘格式，不引入持久化 epoch，也不追溯识别旧版本已发布的错误记录。每个新 metadata chunk 增加一次全范围清零和 allocator 持锁开销；内部 `BdmOps` 新增清零分配回调，相关 BoostIO 组件需一起重新编译。
+
 空历史 Flow 的删除条件继续包含内存/磁盘队列、worker、在途 I/O 及引用计数。暂时不能删除返回可重试结果，不能把“暂未删除”当作销毁任务成功。
 
 故障盘仍由 CleanupFaultedDiskFlows 处理；收集或注销故障 Flow 时移除对应历史队列 ID。故障清理不依赖普通读取/水位淘汰完成，也不会把故障 Flow 重新放回队列。
@@ -57,7 +63,7 @@ FIFO 的顺序是运行时进入历史队列的顺序。恢复时沿已有扫描
 
 元数据删除继续复用 SliceRef 延迟回调、WCacheIndex 删除及共享事件 batch。watermark 达标、Slice 被取出、reader 退出、segment 释放和整个 Flow 销毁是不同完成时点。
 
-Delete 成功不承诺立即崩溃后的重启安全性：迁移期间的删除标记可能仍在等待最后一个 reader，补写失败后也不保证最终同步成功。发布顺序、兼容性和失败处理详见 [WCache 内存发布与删除标记同步设计](wcache_publication_and_delete_markers.md)。
+Delete 成功不承诺立即崩溃后的重启安全性：迁移期间的删除标记可能仍在等待最后一个 reader，补写失败后也不保证最终同步成功，后续恢复可能重新出现已删除记录。该尽力同步策略应用于共用 WCache 迁移路径，没有新增模式开关；首次 data/metadata 下刷失败仍保留原有错误返回与队头重试，CRC 校验不变。
 
 ## 代码与验证入口
 

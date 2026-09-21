@@ -997,7 +997,44 @@ int32_t BdmDiskReadMeta(uintptr_t itemPtr, uint64_t offset, void *buf, uint64_t 
     return BDM_CODE_OK;
 }
 
-int32_t BdmDiskAlloc(uintptr_t objPtr, uint64_t bucketId, uint64_t bucketOffset, uint64_t len, uint64_t *chunkId)
+static int32_t BdmDiskZeroChunk(uintptr_t context, uint64_t chunkId, uint64_t len)
+{
+    BdmDiskItem *item = (BdmDiskItem *)context;
+    if (item->minChunkSize == 0 || chunkId > item->dataLength / item->minChunkSize || len == 0) {
+        return BDM_CODE_INVALID_PARAM;
+    }
+    uint64_t dataOffset = chunkId * item->minChunkSize;
+    if (len > item->dataLength - dataOffset || item->offset > UINT64_MAX - item->dataOffset ||
+        dataOffset > UINT64_MAX - item->offset - item->dataOffset) {
+        return BDM_CODE_CROSS_BOUND;
+    }
+    uint64_t offset = item->offset + item->dataOffset + dataOffset;
+    if (len > UINT64_MAX - offset) {
+        return BDM_CODE_CROSS_BOUND;
+    }
+    int32_t rangeRet = BdmDiskCheckRegionRange(item, offset, len);
+    if (rangeRet != BDM_CODE_OK) {
+        return rangeRet;
+    }
+    uint64_t bufferSize = MIN(len, BDM_RESTORE_META_SIZE);
+    char *zeros = (char *)calloc(1, bufferSize);
+    if (zeros == NULL) {
+        return BDM_CODE_ERR;
+    }
+    int32_t ret = BDM_CODE_OK;
+    for (uint64_t done = 0; done < len; done += bufferSize) {
+        uint64_t size = MIN(bufferSize, len - done);
+        ret = BdmDiskInnerReadWrite(item, zeros, size, offset + done, FALSE);
+        if (ret != BDM_CODE_OK) {
+            break;
+        }
+    }
+    free(zeros);
+    return ret;
+}
+
+static int32_t BdmDiskAllocImpl(uintptr_t objPtr, uint64_t bucketId, uint64_t bucketOffset, uint64_t len,
+    uint64_t *chunkId, bool zeroed)
 {
     BdmObj *obj = (BdmObj *)objPtr;
     BdmDiskItem *item = (BdmDiskItem *)obj->opsInfo;
@@ -1013,7 +1050,9 @@ int32_t BdmDiskAlloc(uintptr_t objPtr, uint64_t bucketId, uint64_t bucketOffset,
 
     int32_t ret = BDM_CODE_OK;
     BIO_TP_START(BDM_ALLOC_BLOCK_FAIL, &ret, BDM_CODE_ERR);
-    ret = BdmAllocatorAllocChunk(item->allocator, bucketId, bucketOffset, len, chunkId);
+    ret = zeroed ? BdmAllocatorAllocChunkWithInit(item->allocator, bucketId, bucketOffset, len, chunkId,
+        BdmDiskZeroChunk, (uintptr_t)item) :
+        BdmAllocatorAllocChunk(item->allocator, bucketId, bucketOffset, len, chunkId);
     BIO_TP_END;
     if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGWARN(0, "Alloc chunk failed, bdm id(%u) length(%lu).", obj->bdmId, len);
@@ -1021,6 +1060,17 @@ int32_t BdmDiskAlloc(uintptr_t objPtr, uint64_t bucketId, uint64_t bucketOffset,
     }
 
     return BDM_CODE_OK;
+}
+
+int32_t BdmDiskAlloc(uintptr_t objPtr, uint64_t bucketId, uint64_t bucketOffset, uint64_t len, uint64_t *chunkId)
+{
+    return BdmDiskAllocImpl(objPtr, bucketId, bucketOffset, len, chunkId, false);
+}
+
+static int32_t BdmDiskAllocZeroed(uintptr_t objPtr, uint64_t bucketId, uint64_t bucketOffset, uint64_t len,
+    uint64_t *chunkId)
+{
+    return BdmDiskAllocImpl(objPtr, bucketId, bucketOffset, len, chunkId, true);
 }
 
 int32_t BdmDiskFree(uintptr_t objPtr, uint64_t len, uint64_t chunkId)
@@ -2210,6 +2260,7 @@ void BdmDiskFillBdmObj(BdmObj *obj, BdmDiskItem *item)
     obj->minChunkSize = item->minChunkSize;
     obj->maxChunkSize = item->maxChunkSize;
     obj->ops.alloc = BdmDiskAlloc;
+    obj->ops.allocZeroed = BdmDiskAllocZeroed;
     obj->ops.free = BdmDiskFree;
     obj->ops.parseChunkId = BdmDiskParseChunkId;
     obj->ops.read = BdmDiskRead;

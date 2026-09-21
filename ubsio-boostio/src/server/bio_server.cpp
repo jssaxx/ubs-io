@@ -26,6 +26,7 @@
 #include "bio_monotonic.h"
 #include "bio_server_c.h"
 #include "cache.h"
+#include "cache_flow.h"
 #include "cache_overload_ctrl.h"
 #include "cm_c.h"
 #include "expire_checker.h"
@@ -461,7 +462,10 @@ BResult BioServer::BioBdmInit()
 
     DiskAllocator diskAllocator;
     diskAllocator.alloc = [](uint32_t bdmId, uint64_t flowId, uint64_t flowOffset, uint64_t len, uint64_t *chunkId) {
-        int ret = BdmAlloc(bdmId, flowId, flowOffset, len, chunkId);
+        bool metadata = CacheFlowIdManager::GetType(flowId) == WRITE_CACHE &&
+            CacheFlowIdManager::GetInnerType(flowId) == WCACHE_FLOW_DISK_META_PREFIX;
+        int ret = metadata ? BdmAllocZeroed(bdmId, flowId, flowOffset, len, chunkId) :
+            BdmAlloc(bdmId, flowId, flowOffset, len, chunkId);
         if (ret != BDM_CODE_OK) {
             return BIO_ERR;
         }
