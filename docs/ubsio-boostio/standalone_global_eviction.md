@@ -32,15 +32,16 @@ FIFO 的顺序是运行时进入历史队列的顺序。恢复时沿已有扫描
 
 ## 触发与并发
 
-- 新写入的 WCache SliceRef 在入队前为 `SLICE_PENDING`，Index 在桶写锁内插入成功后将其改为 `SLICE_VALID`。重复 key 保留旧索引，新引用以及失败 Put 转为 `SLICE_INVALID` 进入现有清理路径；恢复记录在发布或确定为 tombstone 后分别进入 VALID/INVALID。RCache 的默认 VALID 状态不变。
-- PENDING 允许 MEMORY → DISK 搬运；DISK 最终淘汰、无盘 MEMORY 丢弃和强制过期清理遇到 PENDING 时返回重试，Slice 放回原队头，不跳过该 Slice。同步 UnderFS 写入可以完成数据搬运，但延后 `hasEvict` 标记和缓存删除，将 Slice 放回队头等待索引发布。
-- Put 完成索引发布后请求 MEMORY/DISK 调度。最终淘汰按目标 Slice 状态判断，不再要求整个 Flow 的 Put 在途计数归零。
+- 新写入的 WCache SliceRef 在内存写完后、入队前调用现有 `WCacheIndex::Insert()`。插入成功即 `SLICE_VALID`，完整内存数据立即对 Get/Exist 可见；重复 key 保留旧索引，新引用转 `SLICE_INVALID`。INVALID 对象在入队前设置内存 `hasEvict=1`，有效对象不重写 0；失败对象通过 tombstone 清理其 Flow 区间。RCache 的默认 VALID 状态不变。
+- 普通 Put 不再把 PENDING 对象加入淘汰队列，同步路径保留队头推进语义，不保证本次 Slice 到达目标介质。同步 UnderFS 不再需要等待索引发布的 `deferred` 分支。恢复等入口遇到 PENDING 时仍返回重试，不跳过队头；reader 未释放导致的延迟 Slice 切换仍保留。
+- MEMORY → DISK 切换回调在释放旧内存前读取旧 metadata，必要时将 SSD `hasEvict` 补写为 1，不将 1 改回 0。标记读取或补写失败只记录 warning，继续回收旧内存并加入磁盘队列，不保留完成上下文或新增补写重试；该缓存策略接受后续恢复读到过期记录。同步和后台搬运均与 Delete 使用 Slice 操作锁协调。
+- Put 入队及下刷完成后继续请求 MEMORY/DISK 调度。已发布对象不会因其他队头下刷失败而撤销；最终淘汰不要求整个 Flow 的 Put 在途计数归零。
 - 原有下刷完成和 tombstone 入口通过 WCache 注册的回调请求 Manager 调度。
 - scheduled/pending 合并重复触发；任务提交失败保留 pending。
 - 批次有进展后请求下一轮，由下一轮重新检查水位；失败由原重试线程延后处理。
 - 完成全部启动恢复、发布 Cache 初始化完成状态后才启用调度，避免扫描与淘汰交错，并确保故障处理已能接管恢复 Flow。
 - 原重试线程每秒重试失败请求，并检查历史队头是否可以退役，使最后一个 reader 退出后不依赖新的 Put 才能回收空 Flow。
-- 队列只保存 flowId；worker 临时持有 WCache 引用。任务准入与故障标记共用 Manager 锁；故障标记后不再准入普通批次。`FlyIo` 只统计 Put，覆盖到索引发布完成；全局淘汰使用独立的 `mEvictOnFlyRef[tier]`，不影响 Put 完成判断。
+- 队列只保存 flowId；worker 临时持有 WCache 引用。任务准入与故障标记共用 Manager 锁；故障标记后不再准入普通批次。`FlyIo` 只统计 Put，覆盖索引发布、入队及本次队头推进；全局淘汰使用独立的 `mEvictOnFlyRef[tier]`，不影响 Put 完成判断。
 - 每次淘汰批次准入时增加对应 tier 的在途计数，成功、失败或异常退出均归还。失败 Slice 放回队头并登记重试后，本批次归还计数；等待重试期间不占计数，下次准入重新计数。
 - PT 视图在取得 Manager 锁之前复制，只用于活跃候选检查，不在淘汰轮次中改变 Flow 的读写状态。
 
@@ -55,6 +56,8 @@ FIFO 的顺序是运行时进入历史队列的顺序。恢复时沿已有扫描
 禁止新 Put 和普通淘汰批次后，故障线程在 Manager 锁外同时等待 Put 与 MEMORY/DISK 批次在途计数归零，每 100 ms 检查一次、每个 Flow 等待约 1 秒；超时返回 `BIO_INNER_RETRY`，保留故障处理中状态以阻止 rejoin。等待的是已准入批次退出，不要求重试队列清空或故障盘下刷成功。`mEvictRef` 仍用于 worker 互斥，不能代替独立在途计数；延迟 Slice 回调仍由引用计数保护，批次归零不表示回调全部完成。旧 Flush/ExpiredClear 路径不纳入普通全局批次计数。
 
 元数据删除继续复用 SliceRef 延迟回调、WCacheIndex 删除及共享事件 batch。watermark 达标、Slice 被取出、reader 退出、segment 释放和整个 Flow 销毁是不同完成时点。
+
+Delete 成功不承诺立即崩溃后的重启安全性：迁移期间的删除标记可能仍在等待最后一个 reader，补写失败后也不保证最终同步成功。发布顺序、兼容性和失败处理详见 [WCache 内存发布与删除标记同步设计](wcache_publication_and_delete_markers.md)。
 
 ## 代码与验证入口
 
