@@ -190,6 +190,89 @@ protected:
         manager.RunGlobalEvict(Domain(manager.mHasDiskCache ? WCACHE_DISK : WCACHE_MEMORY, diskId));
     }
 
+    FlowPtr MemoryFlow(uint64_t id, uint64_t capacity)
+    {
+        // Fixture buffers are bounded by the largest metadata chunk used by these tests.
+        if (capacity == 0 || capacity > TEST_META_CAPACITY) {
+            throw std::invalid_argument("Test flow capacity is out of range");
+        }
+        buffers.emplace_back(new char[capacity]());
+        auto flow = MakeRef<Flow>(FLOW_META, FLOW_MEMORY, id, 0, capacity, 0);
+        flow->mChunkList.push_back(reinterpret_cast<uint64_t>(buffers.back().get()));
+        flow->mWrittenOffset = capacity;
+        flow->mPreLoadOffset = capacity;
+        flow->mSealed = true;
+        return flow;
+    }
+
+    WCachePtr MemoryWriter(uint32_t slots = 3)
+    {
+        Config().enableCrc = false;
+        auto flow = manager.mWCacheManager.at(AddFlow(0));
+        // The fixture has an allocated metadata chunk even before its first record is written.
+        flow->mCacheTiers[WCACHE_DISK]->mMetaFlow->mPreLoadOffset = TEST_META_CAPACITY;
+        flow->mCacheTiers[WCACHE_DISK]->mMetaFlow->mWrittenOffset = TEST_META_CAPACITY;
+        auto tier = flow->mCacheTiers[WCACHE_MEMORY];
+        tier->type = WCACHE_MEMORY;
+        tier->mMetaFlow = MemoryFlow(flow->GetFlowId(), TEST_META_CAPACITY);
+        tier->mDataFlow = MemoryFlow(flow->GetFlowId(), slots * TEST_SEGMENT);
+        tier->mFlowTruncateCursor = MakeRef<WFlowTruncateCursor>();
+        flow->mScheduleEvictCallback = [](WCacheTierType) {};
+        flow->mPublishIndexCallback = [this](uint16_t pt, const Key &key, const WCacheSliceRefPtr &ref) {
+            return manager.mCacheIndex->Insert(pt, key, ref);
+        };
+        return flow;
+    }
+
+    BResult PutValue(const WCachePtr &flow, const char *key, uint64_t index, char value,
+        WCacheSliceRefPtr &ref, RealIoStrategy strategy = WRITE_MEM_BACK)
+    {
+        std::vector<char> data(TEST_SEGMENT, value);
+        std::vector<FlowAddr> addrs{FlowAddr(reinterpret_cast<uint64_t>(data.data()), 0, TEST_SEGMENT)};
+        auto slice = MakeRef<WCacheSlice>(flow->GetFlowId(), index * TEST_SEGMENT, index,
+            TEST_SEGMENT, addrs, FLOW_MEMORY);
+        CacheAttr attr(strategy, 0, LOCAL_AFFINITY, WRITE_BACK);
+        return flow->Put(const_cast<char *>(key), slice, [](const SlicePtr &from, const SlicePtr &to) {
+            CacheSliceOperator op;
+            return op.Copy(from, to);
+        }, ref, attr);
+    }
+
+    WFlowSliceMeta Meta(const WCachePtr &flow, WCacheTierType type, uint64_t index)
+    {
+        WCacheSlicePtr slice;
+        EXPECT_EQ(flow->mCacheTiers[type]->GetMetaSlice(index, slice), BIO_OK);
+        WFlowSliceMeta meta{};
+        CacheSliceOperator op;
+        EXPECT_EQ(op.Copy(slice.Get(), reinterpret_cast<char *>(&meta), sizeof(meta)), BIO_OK);
+        return meta;
+    }
+
+    // Isolate the handover callback with actual metadata copies in RAM; no raw device access.
+    void PrepareHandover(const WCachePtr &flow, const WCacheSliceRefPtr &ref,
+        WCacheSlicePtr &memoryMeta, WCacheSlicePtr &diskMeta)
+    {
+        auto index = ref->GetSlice()->GetIndexInFlow();
+        EXPECT_EQ(flow->mCacheTiers[WCACHE_MEMORY]->GetMetaSlice(index, memoryMeta), BIO_OK);
+        EXPECT_EQ(flow->mCacheTiers[WCACHE_DISK]->GetMetaSlice(index, diskMeta), BIO_OK);
+        CacheSliceOperator op;
+        EXPECT_EQ(op.Copy(memoryMeta.Get(), diskMeta.Get()), BIO_OK);
+        EXPECT_EQ(flow->mCacheTiers[WCACHE_MEMORY]->GetEvictSlice(), ref);
+    }
+
+    void Handover(const WCachePtr &flow, const WCacheSliceRefPtr &ref,
+        const WCacheSlicePtr &memoryMeta, const WCacheSlicePtr &diskMeta)
+    {
+        auto old = ref->GetSlice();
+        std::vector<FlowAddr> addrs;
+        auto disk = MakeRef<WCacheSlice>(old->GetFlowId(), old->GetOffsetInFlow(), old->GetIndexInFlow(),
+            old->GetLength(), addrs, FLOW_DISK);
+        WCacheSliceRef::SetSliceCallback callback = [flow, ref, memoryMeta, diskMeta](const WCacheSlicePtr &oldSlice) {
+            flow->CompleteMemToDisk(ref, oldSlice, memoryMeta, diskMeta);
+        };
+        ref->SetSlice(disk, callback);
+    }
+
     WCacheManager manager;
     BioConfig::DaemonConfig originalConfig;
     DiskAllocator originalDiskAllocator;
@@ -502,21 +585,290 @@ TEST_F(TestWCacheGlobalEvict, duplicate_publication_keeps_original_index_and_inv
     indexed->Release();
 }
 
-TEST_F(TestWCacheGlobalEvict, front_disk_operation_defers_pending_slice_retirement)
+TEST_F(TestWCacheGlobalEvict, front_disk_operation_retries_unpublished_slice)
 {
     auto id = AddFlow(1, false, 0, 1, false);
     auto flow = manager.mWCacheManager.at(id);
     auto ref = flow->mCacheTiers[WCACHE_DISK]->GetEvictSlice();
     auto batch = std::make_shared<UbsIoMetaEventBatch>();
-    bool deferred = false;
-    EXPECT_EQ(flow->EvictFromDiskToUnderFs(ref, true, true, batch, &deferred), BIO_OK);
-    EXPECT_TRUE(deferred);
+    EXPECT_EQ(flow->EvictFromDiskToUnderFs(ref, true, true, batch), BIO_INNER_RETRY);
     EXPECT_EQ(ref->GetState(), SLICE_PENDING);
     EXPECT_NE(ref->GetSlice(), nullptr);
     EXPECT_TRUE(deletedFlows.empty());
     auto *meta = reinterpret_cast<WFlowSliceMeta *>(buffers.back().get());
     EXPECT_EQ(meta->hasEvict, 0U);
     flow->mCacheTiers[WCACHE_DISK]->RetryEvictQueue(ref);
+}
+
+TEST_F(TestWCacheGlobalEvict, memory_put_publishes_complete_data_before_queue_admission)
+{
+    auto flow = MemoryWriter();
+    char key[] = "publish-before-enqueue";
+    bool published = false;
+    flow->mPublishIndexCallback = [&](uint16_t pt, const Key &putKey, const WCacheSliceRefPtr &ref) {
+        EXPECT_TRUE(flow->mCacheTiers[WCACHE_MEMORY]->IsEmptyEvictSliceQueue());
+        auto ret = manager.mCacheIndex->Insert(pt, putKey, ref);
+        auto indexed = manager.mCacheIndex->Aquire(pt, putKey);
+        EXPECT_EQ(indexed, ref);
+        if (indexed != nullptr) {
+            std::vector<char> value(TEST_SEGMENT);
+            CacheSliceOperator op;
+            EXPECT_EQ(op.Copy(indexed->GetSlice().Get(), value.data(), value.size()), BIO_OK);
+            EXPECT_EQ(value, std::vector<char>(TEST_SEGMENT, 'A'));
+            indexed->Release();
+        }
+        published = true;
+        return ret;
+    };
+    flow->mScheduleEvictCallback = [&](WCacheTierType) { EXPECT_TRUE(published); };
+    WCacheSliceRefPtr ref;
+    ASSERT_EQ(PutValue(flow, key, 0, 'A', ref), BIO_OK);
+    EXPECT_EQ(ref->GetState(), SLICE_VALID);
+    EXPECT_EQ(Queued(flow->GetFlowId(), WCACHE_MEMORY), 1U);
+}
+
+TEST_F(TestWCacheGlobalEvict, duplicate_then_delete_and_rewrite_recovers_only_new_record)
+{
+    auto flow = MemoryWriter();
+    char key[] = "duplicate-delete-rewrite";
+    WCacheSliceRefPtr original, duplicate, replacement;
+    ASSERT_EQ(PutValue(flow, key, 0, 'A', original), BIO_OK);
+    ASSERT_EQ(PutValue(flow, key, 1, 'B', duplicate), BIO_OK);
+    EXPECT_EQ(duplicate->GetState(), SLICE_INVALID);
+    EXPECT_EQ(Meta(flow, WCACHE_MEMORY, 1).hasEvict, 1U);
+    ASSERT_EQ(manager.Delete(flow->GetPtId(), key), BIO_OK);
+    ASSERT_EQ(PutValue(flow, key, 2, 'C', replacement), BIO_OK);
+
+    CacheSliceOperator op;
+    auto disk = flow->mCacheTiers[WCACHE_DISK];
+    for (uint64_t index = 0; index < 3; ++index) {
+        WCacheSlicePtr memoryMeta, diskMeta;
+        ASSERT_EQ(flow->mCacheTiers[WCACHE_MEMORY]->GetMetaSlice(index, memoryMeta), BIO_OK);
+        ASSERT_EQ(disk->GetMetaSlice(index, diskMeta), BIO_OK);
+        ASSERT_EQ(op.Copy(memoryMeta.Get(), diskMeta.Get()), BIO_OK);
+        disk->mDataFlow->mChunkList.push_back(index + 1);
+    }
+    disk->mDataFlow->mWrittenOffset = 3 * TEST_SEGMENT;
+    disk->mDataFlow->mPreLoadOffset = 3 * TEST_SEGMENT;
+    auto recoveredIndex = MakeRef<WCacheIndex>();
+    uint32_t recovered = 0;
+    ASSERT_EQ(flow->Recover([&](uint16_t pt, const Key &recoveredKey, const WCacheSliceRefPtr &ref) {
+        ++recovered;
+        return recoveredIndex->Insert(pt, recoveredKey, ref);
+    }), BIO_OK);
+    ASSERT_EQ(recovered, 1U);
+    auto recoveredRef = recoveredIndex->Aquire(flow->GetPtId(), key);
+    ASSERT_NE(recoveredRef, nullptr);
+    EXPECT_EQ(recoveredRef->GetSlice()->GetIndexInFlow(), 2U);
+    recoveredRef->Release();
+}
+
+TEST_F(TestWCacheGlobalEvict, failed_head_flush_keeps_current_memory_publication)
+{
+    auto flow = MemoryWriter();
+    char currentKey[] = "current";
+    WCacheSliceRefPtr head, current;
+    ASSERT_EQ(PutValue(flow, "head", 0, 'A', head), BIO_OK);
+    flow->mCacheTiers[WCACHE_DISK]->mDataFlow->mTruncateOffset = TEST_SEGMENT;
+    EXPECT_NE(PutValue(flow, currentKey, 1, 'B', current, WRITE_DISK_BACK), BIO_OK);
+    ASSERT_NE(current, nullptr);
+    EXPECT_EQ(current->GetState(), SLICE_VALID);
+    EXPECT_TRUE(manager.Exist(flow->GetPtId(), currentKey));
+    EXPECT_EQ(flow->mCacheTiers[WCACHE_MEMORY]->mEvictSliceQueue.front(), head);
+    EXPECT_EQ(Queued(flow->GetFlowId(), WCACHE_MEMORY), 2U);
+    EXPECT_EQ(flow->GetIndex(), 2U);
+}
+
+TEST_F(TestWCacheGlobalEvict, last_reader_propagates_delete_before_memory_reclamation)
+{
+    auto flow = MemoryWriter();
+    char key[] = "late-delete";
+    WCacheSliceRefPtr ref;
+    ASSERT_EQ(PutValue(flow, key, 0, 'A', ref), BIO_OK);
+    flow->mCacheTiers[WCACHE_DISK]->mDataFlow = MemoryFlow(flow->GetFlowId(), TEST_SEGMENT);
+    ASSERT_EQ(flow->mCacheTiers[WCACHE_MEMORY]->GetEvictSlice(), ref);
+    ASSERT_TRUE(ref->Aquire());
+    ASSERT_EQ(flow->EvictFromMemToDisk(ref, true), BIO_OK);
+    ASSERT_EQ(manager.Delete(flow->GetPtId(), key), BIO_OK);
+    EXPECT_EQ(Meta(flow, WCACHE_MEMORY, 0).hasEvict, 1U);
+    EXPECT_EQ(Meta(flow, WCACHE_DISK, 0).hasEvict, 0U); // Accepted crash window before the last Release.
+    EXPECT_EQ(flow->mCacheTiers[WCACHE_MEMORY]->GetDataEvictOffset(), 0U);
+    ref->Release();
+    EXPECT_EQ(Meta(flow, WCACHE_DISK, 0).hasEvict, 1U);
+    EXPECT_EQ(flow->mCacheTiers[WCACHE_MEMORY]->GetDataEvictOffset(), TEST_SEGMENT);
+    EXPECT_EQ(Queued(flow->GetFlowId()), 1U);
+    EXPECT_EQ(retryCount, 0U);
+}
+
+TEST_F(TestWCacheGlobalEvict, marker_failure_does_not_block_reclamation_or_enqueue_retry)
+{
+    auto flow = MemoryWriter();
+    char key[] = "best-effort-marker";
+    WCacheSliceRefPtr ref;
+    ASSERT_EQ(PutValue(flow, key, 0, 'A', ref), BIO_OK);
+    WCacheSlicePtr memoryMeta, diskMeta;
+    PrepareHandover(flow, ref, memoryMeta, diskMeta);
+    ASSERT_TRUE(ref->Aquire());
+    // A null target deterministically fails the marker write without device I/O.
+    Handover(flow, ref, memoryMeta, nullptr);
+    ASSERT_EQ(manager.Delete(flow->GetPtId(), key), BIO_OK);
+    EXPECT_EQ(flow->mCacheTiers[WCACHE_MEMORY]->GetDataEvictOffset(), 0U);
+    EXPECT_NO_THROW(ref->Release());
+    EXPECT_EQ(flow->mCacheTiers[WCACHE_MEMORY]->GetDataEvictOffset(), TEST_SEGMENT);
+    EXPECT_TRUE(flow->IsEmptyEvict(WCACHE_MEMORY));
+    ASSERT_EQ(Queued(flow->GetFlowId()), 1U);
+    EXPECT_EQ(flow->mCacheTiers[WCACHE_DISK]->mEvictSliceQueue.front(), ref);
+    EXPECT_EQ(Queued(flow->GetFlowId(), WCACHE_MEMORY), 0U);
+    // Stale SSD validity on a failed best-effort update is an explicitly accepted outcome.
+    EXPECT_EQ(Meta(flow, WCACHE_DISK, 0).hasEvict, 0U);
+    EXPECT_EQ(retryCount, 0U);
+    EXPECT_TRUE(manager.mRetryManager[WCACHE_MEMORY].empty());
+    manager.RetryGlobalEviction();
+    EXPECT_EQ(Meta(flow, WCACHE_DISK, 0).hasEvict, 0U);
+    EXPECT_EQ(Queued(flow->GetFlowId()), 1U);
+}
+
+TEST_F(TestWCacheGlobalEvict, memory_marker_read_failure_still_finishes_handover)
+{
+    auto flow = MemoryWriter();
+    WCacheSliceRefPtr ref;
+    ASSERT_EQ(PutValue(flow, "unreadable-marker", 0, 'A', ref), BIO_OK);
+    WCacheSlicePtr memoryMeta, diskMeta;
+    PrepareHandover(flow, ref, memoryMeta, diskMeta);
+    EXPECT_NO_THROW(Handover(flow, ref, nullptr, diskMeta));
+    EXPECT_EQ(flow->mCacheTiers[WCACHE_MEMORY]->GetDataEvictOffset(), TEST_SEGMENT);
+    EXPECT_EQ(Queued(flow->GetFlowId()), 1U);
+    EXPECT_EQ(retryCount, 0U);
+}
+
+TEST_F(TestWCacheGlobalEvict, completion_does_not_clear_newer_ssd_delete)
+{
+    auto flow = MemoryWriter();
+    WCacheSliceRefPtr ref;
+    ASSERT_EQ(PutValue(flow, "ssd-delete", 0, 'A', ref), BIO_OK);
+    WCacheSlicePtr memoryMeta, diskMeta;
+    PrepareHandover(flow, ref, memoryMeta, diskMeta);
+    WFlowSliceMeta meta = Meta(flow, WCACHE_DISK, 0);
+    meta.hasEvict = 1;
+    CacheSliceOperator op;
+    ASSERT_EQ(op.Copy(reinterpret_cast<const char *>(&meta), diskMeta.Get()), BIO_OK);
+    EXPECT_EQ(Meta(flow, WCACHE_MEMORY, 0).hasEvict, 0U);
+    Handover(flow, ref, memoryMeta, diskMeta);
+    EXPECT_EQ(Meta(flow, WCACHE_DISK, 0).hasEvict, 1U);
+}
+
+TEST_F(TestWCacheGlobalEvict, faulted_handover_reclaims_memory_without_disk_marker_write)
+{
+    auto flow = MemoryWriter();
+    char key[] = "fault-marker";
+    WCacheSliceRefPtr ref;
+    ASSERT_EQ(PutValue(flow, key, 0, 'A', ref), BIO_OK);
+    WCacheSlicePtr memoryMeta, diskMeta;
+    PrepareHandover(flow, ref, memoryMeta, diskMeta);
+    ASSERT_TRUE(ref->Aquire());
+    Handover(flow, ref, memoryMeta, nullptr);
+    ASSERT_EQ(manager.Delete(flow->GetPtId(), key), BIO_OK);
+    flow->SetStandaloneFault();
+    ref->Release();
+    EXPECT_EQ(flow->mCacheTiers[WCACHE_MEMORY]->GetDataEvictOffset(), TEST_SEGMENT);
+    EXPECT_EQ(Queued(flow->GetFlowId()), 0U);
+    EXPECT_EQ(retryCount, 0U);
+    flow->mStandaloneFault = false;
+}
+
+TEST_F(TestWCacheGlobalEvict, invalid_memory_tombstone_waits_for_existing_reader)
+{
+    auto flow = MemoryWriter();
+    char key[] = "deleted-with-reader";
+    WCacheSliceRefPtr ref;
+    ASSERT_EQ(PutValue(flow, key, 0, 'A', ref), BIO_OK);
+    ASSERT_EQ(flow->mCacheTiers[WCACHE_MEMORY]->GetEvictSlice(), ref);
+    flow->mCacheTiers[WCACHE_DISK]->mDataFlow = MemoryFlow(flow->GetFlowId(), TEST_SEGMENT);
+    ASSERT_TRUE(ref->Aquire());
+    ASSERT_EQ(manager.Delete(flow->GetPtId(), key), BIO_OK);
+    ASSERT_EQ(flow->EvictMemoryTombstone(ref), BIO_OK);
+    EXPECT_NE(ref->GetSlice(), nullptr);
+    EXPECT_EQ(flow->mCacheTiers[WCACHE_MEMORY]->GetDataEvictOffset(), 0U);
+    EXPECT_EQ(Meta(flow, WCACHE_DISK, 0).hasEvict, 1U);
+    ref->Release();
+    EXPECT_EQ(ref->GetSlice(), nullptr);
+    EXPECT_EQ(flow->mCacheTiers[WCACHE_MEMORY]->GetDataEvictOffset(), TEST_SEGMENT);
+}
+
+TEST_F(TestWCacheGlobalEvict, recovery_does_not_advance_positions_or_expand_preallocation)
+{
+    auto flow = manager.mWCacheManager.at(AddFlow(1, true, 0, 1, false));
+    auto tier = flow->mCacheTiers[WCACHE_DISK];
+    tier->mMetaFlow->mPreLoadOffset = TEST_META_CAPACITY;
+    tier->mMetaFlow->mPreLoadSize = 2 * TEST_META_CAPACITY;
+    tier->mDataFlow->mWrittenOffset = 0;
+    tier->mDataFlow->mPreLoadSize = 2 * TEST_SEGMENT;
+    const uint64_t written = tier->mMetaFlow->mWrittenOffset;
+    for (uint32_t restart = 0; restart < 3; ++restart) {
+        tier->mEvictSliceQueue.clear();
+        auto index = MakeRef<WCacheIndex>();
+        uint32_t records = 0;
+        ASSERT_EQ(flow->Recover([&](uint16_t pt, const Key &key, const WCacheSliceRefPtr &ref) {
+            ++records;
+            return index->Insert(pt, key, ref);
+        }), BIO_OK);
+        EXPECT_EQ(records, 1U);
+        EXPECT_EQ(tier->mMetaFlow->mWrittenOffset.load(), written);
+        EXPECT_EQ(tier->mMetaFlow->GetTotalLen(), TEST_META_CAPACITY);
+        EXPECT_EQ(tier->mMetaFlow->GetAllocatedLen(), TEST_META_CAPACITY);
+        EXPECT_EQ(tier->mDataFlow->mWrittenOffset.load(), 0U);
+        EXPECT_EQ(tier->mDataFlow->GetTotalLen(), TEST_SEGMENT);
+        EXPECT_FALSE(tier->mMetaFlow->mPreLoadFlag);
+        EXPECT_FALSE(tier->mDataFlow->mPreLoadFlag);
+    }
+}
+
+TEST_F(TestWCacheGlobalEvict, existing_addresses_validate_extent_and_allow_recovered_truncation)
+{
+    Flow flow(FLOW_META, FLOW_DISK, 77, 0, TEST_SEGMENT, 2 * TEST_SEGMENT);
+    ASSERT_EQ(flow.RecoverChunk(2 * TEST_SEGMENT, 11), BIO_OK);
+    ASSERT_EQ(flow.RecoverChunk(3 * TEST_SEGMENT, 12), BIO_OK);
+    ASSERT_EQ(flow.RecoverCheck(), BIO_OK);
+    EXPECT_EQ(flow.GetValidLen(), 2 * TEST_SEGMENT);
+    std::vector<FlowAddr> addrs;
+    ASSERT_EQ(flow.GetExistingAddrByOffset(3 * TEST_SEGMENT - 100, 200, addrs), BIO_OK);
+    ASSERT_EQ(addrs.size(), 2U);
+    EXPECT_EQ(addrs[0].chunkId, 11U);
+    EXPECT_EQ(addrs[0].chunkOffset, TEST_SEGMENT - 100);
+    EXPECT_EQ(addrs[0].chunkLen, 100U);
+    EXPECT_EQ(addrs[1].chunkId, 12U);
+    EXPECT_EQ(addrs[1].chunkOffset, 0U);
+    EXPECT_EQ(addrs[1].chunkLen, 100U);
+    EXPECT_NE(flow.GetExistingAddrByOffset(2 * TEST_SEGMENT - 1, 1, addrs), BIO_OK);
+    EXPECT_NE(flow.GetExistingAddrByOffset(4 * TEST_SEGMENT, 1, addrs), BIO_OK);
+    EXPECT_NE(flow.GetExistingAddrByOffset(UINT64_MAX, 2, addrs), BIO_OK);
+    EXPECT_EQ(addrs.size(), 2U);
+    EXPECT_EQ(flow.mWrittenOffset.load(), 4 * TEST_SEGMENT);
+    EXPECT_EQ(flow.mPreLoadOffset.load(), 4 * TEST_SEGMENT);
+    EXPECT_FALSE(flow.mPreLoadFlag);
+    FlowManager::mUsedSize[FLOW_WCACHE][FLOW_DISK][0] = 2 * TEST_SEGMENT;
+    ASSERT_EQ(flow.TruncateOffset(3 * TEST_SEGMENT), BIO_OK);
+    EXPECT_EQ(flow.GetAllocatedLen(), TEST_SEGMENT);
+    EXPECT_EQ(flow.GetValidLen(), TEST_SEGMENT);
+}
+
+TEST_F(TestWCacheGlobalEvict, recovery_skips_overflowing_record_ranges_without_allocating)
+{
+    auto flow = manager.mWCacheManager.at(AddFlow(1, true, 0, 1, false));
+    auto tier = flow->mCacheTiers[WCACHE_DISK];
+    auto *meta = reinterpret_cast<WFlowSliceMeta *>(buffers.back().get());
+    meta->offset = 1;
+    meta->length = UINT64_MAX;
+    uint32_t records = 0;
+    ASSERT_EQ(flow->Recover([&](uint16_t, const Key &, const WCacheSliceRefPtr &) {
+        ++records;
+        return BIO_OK;
+    }), BIO_OK);
+    EXPECT_EQ(records, 0U);
+    EXPECT_EQ(tier->mDataFlow->GetTotalLen(), TEST_SEGMENT);
+    WCacheSlicePtr metaSlice;
+    EXPECT_EQ(tier->GetMetaSlice(UINT64_MAX, metaSlice), BIO_INVALID_PARAM);
+    EXPECT_EQ(metaSlice, nullptr);
 }
 
 TEST_F(TestWCacheGlobalEvict, fault_wait_still_waits_for_put_after_batches_finish)

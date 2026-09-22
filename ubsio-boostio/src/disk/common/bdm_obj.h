@@ -42,6 +42,7 @@ typedef struct {
     int32_t (*nextchunk)(uintptr_t objPtr, uint64_t *chunkId, uint64_t *chunkSize, uint64_t *bucketId,
         uint64_t *bucketOffset);
     int32_t (*getcap)(uintptr_t objPtr, uint64_t *totalSize, uint64_t *usedSize);
+    int32_t (*allocZeroed)(uintptr_t objPtr, uint64_t bucketId, uint64_t bucketOffset, uint64_t len, uint64_t *chunkId);
 } BdmOps;
 
 typedef void *BdmOpsInfo;

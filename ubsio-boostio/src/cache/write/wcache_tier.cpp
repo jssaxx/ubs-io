@@ -170,18 +170,19 @@ uint64_t WCacheTier::GetTruncateIndex()
 
 BResult WCacheTier::GetMetaSlice(uint64_t indexInFlow, WCacheSlicePtr &slice)
 {
+    ChkTrueNot(mMetaEntrySize != 0 && indexInFlow <= UINT64_MAX / mMetaEntrySize, BIO_INVALID_PARAM);
     BResult ret = BIO_ERR;
     BIO_TP_START(WCACHE_GET_META_SLICE_FAIL, ret, BIO_ERR);
-    ret = GetSlice(mMetaFlow, indexInFlow * mMetaEntrySize, indexInFlow, mMetaEntrySize, slice);
+    ret = GetSlice(mMetaFlow, indexInFlow * mMetaEntrySize, indexInFlow, mMetaEntrySize, slice, true);
     BIO_TP_END;
     ChkTrue(ret == BIO_OK, ret,
         "Failed to get meta slice, flowId " << mMetaFlow->GetFlowId() << " indexInFlow:" << indexInFlow);
     return BIO_OK;
 }
 
-BResult WCacheTier::GetDataSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
+BResult WCacheTier::GetDataSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice, bool existingOnly)
 {
-    BResult ret = GetSlice(mDataFlow, sliceKey, slice);
+    BResult ret = GetSlice(mDataFlow, sliceKey, slice, existingOnly);
     ChkTrueNot(ret == BIO_OK, ret);
     return BIO_OK;
 }
@@ -338,10 +339,13 @@ void WCacheTier::MarkEvictedIndex(uint64_t indexInFlow)
     mFlowTruncateCursor->MarkEvictedIndex(indexInFlow);
 }
 
-inline BResult WCacheTier::GetSlice(const FlowPtr &flow, const SliceKey &sliceKey, WCacheSlicePtr &slice)
+inline BResult WCacheTier::GetSlice(const FlowPtr &flow, const SliceKey &sliceKey, WCacheSlicePtr &slice,
+    bool existingOnly)
 {
+    ChkTrueNot(sliceKey.length <= UINT32_MAX, BIO_INVALID_PARAM);
     std::vector<FlowAddr> flowAddrs;
-    auto ret = flow->GetAddrByOffset(sliceKey.flowOffset, sliceKey.length, flowAddrs);
+    auto ret = existingOnly ? flow->GetExistingAddrByOffset(sliceKey.flowOffset, sliceKey.length, flowAddrs) :
+        flow->GetAddrByOffset(sliceKey.flowOffset, sliceKey.length, flowAddrs);
     ChkTrueNot(ret == BIO_OK, ret);
 
     slice = MakeRef<WCacheSlice>(sliceKey.flowId, sliceKey.flowOffset, sliceKey.indexInFlow,
@@ -353,10 +357,12 @@ inline BResult WCacheTier::GetSlice(const FlowPtr &flow, const SliceKey &sliceKe
 }
 
 inline BResult WCacheTier::GetSlice(const FlowPtr &flow, uint64_t offset, uint64_t index, uint64_t length,
-    WCacheSlicePtr &slice)
+    WCacheSlicePtr &slice, bool existingOnly)
 {
+    ChkTrueNot(length <= UINT32_MAX, BIO_INVALID_PARAM);
     std::vector<FlowAddr> flowAddrs;
-    auto ret = flow->GetAddrByOffset(offset, length, flowAddrs);
+    auto ret = existingOnly ? flow->GetExistingAddrByOffset(offset, length, flowAddrs) :
+        flow->GetAddrByOffset(offset, length, flowAddrs);
     ChkTrueNot(ret == BIO_OK, ret);
 
     slice = MakeRef<WCacheSlice>(flow->GetFlowId(), offset, index, length, flowAddrs, flow->GetFlowType());

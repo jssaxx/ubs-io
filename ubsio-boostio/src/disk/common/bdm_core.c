@@ -60,7 +60,8 @@ void BdmSetDiskStartupInfo(uint32_t isStandalone, uint32_t deviceId)
     BDM_LOGINFO(0, "Set bdm disk startup info, standalone(%u), deviceId(%u).", isStandalone, deviceId);
 }
 
-int32_t BdmAlloc(uint32_t bdmId, uint64_t bucketId, uint64_t bucketOffset, uint64_t len, uint64_t *chunkId)
+static int32_t BdmAllocImpl(uint32_t bdmId, uint64_t bucketId, uint64_t bucketOffset, uint64_t len,
+    uint64_t *chunkId, bool zeroed)
 {
     if (UNLIKELY(len > BDM_MAX_CHUNK_LENGTH)) {
         BDM_LOGERROR(0, "bdm alloc len(%llu) is invalid.", len);
@@ -76,12 +77,14 @@ int32_t BdmAlloc(uint32_t bdmId, uint64_t bucketId, uint64_t bucketOffset, uint6
         return BDM_CODE_NOT_EXIST;
     }
 
-    if (UNLIKELY(bdm->ops.alloc == NULL)) {
+    int32_t (*alloc)(uintptr_t, uint64_t, uint64_t, uint64_t, uint64_t *) =
+        zeroed ? bdm->ops.allocZeroed : bdm->ops.alloc;
+    if (UNLIKELY(alloc == NULL)) {
         BDM_LOGERROR(0, "Invalid ops, not register alloc function.");
         return BDM_CODE_ERR;
     }
 
-    int32_t ret = bdm->ops.alloc((uintptr_t)bdm, bucketId, bucketOffset, len, chunkId);
+    int32_t ret = alloc((uintptr_t)bdm, bucketId, bucketOffset, len, chunkId);
     if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGERROR(0, "Alloc failed, bdm id(%u) len(%lu) ret(%d).", bdmId, len, ret);
         return ret;
@@ -90,6 +93,16 @@ int32_t BdmAlloc(uint32_t bdmId, uint64_t bucketId, uint64_t bucketOffset, uint6
     *chunkId = ENCODE_CHUNK_ID(*chunkId, bdmId);
     BDM_LOGDEBUG(0, "Alloc success, chunkId(%lu) bucketId(%lu) bucketOffset(%lu).", *chunkId, bucketId, bucketOffset);
     return BDM_CODE_OK;
+}
+
+int32_t BdmAlloc(uint32_t bdmId, uint64_t bucketId, uint64_t bucketOffset, uint64_t len, uint64_t *chunkId)
+{
+    return BdmAllocImpl(bdmId, bucketId, bucketOffset, len, chunkId, false);
+}
+
+int32_t BdmAllocZeroed(uint32_t bdmId, uint64_t bucketId, uint64_t bucketOffset, uint64_t len, uint64_t *chunkId)
+{
+    return BdmAllocImpl(bdmId, bucketId, bucketOffset, len, chunkId, true);
 }
 
 int32_t BdmFree(uint32_t bdmId, uint64_t len, uint64_t chunkId)

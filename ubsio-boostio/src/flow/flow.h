@@ -48,6 +48,8 @@ public:
     ~Flow() = default;
 
     BResult GetAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAddr> &flowAddr);
+    // Resolve an allocated range without advancing the write position or scheduling allocation.
+    BResult GetExistingAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAddr> &flowAddr);
 
     BResult ValidateAndPreloadRange(uint64_t offset, uint32_t len);
 

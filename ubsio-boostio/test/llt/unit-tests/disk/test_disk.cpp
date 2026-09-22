@@ -14,7 +14,9 @@
 #include <mockcpp/mockcpp.hpp>
 #include <semaphore.h>
 #include <string>
+#include <vector>
 #include <unistd.h>
+#include "wcache_tier.h"
 #include "securec.h"
 #include "tracepoint.h"
 #include "bio_mock.h"
@@ -599,6 +601,78 @@ TEST_F(TestDisk, test_force_new_disk_skips_old_allocator_recovery)
     ASSERT_EQ(BdmCreate(&para, &createdBdmId), BDM_CODE_OK);
     ASSERT_EQ(BdmGetCapacity(bdmId, &totalCapacity, &usedCapacity), BDM_CODE_OK);
     EXPECT_EQ(usedCapacity, NO_4194304);
+    EXPECT_EQ(BdmDestroy(bdmId), BDM_CODE_OK);
+}
+
+TEST_F(TestDisk, test_force_new_reused_metadata_contains_only_new_records)
+{
+    constexpr uint32_t bdmId = 711;
+    constexpr uint64_t flowId = 77;
+    constexpr uint64_t metaFlowId = (3ULL << 32) | flowId;
+    constexpr uint64_t dataFlowId = (4ULL << 32) | flowId;
+    TempBdmFile diskFile(bdmId);
+    ASSERT_EQ(CreateBdmAndDestroy(diskFile.path, bdmId, BuildVirtualPad(0, 1)), BDM_CODE_OK);
+
+    BdmCreatePara para{};
+    ASSERT_EQ(strncpy_s(para.name, BDM_NAME_LEN, diskFile.path.c_str(), diskFile.path.size()), BDM_CODE_OK);
+    ASSERT_GE(sprintf_s(para.sn, BDM_SN_LEN, "%s_%u", "meta", bdmId), 0);
+    para.length = TEST_BDM_META_DISK_LEN;
+    para.bdmId = bdmId;
+    para.pad = BuildVirtualPad(0, 1);
+    para.minChunkSize = NO_4194304;
+    para.maxChunkSize = NO_4194304;
+    auto create = [&](bool forceNew) {
+        uint32_t created = BDM_INVALID_ID;
+        BdmDiskSetForceNew(forceNew ? 1 : 0);
+        auto ret = BdmCreate(&para, &created);
+        BdmDiskSetForceNew(0);
+        return ret;
+    };
+    ASSERT_EQ(create(false), BDM_CODE_OK);
+    uint64_t oldMetaChunk = 0, oldDataChunk = 0;
+    ASSERT_EQ(BdmAllocZeroed(bdmId, metaFlowId, 0, NO_4194304, &oldMetaChunk), BDM_CODE_OK);
+    ASSERT_EQ(BdmAlloc(bdmId, dataFlowId, 0, NO_4194304, &oldDataChunk), BDM_CODE_OK);
+    WFlowSliceMeta records[8]{};
+    for (uint32_t i = 0; i < 8; ++i) {
+        ASSERT_GE(sprintf_s(records[i].key, sizeof(records[i].key), "old-%u", i), 0);
+        records[i].magic = flowId;
+        records[i].offset = i * 512;
+        records[i].length = 512;
+    }
+    ASSERT_EQ(BdmWrite(oldMetaChunk, 0, records, sizeof(records)), BDM_CODE_OK);
+    std::vector<char> neighbor(512, 'D');
+    ASSERT_EQ(BdmWrite(oldDataChunk, 0, neighbor.data(), neighbor.size()), BDM_CODE_OK);
+    ASSERT_EQ(BdmDestroy(bdmId), BDM_CODE_OK);
+
+    ASSERT_EQ(create(true), BDM_CODE_OK);
+    uint64_t newMetaChunk = 0, newDataChunk = 0;
+    ASSERT_EQ(BdmAllocZeroed(bdmId, metaFlowId, 0, NO_4194304, &newMetaChunk), BDM_CODE_OK);
+    EXPECT_EQ(newMetaChunk, oldMetaChunk);
+    ASSERT_EQ(BdmRead(newMetaChunk, 0, records, sizeof(records)), BDM_CODE_OK);
+    for (const auto &record : records) {
+        EXPECT_EQ(record.magic, 0U);
+    }
+    records[0].magic = flowId;
+    records[0].length = 512;
+    ASSERT_GE(sprintf_s(records[0].key, sizeof(records[0].key), "%s", "new"), 0);
+    ASSERT_EQ(BdmWrite(newMetaChunk, 0, records, sizeof(records[0])), BDM_CODE_OK);
+    ASSERT_EQ(BdmAlloc(bdmId, dataFlowId, 0, NO_4194304, &newDataChunk), BDM_CODE_OK);
+    EXPECT_EQ(newDataChunk, oldDataChunk);
+    std::vector<char> readNeighbor(512);
+    ASSERT_EQ(BdmRead(newDataChunk, 0, readNeighbor.data(), readNeighbor.size()), BDM_CODE_OK);
+    EXPECT_EQ(readNeighbor, neighbor); // Metadata initialization does not clear adjacent data chunks.
+    ASSERT_EQ(BdmDestroy(bdmId), BDM_CODE_OK);
+
+    ASSERT_EQ(create(false), BDM_CODE_OK);
+    ASSERT_EQ(BdmRead(newMetaChunk, 0, records, sizeof(records)), BDM_CODE_OK);
+    uint32_t valid = 0;
+    for (const auto &record : records) {
+        if (record.magic == flowId && record.hasEvict == 0) {
+            ++valid;
+            EXPECT_STREQ(record.key, "new");
+        }
+    }
+    EXPECT_EQ(valid, 1U);
     EXPECT_EQ(BdmDestroy(bdmId), BDM_CODE_OK);
 }
 

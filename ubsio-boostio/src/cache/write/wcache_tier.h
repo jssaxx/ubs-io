@@ -95,7 +95,7 @@ public:
 
     BResult GetMetaSlice(uint64_t indexInFlow, WCacheSlicePtr &slice);
 
-    BResult GetDataSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice);
+    BResult GetDataSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice, bool existingOnly = false);
 
     BResult GetMetaDataSlice(uint64_t indexInFlow, uint64_t offset, uint64_t length, WFlowMetaDataSlice &metaDataSlice);
 
@@ -135,9 +135,10 @@ public:
 
 private:
     BResult ToFlowType(WCacheTierType tier, FlowType &flowType);
-    static BResult GetSlice(const FlowPtr &flow, const SliceKey &sliceKey, WCacheSlicePtr &slice);
+    static BResult GetSlice(const FlowPtr &flow, const SliceKey &sliceKey, WCacheSlicePtr &slice,
+        bool existingOnly = false);
     static BResult GetSlice(const FlowPtr &flow, uint64_t offset, uint64_t index, uint64_t length,
-        WCacheSlicePtr &slice);
+        WCacheSlicePtr &slice, bool existingOnly = false);
 
 private:
     WCacheTierType type;

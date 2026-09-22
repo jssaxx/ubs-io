@@ -249,8 +249,10 @@ BResult WCacheManager::CreateWCache(uint64_t procId, uint64_t flowId, uint16_t p
     if (mStandaloneMode) {
         scheduleEvictCallback = [this](WCacheTierType type) { ScheduleGlobalEvict(type); };
     }
+    WCache::PublishIndexCallback publishIndexCallback = [this](uint16_t pt, const Key &key,
+        const WCacheSliceRefPtr &sliceRef) { return mCacheIndex->Insert(pt, key, sliceRef); };
     wcache->RegOp(mGetLocDiskStatus, mLocRole, mEvictOffset, recordMetaDeleteEventCallback, retryCallback,
-        submitMetaEventBatchCallback, scheduleEvictCallback);
+        submitMetaEventBatchCallback, scheduleEvictCallback, publishIndexCallback);
     auto ret = wcache->Init(mEvictService, mRCacheManager, isRecover);
     ChkTrue(ret == BIO_OK, ret, "Failed to init WCache, flowId:" << flowId);
 
@@ -555,6 +557,7 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
     ret = wcache->Put(key, slice, sliceReader, sliceRef, attr);
     BIO_TP_END;
     BIO_TRACE_END(WCACHE_TRACE_PUT_WRITE_FLOW, ret);
+    BIO_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
         if (sliceRef != nullptr && sliceRef->GetState() == SLICE_PENDING) {
             sliceRef->SetState(SLICE_INVALID);
@@ -568,23 +571,9 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
         return BIO_OK;
     }
 
-    // 4. Insert slice reference to write cache index manager.
-    BIO_TRACE_START(WCACHE_TRACE_PUT_INSERT_INDEX);
-    ret = mCacheIndex->Insert(CacheFlowIdManager::GetPtId(slice->GetFlowId()), key, sliceRef);
-    BIO_TRACE_END(WCACHE_TRACE_PUT_INSERT_INDEX, ret);
-    BIO_TP_END;
-    if (UNLIKELY(ret != BIO_OK)) {
-        if (sliceRef != nullptr && sliceRef->GetState() == SLICE_PENDING) {
-            sliceRef->SetState(SLICE_INVALID);
-        }
-        LOG_ERROR("Insert slice reference to write cache index manager failed, ret:" << ret << ", key:" << key << ".");
-        wcache->DecFlyIo();
-        return ret;
-    }
-    wcache->StartDirectUnderFsEvict();
     wcache->DecFlyIo();
     if (ret == BIO_OK && mStandaloneMode) {
-        // The index is published before the final-tier worker is allowed to delete this Put.
+        // WCache publishes before enqueueing; keep the existing completion scheduling trigger.
         ScheduleGlobalEvict(WCACHE_MEMORY);
         if (mHasDiskCache) {
             ScheduleGlobalEvict(WCACHE_DISK);
