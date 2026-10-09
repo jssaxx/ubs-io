@@ -30,6 +30,7 @@ std::atomic<bool> Logger::gInitErrorScreenEnabled{ false };
 const int STDOUT_TYPE = 0;
 const int FILE_TYPE = 1;
 const int STDERR_TYPE = 2;
+constexpr const char *LOG_LEVEL_NAMES[] = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"};
 
 constexpr int MIN_LOG_LEVEL_MAX = 5;
 constexpr int SIZE_MB_SHIFT = 20;
@@ -45,9 +46,9 @@ void Logger::LogToStdErr(int32_t level, const std::string &message)
     struct timeval tv {};
     struct tm localTime {};
     char strTime[20] {};
-    const char *levelName = "unknown";
+    const char *levelName = "UNKNOWN";
     if (level >= BIOLOG_LEVEL_TRACE && level <= BIOLOG_LEVEL_CRITICAL) {
-        levelName = spdlog::level::to_string_view(static_cast<spdlog::level::level_enum>(level)).data();
+        levelName = LOG_LEVEL_NAMES[level];
     }
 
     gettimeofday(&tv, nullptr);
@@ -81,9 +82,9 @@ void Logger::LogToStdErr(const std::ostringstream &oss)
 
     gettimeofday(&tv, nullptr);
     if (strftime(strTime, sizeof strTime, "%Y-%m-%d %H:%M:%S.", localtime(&tv.tv_sec)) != 0) {
-        std::cout << strTime << tv.tv_usec << " info " << syscall(SYS_gettid) << " " << oss.str() << std::endl;
+        std::cout << strTime << tv.tv_usec << " INFO " << syscall(SYS_gettid) << " " << oss.str() << std::endl;
     } else {
-        std::cout << " Invalid time info " << syscall(SYS_gettid) << " " << oss.str() << std::endl;
+        std::cout << " Invalid time INFO " << syscall(SYS_gettid) << " " << oss.str() << std::endl;
     }
 }
 
@@ -165,7 +166,7 @@ int32_t Logger::Init()
     try {
         if (mOptions.logType == STDOUT_TYPE) { // stdout
             mSpdLogger = spdlog::stdout_logger_mt("console");
-            mSpdLogger->set_pattern("%Y-%m-%d %H:%M:%S.%f %t %l %v");
+            mSpdLogger->set_pattern("%Y-%m-%d %H:%M:%S.%f %t %v");
         } else if (mOptions.logType == FILE_TYPE) { // file
             const std::string logName = std::string("ns:0").append(";log:normal");
             spdlog::file_event_handlers handlers;
@@ -181,13 +182,13 @@ int32_t Logger::Init()
             mSpdLogger->info("", "");
             mSpdLogger->set_pattern("%Y-%m-%d %H:%M:%S.%f %t %v");
             mSpdLogger->info("Log started at [{}] level",
-                spdlog::level::to_string_view(static_cast<spdlog::level::level_enum>(mOptions.minLogLevel)).data());
+                LOG_LEVEL_NAMES[mOptions.minLogLevel]);
             mSpdLogger->info("Log default format: yyyy-mm-dd hh:mm:ss.uuuuuu threadid loglevel msg");
-            mSpdLogger->set_pattern("%Y-%m-%d %H:%M:%S.%f %t %l %v");
+            mSpdLogger->set_pattern("%Y-%m-%d %H:%M:%S.%f %t %v");
             spdlog::flush_every(std::chrono::seconds(1));
         } else if (mOptions.logType == STDERR_TYPE) { // stderr
             mSpdLogger = spdlog::stderr_logger_mt("console");
-            mSpdLogger->set_pattern("%C/%m/%d %H:%M:%S.%f %t %l %v");
+            mSpdLogger->set_pattern("%C/%m/%d %H:%M:%S.%f %t %v");
         }
         mSpdLogger->set_level(static_cast<spdlog::level::level_enum>(mOptions.minLogLevel));
         mSpdLogger->flush_on(spdlog::level::err);
@@ -223,7 +224,7 @@ int32_t Logger::Log(int level, const std::string &message) const
         return -2L;
     }
 
-    mSpdLogger->log(static_cast<spdlog::level::level_enum>(level), "{}", message);
+    mSpdLogger->log(static_cast<spdlog::level::level_enum>(level), "{} {}", LOG_LEVEL_NAMES[level], message);
     return 0L;
 }
 
