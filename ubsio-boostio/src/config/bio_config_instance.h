@@ -58,7 +58,7 @@ const auto SEGMENT_SIZE_MB = std::make_pair("ubsio.segment.size_in_mb", 4);
 
 const auto MEM_CAPACITY_SIZE_GB = std::make_pair("ubsio.mem.size_in_gb", 50);
 
-const auto DISK_CONF_PATH = std::make_pair("ubsio.disk.path", "xxx:xxx:xxx");
+const auto DISK_CONF_PATH = std::make_pair("ubsio.disk.path", "");
 const auto BDM_IO_ENGINE = std::make_pair("ubsio.bdm.io_engine", "sync");
 const auto STANDALONE_DEVICE_COUNT = std::make_pair("ubsio.standalone.device_count", 1);
 const auto STANDALONE_FORCE_NEW_DISK = std::make_pair("ubsio.standalone.force_new_disk", "false");
