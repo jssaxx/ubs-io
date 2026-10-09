@@ -77,7 +77,7 @@ ubsio.batch_read.copy_workers = 4
 | 配置项 | 值类型 | 是否必填 | 默认值 | 有效范围 | 说明 |
 | --- | --- | --- | --- | --- | --- |
 | `ubsio.disk.path` | 字符串 | 可选 | 空 | standalone 模式最多 `16` 个有效块设备路径，以英文冒号分隔 | UBS IO 独占的整盘、分区或 loop 块设备。留空表示不使用本地磁盘；启用 `local` UnderFS 时，wcache 数据直接淘汰到本地文件系统，否则仅使用内存缓存。设备不能存在挂载点或需要保留的数据。 |
-| `ubsio.log.level` | 字符串 | 可选 | `info` | `error`、`warn`、`info`、`debug`、`trace` | 配置初始化后设置 BoostIO server 日志级别。配置值使用小写，日志输出中的级别标签使用大写 `TRACE`、`DEBUG`、`INFO`、`WARN`、`ERROR`、`CRITICAL`。 |
+| `ubsio.log.level` | 字符串 | 可选 | `info` | `error`、`warn`、`info`、`debug`、`trace` | 配置初始化后设置 BoostIO server 日志级别。 |
 | `ubsio.log.path` | 字符串 | 可选 | `/var/log/ubsio` | 非空且可创建或已存在的目录路径 | BoostIO server 普通日志目录；统计日志写入其 `trace` 子目录。 |
 | `ubsio.standalone.device_count` | 整数 | 可选 | `0` | 无盘模式为 `0`；配置缓存盘时为 `1` 到 `16` | 配置缓存盘时，应与 `ock.mmc.local_service.dram.size > 0` 的 `local_service` 进程数一致。 |
 | `ubsio.standalone.device_id_gather_timeout_sec` | 整数 | 可选 | `180` | `1` 到 `2147483647` | 配置缓存盘时，等待全部 standalone 逻辑 device ID 完成汇聚的超时时间，单位为秒。 |
