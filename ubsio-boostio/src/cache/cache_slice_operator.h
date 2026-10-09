@@ -17,16 +17,19 @@
 #include <memory>
 #include <mutex>
 #include <vector>
+#include "bio_execution.h"
 #include "cache_slice.h"
 #include "slice_operator.h"
 
 namespace ock {
 namespace bio {
 void PrewarmBdmBatchTempBufferPool();
+char *AllocBatchReadScratchBuffer(uint64_t len);
+void FreeBatchReadScratchBuffer(char *buffer, uint64_t len);
 
 class BdmCopyBatchContext {
 public:
-    BdmCopyBatchContext();
+    explicit BdmCopyBatchContext(const ExecutorServicePtr &copyExecutor = nullptr);
     ~BdmCopyBatchContext();
     BResult EnqueueDiskToMemory(const SlicePtr &from, const SlicePtr &to, BResult *result,
         WCacheSliceRefPtr &sliceRef);
@@ -78,14 +81,25 @@ private:
     void SubmitWindow(std::vector<Entry> &window);
     std::unique_ptr<SubmittedBatch> SubmitEntriesAsync(std::vector<Entry> &entries);
     static void MarkPendingEntriesFailed(std::vector<Entry> &entryList, BResult result);
-    void WaitAndRecord(SubmittedBatch &batch);
+    void WaitAndRecord(SubmittedBatch &batch, bool parallelCopyEnabled);
+    bool PrepareCopyPipeline(SubmittedBatch &batch);
+    static void OnPipelineRequestComplete(void *context, uint32_t entryIndex, int32_t result);
+    void QueuePipelineCopy(SubmittedBatch &batch, uint32_t entryIndex, int32_t ioResult);
+    void DrainPipelineCopies(SubmittedBatch &batch);
+    void CompletePipelineEntry(SubmittedBatch &batch, uint32_t entryIndex, BResult result);
+    BResult WaitPipelineCopies(SubmittedBatch &batch);
     BResult WaitSubmittedIo(SubmittedBatch &batch);
-    BResult CopySubmittedResult(SubmittedBatch &batch);
+    BResult CopySubmittedResult(SubmittedBatch &batch, bool parallelCopyEnabled);
+    BResult CopyScratchEntries(SubmittedBatch &batch, bool parallelCopyEnabled);
+    BResult CopyScratchEntriesParallel(SubmittedBatch &batch, const std::vector<uint32_t> &entryIndices);
+    static BResult CopyScratchEntry(SubmittedBatch &batch, uint32_t entryIndex);
     BResult WaitSubmittedBatch(SubmittedBatch &batch);
 
     mutable std::mutex mLock;
     std::vector<Entry> mEntries;
+    std::vector<std::vector<Entry>> mReadyWindows;
     std::vector<std::unique_ptr<SubmittedBatch>> mSubmitted;
+    ExecutorServicePtr mCopyExecutor;
     uint64_t mPendingBytes = 0;
     std::atomic<int32_t> mResult { BIO_OK };
 };

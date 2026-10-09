@@ -39,9 +39,22 @@ int32_t UfsGet(const char *key, char *value, const size_t len, const uint64_t of
     return UnderFs::Instance()->Get(key, value, len, off);
 }
 
+int32_t UfsGetWithRealLen(const char *key, char *value, const size_t len, const uint64_t off, size_t *realLen)
+{
+    if (UNLIKELY(realLen == nullptr)) {
+        return BIO_INVALID_PARAM;
+    }
+    return UnderFs::Instance()->GetWithRealLen(key, value, len, off, *realLen);
+}
+
 int32_t UfsDelete(const char *key)
 {
     return UnderFs::Instance()->Delete(key);
+}
+
+int32_t UfsExist(const char *key)
+{
+    return UnderFs::Instance()->Exist(key);
 }
 
 int32_t UfsStat(const char *key, ObjStatInfo *objStat)
@@ -87,5 +100,6 @@ void UfsInitUnderFsConfig(UnderFsConfigInfo config)
     bioConfig.cephConfig.pools[0] = config.cephConfig.poolName;
     bioConfig.hdfsConfig.nameNode = config.hdfsConfig.nameNode;
     bioConfig.hdfsConfig.workingPath = config.hdfsConfig.workingPath;
+    bioConfig.localConfig.rootPath = config.localConfig.rootPath;
     UnderFs::InitUnderFsConfig(bioConfig);
 }

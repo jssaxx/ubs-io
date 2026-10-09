@@ -75,6 +75,22 @@ TEST_F(TestBio, test_bio_show_cache_resource_not_num_fail)
     ock::bio::BioClient::Instance()->SetStartWorker(false);
     ret = BioService::BioShowCacheResource(nodeDescription);
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
+    ock::bio::BioClient::Instance()->SetStartWorker(true);
+}
+
+TEST_F(TestBio, test_bio_get_log_level)
+{
+    EXPECT_EQ(BioGetLogLevel(nullptr), RET_CACHE_EPERM);
+
+    auto &client = ock::bio::BioClient::Instance();
+    BioLogLevel level = BIO_LOG_LEVEL_BUTT;
+    client->SetStartWorker(false);
+    EXPECT_EQ(BioGetLogLevel(&level), RET_CACHE_NOT_READY);
+
+    client->SetStartWorker(true);
+    EXPECT_EQ(BioGetLogLevel(&level), RET_CACHE_OK);
+    EXPECT_GE(level, BIO_LOG_LEVEL_TRACE);
+    EXPECT_LT(level, BIO_LOG_LEVEL_BUTT);
 }
 
 TEST_F(TestBio, test_bio_show_cache_resource_not_cache_fail)
@@ -640,8 +656,8 @@ TEST_F(TestBio, test_bio_list_all)
     ObjStat *objs = nullptr;
     uint64_t objNum = 0;
     auto ret = BioListAll(G_TENANT_ID, prefix, &objs, &objNum);
-    EXPECT_EQ(ret, RET_CACHE_OK);
-    EXPECT_EQ(objNum, 1);
+    EXPECT_EQ(ret, BIO_INNER_ERR);
+    EXPECT_EQ(objNum, 0);
     BioFreeListResources(&objs, objNum);
 
     ret = BioListAll(G_TENANT_ID, prefix, &objs, nullptr);

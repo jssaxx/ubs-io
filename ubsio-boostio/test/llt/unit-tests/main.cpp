@@ -32,6 +32,9 @@
 using namespace ock::bio;
 using namespace ock::htracer;
 
+extern void RunUringScenario();
+extern "C" void __gcov_dump(void);
+
 static bool DiskPathInvalid()
 {
     std::string filename = "./ubsio_old.conf";
@@ -48,6 +51,13 @@ static bool DiskPathInvalid()
 
 int main(int argc, char *argv[])
 {
+    if (getenv("BOOSTIO_URING_TEST_CHILD") != nullptr) {
+        ::testing::InitGoogleTest(&argc, argv);
+        RunUringScenario();
+        __gcov_dump();
+        _exit(::testing::Test::HasFailure() ? 1 : 0);
+    }
+
     TestCm::Stub();
     TestHtracer::Stub();
     TestUnderFs::Stub();
@@ -55,9 +65,14 @@ int main(int argc, char *argv[])
     (void)system("rm -rf test2");
     (void)system("rm -rf ceph");
     (void)system("rm -rf conf");
+    (void)system("rm -rf underfs");
+    (void)system("mkdir -p underfs");
     (void)system("cp ../configs/* ./");
     (void)system("sed -i 's/ubsio.mem.size_in_gb = .*/ubsio.mem.size_in_gb = 1/g' ./ubsio_old.conf");
     (void)system("sed -i 's/ubsio.cm.zk_host =.*/ubsio.cm.zk_host = 127.0.0.1:2181/g' ./ubsio_old.conf");
+    (void)system("sed -i 's#ubsio.log.path = .*#ubsio.log.path = .#g' ./ubsio_old.conf");
+    (void)system("sed -i 's#ubsio.underfs.local.root_path = .*"
+        "#ubsio.underfs.local.root_path = ./underfs#g' ./ubsio_old.conf");
     if (DiskPathInvalid()) {
         TestDisk::Stub();
         (void)system("sed -i 's/ubsio.disk.path = .*/ubsio.disk.path = test1:test2/g' ./ubsio_old.conf");
@@ -84,6 +99,7 @@ int main(int argc, char *argv[])
 
     (void)system("rm -rf conf");
     (void)system("rm -rf ceph.conf");
+    (void)system("rm -rf underfs");
     sleep(NO_60);
 
     BioExit();

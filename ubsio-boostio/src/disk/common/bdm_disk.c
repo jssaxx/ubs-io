@@ -171,6 +171,7 @@ typedef struct {
     bool slotAcquired;
     int32_t traceId;
     uint64_t traceStartNs;
+    uint64_t queueTraceStartNs;
     BdmIoCb cb;
     void *ctx;
     void *item;
@@ -186,8 +187,34 @@ static pthread_once_t g_bdmSyncUringKeyOnce = PTHREAD_ONCE_INIT;
 static pthread_key_t g_bdmSyncUringKey;
 static int32_t g_bdmSyncUringKeyRet = BDM_CODE_OK;
 static bool g_bdmSyncUringKeyCreated = false;
+static pthread_mutex_t g_bdmDiskFaultHandlerLock = PTHREAD_MUTEX_INITIALIZER;
+static BdmDiskFaultHandler g_bdmDiskFaultHandler = NULL;
+static void *g_bdmDiskFaultHandlerContext = NULL;
 static pthread_mutex_t g_bdmSyncUringCtxLock = PTHREAD_MUTEX_INITIALIZER;
 static DList g_bdmSyncUringCtxList = D_LIST_HEAD_INIT(g_bdmSyncUringCtxList);
+
+void BdmRegisterDiskFaultHandler(BdmDiskFaultHandler handler, void *context)
+{
+    pthread_mutex_lock(&g_bdmDiskFaultHandlerLock);
+    g_bdmDiskFaultHandler = handler;
+    g_bdmDiskFaultHandlerContext = context;
+    pthread_mutex_unlock(&g_bdmDiskFaultHandlerLock);
+}
+
+static int32_t BdmNotifyDiskFault(uint16_t diskId)
+{
+    int32_t ret;
+    pthread_mutex_lock(&g_bdmDiskFaultHandlerLock);
+    if (g_bdmDiskFaultHandler != NULL) {
+        ret = g_bdmDiskFaultHandler(diskId, g_bdmDiskFaultHandlerContext);
+        pthread_mutex_unlock(&g_bdmDiskFaultHandlerLock);
+        return ret;
+    }
+    pthread_mutex_unlock(&g_bdmDiskFaultHandlerLock);
+    return CmReportDiskStatus(diskId, CM_DISK_FAULT);
+}
+
+static void BdmDiskReportIoFault(BdmDiskItem *itemPtr, uint64_t offset, uint64_t len);
 
 static int32_t BdmDiskFillDiskHead(BdmDiskHead *head, BdmDiskItem *item);
 static void BdmDiskCompleteReq(BdmAsyncOpsReq *req, int32_t ret);
@@ -321,14 +348,7 @@ int32_t BdmDiskInnerReadWrite(BdmDiskItem *itemPtr, char *buff, uint64_t len, ui
         retry++;
     }
 
-    // 上报磁盘故障事件, 标记磁盘状态为false.
-    BDM_LOGWARN(0, "Report disk fault to cm, bdmId(%u), device(%s), offset(%llu), len(%llu).", itemPtr->bdmId,
-        itemPtr->name, offset, len);
-    int32_t reportRet = CmReportDiskStatus((uint16_t)itemPtr->bdmId, CM_DISK_FAULT);
-    if (UNLIKELY(reportRet != BDM_CODE_OK)) {
-        BDM_LOGWARN(0, "Report disk fault failed, bdmId(%u), device(%s).", itemPtr->bdmId, itemPtr->name);
-    }
-    BdmSetDiskUsedStatus(itemPtr->bdmId, false);
+    BdmDiskReportIoFault(itemPtr, offset, len);
     return BDM_CODE_ERR_IO;
 }
 
@@ -366,14 +386,7 @@ int32_t BdmDiskInnerReadWriteDirect(BdmDiskItem *itemPtr, char *buff, uint64_t l
         retry++;
     }
 
-    // 上报磁盘故障事件, 标记磁盘状态为false.
-    BDM_LOGWARN(0, "Report disk fault to cm, bdmId(%u), device(%s), offset(%llu), len(%llu).", itemPtr->bdmId,
-        itemPtr->name, offset, len);
-    int32_t reportRet = CmReportDiskStatus((uint16_t)itemPtr->bdmId, CM_DISK_FAULT);
-    if (UNLIKELY(reportRet != BDM_CODE_OK)) {
-        BDM_LOGWARN(0, "Report disk fault failed, bdmId(%u), device(%s).", itemPtr->bdmId, itemPtr->name);
-    }
-    BdmSetDiskUsedStatus(itemPtr->bdmId, false);
+    BdmDiskReportIoFault(itemPtr, offset, len);
     return BdmDiskFinishDirectBuffer(buff, len, isRead, ioBuf, needBounce, BDM_CODE_ERR_IO);
 }
 
@@ -593,13 +606,13 @@ static int32_t BdmDiskFinishSyncUringBuffer(char *userBuf, uint64_t userLen, int
 
 static void BdmDiskReportIoFault(BdmDiskItem *itemPtr, uint64_t offset, uint64_t len)
 {
-    BDM_LOGWARN(0, "Report disk fault to cm, bdmId(%u), device(%s), offset(%llu), len(%llu).", itemPtr->bdmId,
+    BDM_LOGWARN(0, "Report disk fault, bdmId(%u), device(%s), offset(%llu), len(%llu).", itemPtr->bdmId,
         itemPtr->name, offset, len);
-    int32_t ret = CmReportDiskStatus((uint16_t)itemPtr->bdmId, CM_DISK_FAULT);
+    BdmSetDiskUsedStatus(itemPtr->bdmId, false);
+    int32_t ret = BdmNotifyDiskFault((uint16_t)itemPtr->bdmId);
     if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGWARN(0, "Report disk fault failed, bdmId(%u), device(%s).", itemPtr->bdmId, itemPtr->name);
     }
-    BdmSetDiskUsedStatus(itemPtr->bdmId, false);
 }
 
 static void BdmDiskRegisterSyncUringCtx(BdmSyncUringCtx *uringCtx)
@@ -984,7 +997,44 @@ int32_t BdmDiskReadMeta(uintptr_t itemPtr, uint64_t offset, void *buf, uint64_t 
     return BDM_CODE_OK;
 }
 
-int32_t BdmDiskAlloc(uintptr_t objPtr, uint64_t bucketId, uint64_t bucketOffset, uint64_t len, uint64_t *chunkId)
+static int32_t BdmDiskZeroChunk(uintptr_t context, uint64_t chunkId, uint64_t len)
+{
+    BdmDiskItem *item = (BdmDiskItem *)context;
+    if (item->minChunkSize == 0 || chunkId > item->dataLength / item->minChunkSize || len == 0) {
+        return BDM_CODE_INVALID_PARAM;
+    }
+    uint64_t dataOffset = chunkId * item->minChunkSize;
+    if (len > item->dataLength - dataOffset || item->offset > UINT64_MAX - item->dataOffset ||
+        dataOffset > UINT64_MAX - item->offset - item->dataOffset) {
+        return BDM_CODE_CROSS_BOUND;
+    }
+    uint64_t offset = item->offset + item->dataOffset + dataOffset;
+    if (len > UINT64_MAX - offset) {
+        return BDM_CODE_CROSS_BOUND;
+    }
+    int32_t rangeRet = BdmDiskCheckRegionRange(item, offset, len);
+    if (rangeRet != BDM_CODE_OK) {
+        return rangeRet;
+    }
+    uint64_t bufferSize = MIN(len, BDM_RESTORE_META_SIZE);
+    char *zeros = (char *)calloc(1, bufferSize);
+    if (zeros == NULL) {
+        return BDM_CODE_ERR;
+    }
+    int32_t ret = BDM_CODE_OK;
+    for (uint64_t done = 0; done < len; done += bufferSize) {
+        uint64_t size = MIN(bufferSize, len - done);
+        ret = BdmDiskInnerReadWrite(item, zeros, size, offset + done, FALSE);
+        if (ret != BDM_CODE_OK) {
+            break;
+        }
+    }
+    free(zeros);
+    return ret;
+}
+
+static int32_t BdmDiskAllocImpl(uintptr_t objPtr, uint64_t bucketId, uint64_t bucketOffset, uint64_t len,
+    uint64_t *chunkId, bool zeroed)
 {
     BdmObj *obj = (BdmObj *)objPtr;
     BdmDiskItem *item = (BdmDiskItem *)obj->opsInfo;
@@ -1000,7 +1050,9 @@ int32_t BdmDiskAlloc(uintptr_t objPtr, uint64_t bucketId, uint64_t bucketOffset,
 
     int32_t ret = BDM_CODE_OK;
     BIO_TP_START(BDM_ALLOC_BLOCK_FAIL, &ret, BDM_CODE_ERR);
-    ret = BdmAllocatorAllocChunk(item->allocator, bucketId, bucketOffset, len, chunkId);
+    ret = zeroed ? BdmAllocatorAllocChunkWithInit(item->allocator, bucketId, bucketOffset, len, chunkId,
+        BdmDiskZeroChunk, (uintptr_t)item) :
+        BdmAllocatorAllocChunk(item->allocator, bucketId, bucketOffset, len, chunkId);
     BIO_TP_END;
     if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGWARN(0, "Alloc chunk failed, bdm id(%u) length(%lu).", obj->bdmId, len);
@@ -1008,6 +1060,17 @@ int32_t BdmDiskAlloc(uintptr_t objPtr, uint64_t bucketId, uint64_t bucketOffset,
     }
 
     return BDM_CODE_OK;
+}
+
+int32_t BdmDiskAlloc(uintptr_t objPtr, uint64_t bucketId, uint64_t bucketOffset, uint64_t len, uint64_t *chunkId)
+{
+    return BdmDiskAllocImpl(objPtr, bucketId, bucketOffset, len, chunkId, false);
+}
+
+static int32_t BdmDiskAllocZeroed(uintptr_t objPtr, uint64_t bucketId, uint64_t bucketOffset, uint64_t len,
+    uint64_t *chunkId)
+{
+    return BdmDiskAllocImpl(objPtr, bucketId, bucketOffset, len, chunkId, true);
 }
 
 int32_t BdmDiskFree(uintptr_t objPtr, uint64_t len, uint64_t chunkId)
@@ -1513,6 +1576,7 @@ static int32_t BdmDiskPrepareAsyncContext(BdmAsyncOpsReq *req, bool isRead, bool
     bdmIo->traceId = useUring ? (isRead ? BDM_DISK_TRACE_READ_ASYNC_C : BDM_DISK_TRACE_WRITE_ASYNC_C) :
                                (isRead ? BDM_DISK_TRACE_READ_SYNC_C : BDM_DISK_TRACE_WRITE_SYNC_C);
     bdmIo->traceStartNs = 0;
+    bdmIo->queueTraceStartNs = 0;
     if (HTracerIsEnableC()) {
         bdmIo->traceStartNs = HTracerNowNsC();
         const char *traceName = useUring ? (isRead ? "BDM_DISK_TRACE_READ_ASYNC" : "BDM_DISK_TRACE_WRITE_ASYNC") :
@@ -1544,10 +1608,20 @@ static int32_t BdmDiskExecuteSyncBatch(void **argList, uint32_t argNum, void *ct
         }
         BdmDiskItem *item = (BdmDiskItem *)bdmIo->item;
         uint64_t rwOffset = item->offset + item->dataOffset + item->minChunkSize * bdmIo->chunkId + bdmIo->offset;
+        if (bdmIo->isRead) {
+            HTRACER_C_DELAY_END(BDM_DISK_TRACE_READ_QUEUE_WAIT_C, bdmIo->queueTraceStartNs, BDM_CODE_OK);
+        }
+        uint64_t preadTraceStartNs = 0;
+        if (bdmIo->isRead && HTracerIsEnableC()) {
+            preadTraceStartNs = HTracerNowNsC();
+            HTracerDelayBeginC(BDM_DISK_TRACE_READ_PREAD_C, "BDM_DISK_TRACE_READ_PREAD");
+        }
         int32_t ret = BdmDiskIsRangeAligned(bdmIo->len, rwOffset) ?
-                          BdmDiskInnerReadWriteDirect(
-                              item, (char *)bdmIo->buf, bdmIo->len, rwOffset, bdmIo->isRead) :
-                          BdmDiskInnerReadWrite(item, (char *)bdmIo->buf, bdmIo->len, rwOffset, bdmIo->isRead);
+            BdmDiskInnerReadWriteDirect(item, (char *)bdmIo->buf, bdmIo->len, rwOffset, bdmIo->isRead) :
+            BdmDiskInnerReadWrite(item, (char *)bdmIo->buf, bdmIo->len, rwOffset, bdmIo->isRead);
+        if (bdmIo->isRead) {
+            HTRACER_C_DELAY_END(BDM_DISK_TRACE_READ_PREAD_C, preadTraceStartNs, ret);
+        }
         HTRACER_C_DELAY_END(bdmIo->traceId, bdmIo->traceStartNs, ret);
         bdmIo->cb(bdmIo->ctx, ret);
     }
@@ -1563,8 +1637,15 @@ static int32_t BdmDiskHandleSyncBatch(BdmAsyncOpsReq *reqs, uint32_t reqNum, boo
             BdmDiskCompleteReq(&reqs[i], ret);
             continue;
         }
+        if (isRead && HTracerIsEnableC()) {
+            bdmIo->queueTraceStartNs = HTracerNowNsC();
+            HTracerDelayBeginC(BDM_DISK_TRACE_READ_QUEUE_WAIT_C, "BDM_DISK_TRACE_READ_QUEUE_WAIT");
+        }
         ret = BdmThreadPoolAdd(g_bdmSyncThreadPool, NULL, (void *)bdmIo);
         if (UNLIKELY(ret != BDM_CODE_OK)) {
+            if (isRead) {
+                HTRACER_C_DELAY_END(BDM_DISK_TRACE_READ_QUEUE_WAIT_C, bdmIo->queueTraceStartNs, ret);
+            }
             BdmDiskCleanupPreparedAsyncContext(bdmIo, ret);
             BdmDiskCompleteReq(&reqs[i], ret);
         }
@@ -1840,28 +1921,28 @@ static const char *BdmDiskHeadMode(uint32_t pad)
     return BdmDiskHeadHasStandaloneInfo(pad) ? "standalone" : "cluster";
 }
 
-static uint32_t BdmDiskHeadDeviceId(uint32_t pad)
+static uint32_t BdmDiskHeadSlotIndex(uint32_t pad)
 {
-    return pad & BDM_DISK_HEAD_DEVICE_ID_MASK;
+    return pad & BDM_DISK_HEAD_SLOT_INDEX_MASK;
 }
 
-static uint32_t BdmDiskHeadDeviceCount(uint32_t pad)
+static uint32_t BdmDiskHeadSlotCount(uint32_t pad)
 {
-    return (pad & BDM_DISK_HEAD_DEVICE_COUNT_MASK) >> BDM_DISK_HEAD_DEVICE_COUNT_SHIFT;
+    return (pad & BDM_DISK_HEAD_SLOT_COUNT_MASK) >> BDM_DISK_HEAD_SLOT_COUNT_SHIFT;
 }
 
 static int32_t BdmDiskClearVirtualHeaders(BdmDiskItem *item, const BdmDiskHead *observedHead)
 {
-    uint32_t storedDeviceCount = BdmDiskHeadDeviceCount(observedHead->pad);
-    uint32_t currentDeviceCount = BdmDiskHeadDeviceCount(item->pad);
-    if (UNLIKELY(currentDeviceCount == 0 || currentDeviceCount > BDM_VIRTUAL_LAYOUT_SLOT_NUM)) {
-        BDM_LOGERROR(0, "Invalid current virtual disk metadata, device(%s), bdmId(%u), currentDeviceCount(%u).",
-            item->name, item->bdmId, currentDeviceCount);
+    uint32_t storedSlotCount = BdmDiskHeadSlotCount(observedHead->pad);
+    uint32_t currentSlotCount = BdmDiskHeadSlotCount(item->pad);
+    if (UNLIKELY(currentSlotCount == 0 || currentSlotCount > BDM_VIRTUAL_LAYOUT_SLOT_NUM)) {
+        BDM_LOGERROR(0, "Invalid current virtual disk metadata, device(%s), bdmId(%u), currentSlotCount(%u).",
+            item->name, item->bdmId, currentSlotCount);
         return BDM_CODE_ERR_IO;
     }
 
     /* A current Region is a union of 16-way slots; clear the 2 MiB header area of every owned slot. */
-    uint32_t headerSlotCount = BDM_VIRTUAL_LAYOUT_SLOT_NUM / currentDeviceCount;
+    uint32_t headerSlotCount = BDM_VIRTUAL_LAYOUT_SLOT_NUM / currentSlotCount;
     if (UNLIKELY(item->totalSize % headerSlotCount != 0 ||
         item->totalSize / headerSlotCount < BDM_RESTORE_META_SIZE)) {
         BDM_LOGERROR(0, "Invalid current virtual disk region, device(%s), bdmId(%u), regionLength(%llu), "
@@ -1893,11 +1974,11 @@ static int32_t BdmDiskClearVirtualHeaders(BdmDiskItem *item, const BdmDiskHead *
 
     free(clearBuff);
     if (ret == BDM_CODE_OK) {
-        BDM_LOGWARN(0, "Cleared old virtual disk headers, device(%s), bdmId(%u), storedDeviceCount(%u), "
-            "currentDeviceCount(%u), currentDeviceId(%u), regionOffset(%llu), regionLength(%llu), "
+        BDM_LOGWARN(0, "Cleared old virtual disk headers, device(%s), bdmId(%u), storedSlotCount(%u), "
+            "currentSlotCount(%u), currentSlotIndex(%u), regionOffset(%llu), regionLength(%llu), "
             "headerStride(%llu), headerSlotCount(%u).",
-            item->name, item->bdmId, storedDeviceCount, BdmDiskHeadDeviceCount(item->pad),
-            BdmDiskHeadDeviceId(item->pad), item->offset, item->totalSize, headerStride, headerSlotCount);
+            item->name, item->bdmId, storedSlotCount, BdmDiskHeadSlotCount(item->pad),
+            BdmDiskHeadSlotIndex(item->pad), item->offset, item->totalSize, headerStride, headerSlotCount);
     }
     return ret;
 }
@@ -1920,18 +2001,18 @@ static int32_t BdmDiskCheckItem(const BdmDiskHead *head, const BdmDiskItem *item
         return BDM_CODE_OK;
     }
     if (UNLIKELY(!BdmDiskHeadHasStandaloneInfo(head->pad) && !BdmDiskHeadHasStandaloneInfo(item->pad))) {
-        BDM_LOGWARN(0, "Disk metadata without standalone startup info, device(%s), bdmId(%u), currentDeviceId(%u).",
-            item->name, item->bdmId, BdmDiskHeadDeviceId(item->pad));
+        BDM_LOGWARN(0, "Disk metadata without standalone startup info, device(%s), bdmId(%u), currentSlotIndex(%u).",
+            item->name, item->bdmId, BdmDiskHeadSlotIndex(item->pad));
         return BDM_CODE_OK;
     }
 
     BDM_LOGERROR(0,
-        "Disk metadata mismatch, device(%s), bdmId(%u), storedMode(%s), storedVersion(%u), storedDeviceCount(%u), "
-        "storedDeviceId(%u), currentMode(%s), currentVersion(%u), currentDeviceCount(%u), currentDeviceId(%u).",
+        "Disk metadata mismatch, device(%s), bdmId(%u), storedMode(%s), storedVersion(%u), storedSlotCount(%u), "
+        "storedSlotIndex(%u), currentMode(%s), currentVersion(%u), currentSlotCount(%u), currentSlotIndex(%u).",
         item->name, item->bdmId, BdmDiskHeadMode(head->pad), BdmDiskHeadLayoutVersion(head->pad),
-        BdmDiskHeadDeviceCount(head->pad), BdmDiskHeadDeviceId(head->pad),
-        BdmDiskHeadMode(item->pad), BdmDiskHeadLayoutVersion(item->pad), BdmDiskHeadDeviceCount(item->pad),
-        BdmDiskHeadDeviceId(item->pad));
+        BdmDiskHeadSlotCount(head->pad), BdmDiskHeadSlotIndex(head->pad),
+        BdmDiskHeadMode(item->pad), BdmDiskHeadLayoutVersion(item->pad), BdmDiskHeadSlotCount(item->pad),
+        BdmDiskHeadSlotIndex(item->pad));
     return BDM_CODE_METADATA_MISMATCH;
 }
 
@@ -1965,7 +2046,7 @@ int32_t BdmDiskRestoreCheckOK(BdmDiskItem *item)
     bool currentVirtualLayout = BdmDiskHeadHasVirtualLayout(item->pad);
     bool storedVirtualLayout = head.magic == BDM_DISK_MAGIC && BdmDiskHeadHasVirtualLayout(head.pad);
     if (currentVirtualLayout && (!storedVirtualLayout ||
-        BdmDiskHeadDeviceCount(head.pad) != BdmDiskHeadDeviceCount(item->pad))) {
+        BdmDiskHeadSlotCount(head.pad) != BdmDiskHeadSlotCount(item->pad))) {
         ret = BdmDiskClearVirtualHeaders(item, &head);
         if (UNLIKELY(ret != BDM_CODE_OK)) {
             return ret;
@@ -2166,6 +2247,7 @@ int32_t BdmDiskCreateAllocator(BdmDiskItem *item)
 void BdmDiskDestroyAllocator(BdmDiskItem *item)
 {
     int32_t ret = BdmAllocatorDestroy(item->allocator);
+    item->allocator = 0;
     if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGERROR(0, "destroy allocator failed.");
     }
@@ -2178,6 +2260,7 @@ void BdmDiskFillBdmObj(BdmObj *obj, BdmDiskItem *item)
     obj->minChunkSize = item->minChunkSize;
     obj->maxChunkSize = item->maxChunkSize;
     obj->ops.alloc = BdmDiskAlloc;
+    obj->ops.allocZeroed = BdmDiskAllocZeroed;
     obj->ops.free = BdmDiskFree;
     obj->ops.parseChunkId = BdmDiskParseChunkId;
     obj->ops.read = BdmDiskRead;
@@ -2190,6 +2273,19 @@ void BdmDiskFillBdmObj(BdmObj *obj, BdmDiskItem *item)
     obj->ops.nextchunk = BdmDiskGetNextChunk;
     obj->ops.getcap = BdmDiskGetCap;
     obj->opsInfo = (BdmOpsInfo)item;
+}
+
+int32_t BdmGetDiskPath(uint32_t bdmId, char *path, uint32_t pathLen)
+{
+    if (path == NULL || pathLen == 0) {
+        return BDM_CODE_ERR;
+    }
+    BdmObj *obj = BdmGetBdmObj(bdmId);
+    if (obj == NULL || obj->opsInfo == NULL) {
+        return BDM_CODE_NOT_EXIST;
+    }
+    BdmDiskItem *item = (BdmDiskItem *)obj->opsInfo;
+    return strcpy_s(path, pathLen, item->name) == 0 ? BDM_CODE_OK : BDM_CODE_ERR;
 }
 
 static void BdmDiskFillItem(BdmDiskItem *item, BdmCreatePara *para, uint32_t bdmId)

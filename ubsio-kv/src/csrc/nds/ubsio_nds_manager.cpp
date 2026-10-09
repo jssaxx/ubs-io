@@ -84,6 +84,7 @@ KvcError NdsManager::Initialize(int device) noexcept
         int fd = NdsApi::NdsOpen(diskPath.c_str(), O_RDONLY | O_DIRECT);
         if (fd < 0) {
             LOG_ERROR("Nds open failed with device " << deviceId << ", errno: " << errno << ":" << strerror(errno));
+            UnInitialize();
             return UBSIO_KVC_ERR;
         }
         diskFdMap[diskPath] = { fd, deviceId };
@@ -95,6 +96,7 @@ KvcError NdsManager::Initialize(int device) noexcept
         auto threadCntValid = StrUtil::StrToLong(threadEnv, threadCnt);
         if (!threadCntValid || threadCnt <= 0 || threadCnt > MAX_THREAD_CNT) {
             LOG_ERROR("Nds env is invalid, UBSIO_NDS_READ_THREAD range is (0, " << MAX_THREAD_CNT << "]");
+            UnInitialize();
             return UBSIO_KVC_ERR;
         }
     }
@@ -103,12 +105,14 @@ KvcError NdsManager::Initialize(int device) noexcept
     ndsReadPool = ExecutorService::Create(threadCnt);
     if (UNLIKELY(ndsReadPool == nullptr)) {
         LOG_ERROR("Nds thread pool init failed.");
+        UnInitialize();
         return UBSIO_KVC_ERR;
     }
     auto success = ndsReadPool->Start();
     if (UNLIKELY(!success)) {
         LOG_ERROR("Nds thread pool start failed.");
         ndsReadPool = nullptr;
+        UnInitialize();
         return UBSIO_KVC_ERR;
     }
 
@@ -119,14 +123,14 @@ KvcError NdsManager::Initialize(int device) noexcept
 
 KvcError NdsManager::UnInitialize() noexcept
 {
+    if (ndsReadPool.Get() != nullptr) {
+        ndsReadPool = nullptr;
+    }
     NdsApi::NdsUninit();
     for (const auto &[diskPath, fid]: diskFdMap) {
         close(fid.fd);
     }
     diskFdMap.clear();
-    if (ndsReadPool.Get() != nullptr) {
-        ndsReadPool = nullptr;
-    }
     NdsApi::CleanupLibrary();
     ndsInit = false;
     ndsNormal = false;
@@ -340,6 +344,11 @@ KvcError NdsManager::BatchDirectRead(const std::vector<std::string> &keys,
     const size_t batchSize = keys.size();
     if (UNLIKELY(batchSize == 0 || batchSize > MAX_BATCH_SIZE)) {
         LOG_ERROR("Batch size is 0 or exceeds the limit of " << MAX_BATCH_SIZE);
+        return UBSIO_KVC_ERR;
+    }
+    if (UNLIKELY(buffers.size() != batchSize || sizes.size() != batchSize)) {
+        LOG_ERROR("Unmatched batch dimensions, keys:" << batchSize << ", buffers:" << buffers.size() <<
+            ", sizes:" << sizes.size());
         return UBSIO_KVC_ERR;
     }
 

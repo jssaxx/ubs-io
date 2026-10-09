@@ -5,11 +5,11 @@
 import atexit
 
 global KvInit, KvExit, KvGetResourceInfo, KvScanKey, KvPut, KvGet, KvExist, KvDelete, KvGetLength, \
-    KvBatchPut, KvBatchGet, KvBatchExist, KvBatchDelete, KvBatchGetLength, \
+    KvBatchPut, KvBatchGet, KvBatchExist, KvBatchStat, KvBatchDelete, KvBatchGetLength, \
     NdsInit, NdsUninit, NdsRegmem, NdsUnregmem, NdsRead, NdsBatchRead
 from c2python_sdk import (KvInit, KvExit, KvGetResourceInfo, KvScanKey, KvPut, KvGet, KvExist, KvDelete, KvGetLength,
                           KvBatchPut,
-                          KvBatchGet, KvBatchExist, KvBatchDelete, KvBatchGetLength,
+                          KvBatchGet, KvBatchExist, KvBatchStat, KvBatchDelete, KvBatchGetLength,
                           NdsInit, NdsUninit, NdsRegmem, NdsUnregmem, NdsRead, NdsBatchRead)
 
 _initialized = False
@@ -161,6 +161,16 @@ def batch_exist(keys) -> list:
     :return: result list
     """
     return KvBatchExist(keys)
+
+
+def batch_stat(keys) -> list:
+    """
+    Query metadata for multiple keys in the UBS-IO KV Cache.
+    :param keys: list of keys for the data objects
+    :return: list of dictionaries containing key, size and result;
+             an empty list on a batch-level failure
+    """
+    return KvBatchStat(keys)
 
 
 def batch_delete(keys) -> list:

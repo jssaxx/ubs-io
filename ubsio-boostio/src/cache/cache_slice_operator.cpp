@@ -12,10 +12,13 @@
 
 #include "cache_slice_operator.h"
 #include <semaphore.h>
+#include <algorithm>
 #include <atomic>
 #include <cerrno>
+#include <condition_variable>
 #include <cstdint>
 #include <cstdlib>
+#include <deque>
 #include <memory>
 #include <new>
 #include <unordered_map>
@@ -40,6 +43,8 @@ constexpr BResult BDM_BATCH_PENDING = BIO_INNER_RETRY;
 
 struct BdmBatchContext;
 
+using BdmEntryCompleteCallback = void (*)(void *context, uint32_t entryIndex, int32_t result);
+
 struct BdmBatchRequest {
     BdmBatchRequest(uint64_t chunk, uint64_t off, void *buffer, uint64_t length)
         : chunkId(chunk), offset(off), buf(buffer), len(length)
@@ -50,7 +55,8 @@ struct BdmBatchRequest {
     BdmBatchRequest(BdmBatchRequest &&other) noexcept
         : chunkId(other.chunkId), offset(other.offset), buf(other.buf), len(other.len), ioCtx(other.ioCtx),
           batch(other.batch), result(other.result.load(std::memory_order_relaxed)),
-          done(other.done.load(std::memory_order_relaxed))
+          done(other.done.load(std::memory_order_relaxed)), entryComplete(other.entryComplete),
+          entryCompleteContext(other.entryCompleteContext), entryIndex(other.entryIndex)
     {
     }
 
@@ -62,6 +68,9 @@ struct BdmBatchRequest {
     BdmBatchContext *batch = nullptr;
     std::atomic<int32_t> result { BDM_CODE_OK };
     std::atomic<bool> done { false };
+    BdmEntryCompleteCallback entryComplete = nullptr;
+    void *entryCompleteContext = nullptr;
+    uint32_t entryIndex = 0;
 };
 
 struct BdmBatchContext {
@@ -81,6 +90,9 @@ void CompleteBdmBatchRequest(BdmBatchRequest *req, int32_t ret)
     if (ret != BDM_CODE_OK) {
         int32_t expected = BDM_CODE_OK;
         req->batch->result.compare_exchange_strong(expected, ret);
+    }
+    if (req->entryComplete != nullptr) {
+        req->entryComplete(req->entryCompleteContext, req->entryIndex, ret);
     }
 
     if (req->batch->pending.fetch_sub(1) == 1) {
@@ -131,9 +143,9 @@ uint64_t GetBdmBatchReadWindowBytes()
     return windowBytes == 0 ? BDM_BATCH_READ_WINDOW_MAX_BYTES : windowBytes;
 }
 
-uint32_t GetBdmBatchReadPipelineDepth()
+uint32_t GetBatchReadPipelineDepth()
 {
-    uint32_t pipelineDepth = BioConfig::Instance()->GetDaemonConfig().bdmBatchReadPipelineDepth;
+    uint32_t pipelineDepth = BioConfig::Instance()->GetDaemonConfig().batchReadPipelineDepth;
     return pipelineDepth == 0 ? BDM_BATCH_READ_WINDOW_PIPELINE_DEPTH : pipelineDepth;
 }
 
@@ -422,6 +434,16 @@ void PrewarmBdmBatchTempBufferPool()
     GetBdmBatchTempBufferPool().Prewarm();
 }
 
+char *AllocBatchReadScratchBuffer(uint64_t len)
+{
+    return GetBdmBatchTempBufferPool().Alloc(len);
+}
+
+void FreeBatchReadScratchBuffer(char *buffer, uint64_t len)
+{
+    GetBdmBatchTempBufferPool().Free(buffer, len);
+}
+
 bool CacheSliceOperator::CanBatchDiskToMemory(const SlicePtr &from, const SlicePtr &to)
 {
     return Validate(from, to) && from->GetFlowType() == FLOW_DISK && to->GetFlowType() == FLOW_MEMORY &&
@@ -465,9 +487,20 @@ struct BdmCopyBatchContext::SubmittedBatch {
     bool resultCopied = false;
     char *tempArena = nullptr;
     uint64_t tempArenaLen = 0;
+    BdmCopyBatchContext *owner = nullptr;
+    std::unique_ptr<std::atomic<uint32_t>[]> entryPendingRequests;
+    std::unique_ptr<std::atomic<int32_t>[]> entryIoResults;
+    std::atomic<uint32_t> pendingPipelineEntries { 0 };
+    std::atomic<int32_t> pipelineResult { BIO_OK };
+    std::mutex copyMutex;
+    std::condition_variable copyCv;
+    std::deque<uint32_t> readyCopyEntries;
+    uint32_t activeCopyDrainers = 0;
+    uint32_t maxCopyDrainers = 0;
+    bool copyPipelineEnabled = false;
 };
 
-BdmCopyBatchContext::BdmCopyBatchContext()
+BdmCopyBatchContext::BdmCopyBatchContext(const ExecutorServicePtr &copyExecutor) : mCopyExecutor(copyExecutor)
 {
     try {
         mEntries.reserve(GetBdmBatchReadWindowKeys());
@@ -501,13 +534,12 @@ BResult BdmCopyBatchContext::EnqueueDiskToTempThenCopy(const SlicePtr &from, con
 
 BResult BdmCopyBatchContext::EnqueueEntry(Entry &&entry, uint64_t entryLen)
 {
-    std::vector<std::vector<Entry>> readyWindows;
-    auto flushPending = [this, &readyWindows]() {
+    auto flushPending = [this]() {
         if (mEntries.empty()) {
             return;
         }
-        readyWindows.emplace_back();
-        readyWindows.back().swap(mEntries);
+        mReadyWindows.emplace_back();
+        mReadyWindows.back().swap(mEntries);
         mPendingBytes = 0;
     };
 
@@ -533,9 +565,6 @@ BResult BdmCopyBatchContext::EnqueueEntry(Entry &&entry, uint64_t entryLen)
         return BIO_ALLOC_FAIL;
     }
 
-    for (auto &window : readyWindows) {
-        SubmitWindow(window);
-    }
     return BIO_OK;
 }
 
@@ -545,7 +574,7 @@ void BdmCopyBatchContext::SubmitWindow(std::vector<Entry> &window)
         return;
     }
 
-    uint32_t pipelineDepth = GetBdmBatchReadPipelineDepth();
+    uint32_t pipelineDepth = GetBatchReadPipelineDepth();
     std::unique_ptr<SubmittedBatch> waitBatch;
     try {
         std::lock_guard<std::mutex> lock(mLock);
@@ -561,7 +590,9 @@ void BdmCopyBatchContext::SubmitWindow(std::vector<Entry> &window)
         return;
     }
     if (waitBatch != nullptr) {
+        BIO_TRACE_START(BDM_TRACE_READ_BATCH_PIPELINE_WAIT);
         BResult ret = WaitSubmittedIo(*waitBatch);
+        BIO_TRACE_END(BDM_TRACE_READ_BATCH_PIPELINE_WAIT, ret);
         if (ret != BIO_OK) {
             int32_t expected = BIO_OK;
             mResult.compare_exchange_strong(expected, ret);
@@ -574,7 +605,7 @@ void BdmCopyBatchContext::SubmitWindow(std::vector<Entry> &window)
         mResult.compare_exchange_strong(expected, BIO_ALLOC_FAIL);
         MarkPendingEntriesFailed(window, BIO_ALLOC_FAIL);
         if (waitBatch != nullptr) {
-            WaitAndRecord(*waitBatch);
+            WaitAndRecord(*waitBatch, false);
         }
         return;
     }
@@ -585,7 +616,7 @@ void BdmCopyBatchContext::SubmitWindow(std::vector<Entry> &window)
     }
 
     if (waitBatch != nullptr) {
-        WaitAndRecord(*waitBatch);
+        WaitAndRecord(*waitBatch, false);
     }
 }
 
@@ -616,6 +647,7 @@ std::unique_ptr<BdmCopyBatchContext::SubmittedBatch> BdmCopyBatchContext::Submit
         return submitted;
     }
 
+    BIO_TRACE_START(BDM_TRACE_READ_BATCH_WINDOW_BUILD);
     uint64_t requestCount = 0;
     for (const auto &entry : submittedEntries) {
         requestCount += entry.from->GetAddrs().size() + entry.to->GetAddrs().size();
@@ -686,12 +718,16 @@ std::unique_ptr<BdmCopyBatchContext::SubmittedBatch> BdmCopyBatchContext::Submit
         submitted->submitRet = BIO_ALLOC_FAIL;
         requests.clear();
         requestToEntry.clear();
+        BIO_TRACE_END(BDM_TRACE_READ_BATCH_WINDOW_BUILD, submitted->submitRet);
         return submitted;
     }
+    BIO_TRACE_END(BDM_TRACE_READ_BATCH_WINDOW_BUILD, submitted->submitRet);
 
     if (requests.empty()) {
         return submitted;
     }
+
+    (void)PrepareCopyPipeline(*submitted);
 
     BIO_TRACE_START(BDM_TRACE_READ_BATCH_SUBMIT);
     BResult ret = SubmitBdmBatchAsync(requests, true, submitted->batch);
@@ -700,6 +736,150 @@ std::unique_ptr<BdmCopyBatchContext::SubmittedBatch> BdmCopyBatchContext::Submit
         submitted->submitRet = ret;
     }
     return submitted;
+}
+
+bool BdmCopyBatchContext::PrepareCopyPipeline(SubmittedBatch &batch)
+{
+    if (mCopyExecutor == nullptr || batch.entries.empty() || batch.requests.empty()) {
+        return false;
+    }
+
+    std::unique_ptr<uint32_t[]> requestCounts(new (std::nothrow) uint32_t[batch.entries.size()]());
+    batch.entryPendingRequests.reset(new (std::nothrow) std::atomic<uint32_t>[batch.entries.size()]);
+    batch.entryIoResults.reset(new (std::nothrow) std::atomic<int32_t>[batch.entries.size()]);
+    if (requestCounts == nullptr || batch.entryPendingRequests == nullptr || batch.entryIoResults == nullptr) {
+        batch.entryPendingRequests.reset();
+        batch.entryIoResults.reset();
+        return false;
+    }
+
+    for (uint32_t entryIndex : batch.requestToEntry) {
+        if (UNLIKELY(entryIndex >= batch.entries.size())) {
+            batch.entryPendingRequests.reset();
+            batch.entryIoResults.reset();
+            return false;
+        }
+        ++requestCounts[entryIndex];
+    }
+
+    uint32_t pendingEntries = 0;
+    for (uint32_t i = 0; i < batch.entries.size(); ++i) {
+        batch.entryPendingRequests[i].store(requestCounts[i], std::memory_order_relaxed);
+        batch.entryIoResults[i].store(BDM_CODE_OK, std::memory_order_relaxed);
+        if (requestCounts[i] != 0 && batch.entries[i].result != nullptr &&
+            *batch.entries[i].result == BDM_BATCH_PENDING) {
+            ++pendingEntries;
+        }
+    }
+    if (pendingEntries == 0) {
+        return false;
+    }
+
+    batch.owner = this;
+    batch.pendingPipelineEntries.store(pendingEntries, std::memory_order_relaxed);
+    uint32_t configuredDrainers = BioConfig::Instance()->GetDaemonConfig().batchReadCopyWorkers;
+    batch.maxCopyDrainers = std::min<uint32_t>(configuredDrainers, pendingEntries);
+    for (uint32_t i = 0; i < batch.requests.size(); ++i) {
+        batch.requests[i].entryComplete = OnPipelineRequestComplete;
+        batch.requests[i].entryCompleteContext = &batch;
+        batch.requests[i].entryIndex = batch.requestToEntry[i];
+    }
+    batch.copyPipelineEnabled = true;
+    return true;
+}
+
+void BdmCopyBatchContext::OnPipelineRequestComplete(void *context, uint32_t entryIndex, int32_t result)
+{
+    auto *batch = static_cast<SubmittedBatch *>(context);
+    if (UNLIKELY(batch == nullptr || batch->owner == nullptr || entryIndex >= batch->entries.size())) {
+        return;
+    }
+
+    if (result != BDM_CODE_OK) {
+        int32_t expected = BDM_CODE_OK;
+        batch->entryIoResults[entryIndex].compare_exchange_strong(expected, result);
+    }
+    if (batch->entryPendingRequests[entryIndex].fetch_sub(1) != 1) {
+        return;
+    }
+    int32_t ioResult = batch->entryIoResults[entryIndex].load(std::memory_order_relaxed);
+    batch->owner->QueuePipelineCopy(*batch, entryIndex, ioResult);
+}
+
+void BdmCopyBatchContext::QueuePipelineCopy(SubmittedBatch &batch, uint32_t entryIndex, int32_t ioResult)
+{
+    if (ioResult != BDM_CODE_OK) {
+        CompletePipelineEntry(batch, entryIndex, BIO_DISK_IOERR);
+        return;
+    }
+    if (batch.entries[entryIndex].tempBuf == nullptr) {
+        CompletePipelineEntry(batch, entryIndex, BIO_OK);
+        return;
+    }
+
+    bool startDrainer = false;
+    {
+        std::lock_guard<std::mutex> lock(batch.copyMutex);
+        batch.readyCopyEntries.emplace_back(entryIndex);
+        if (batch.activeCopyDrainers < batch.maxCopyDrainers) {
+            ++batch.activeCopyDrainers;
+            startDrainer = true;
+        }
+    }
+    if (!startDrainer) {
+        return;
+    }
+
+    auto task = [this, &batch]() { DrainPipelineCopies(batch); };
+    if (!mCopyExecutor->Execute(task)) {
+        DrainPipelineCopies(batch);
+    }
+}
+
+void BdmCopyBatchContext::DrainPipelineCopies(SubmittedBatch &batch)
+{
+    while (true) {
+        uint32_t entryIndex = 0;
+        {
+            std::lock_guard<std::mutex> lock(batch.copyMutex);
+            if (batch.readyCopyEntries.empty()) {
+                --batch.activeCopyDrainers;
+                batch.copyCv.notify_all();
+                return;
+            }
+            entryIndex = batch.readyCopyEntries.front();
+            batch.readyCopyEntries.pop_front();
+        }
+        BResult ret = CopyScratchEntry(batch, entryIndex);
+        CompletePipelineEntry(batch, entryIndex, ret);
+    }
+}
+
+void BdmCopyBatchContext::CompletePipelineEntry(SubmittedBatch &batch, uint32_t entryIndex, BResult result)
+{
+    auto &entry = batch.entries[entryIndex];
+    if (result != BIO_OK) {
+        int32_t expected = BIO_OK;
+        batch.pipelineResult.compare_exchange_strong(expected, result);
+        if (entry.result != nullptr) {
+            *entry.result = result;
+        }
+    } else if (entry.result != nullptr && *entry.result == BDM_BATCH_PENDING) {
+        *entry.result = BIO_OK;
+    }
+    if (batch.pendingPipelineEntries.fetch_sub(1) == 1) {
+        batch.copyCv.notify_all();
+    }
+}
+
+BResult BdmCopyBatchContext::WaitPipelineCopies(SubmittedBatch &batch)
+{
+    std::unique_lock<std::mutex> lock(batch.copyMutex);
+    batch.copyCv.wait(lock, [&batch]() {
+        return batch.pendingPipelineEntries.load() == 0 && batch.activeCopyDrainers == 0 &&
+            batch.readyCopyEntries.empty();
+    });
+    return batch.pipelineResult.load();
 }
 
 BResult BdmCopyBatchContext::WaitSubmittedIo(SubmittedBatch &batch)
@@ -748,51 +928,135 @@ BResult BdmCopyBatchContext::WaitSubmittedIo(SubmittedBatch &batch)
     return ret;
 }
 
-BResult BdmCopyBatchContext::CopySubmittedResult(SubmittedBatch &batch)
+BResult BdmCopyBatchContext::CopySubmittedResult(SubmittedBatch &batch, bool parallelCopyEnabled)
 {
     if (batch.resultCopied) {
         return batch.waitRet;
     }
 
     BResult ret = WaitSubmittedIo(batch);
-    CacheSliceOperator sliceOperator;
+    BIO_TRACE_START(BDM_TRACE_READ_BATCH_SCRATCH_COPY_FLUSH);
+    BResult copyRet = batch.copyPipelineEnabled ? WaitPipelineCopies(batch) :
+        CopyScratchEntries(batch, parallelCopyEnabled);
+    BIO_TRACE_END(BDM_TRACE_READ_BATCH_SCRATCH_COPY_FLUSH, copyRet);
+    if (ret == BIO_OK) {
+        ret = copyRet;
+    }
     for (auto &entry : batch.entries) {
         if (entry.result == nullptr || *entry.result != BDM_BATCH_PENDING) {
             continue;
         }
-        if (entry.tempBuf != nullptr) {
-            uint32_t entryIndex = static_cast<uint32_t>(&entry - batch.entries.data());
-            if (entryIndex < batch.entryFailed.size() && batch.entryFailed[entryIndex] != 0) {
-                continue;
-            }
-            BIO_TRACE_START(BDM_TRACE_READ_BATCH_SCRATCH_COPY);
-            BResult copyRet = sliceOperator.Copy(entry.tempBuf, entry.to);
-            BIO_TRACE_END(BDM_TRACE_READ_BATCH_SCRATCH_COPY, copyRet);
-            if (copyRet != BIO_OK) {
-                *entry.result = copyRet;
-                ret = copyRet;
-                continue;
-            }
-        }
-        if (entry.result != nullptr && *entry.result == BDM_BATCH_PENDING) {
-            *entry.result = BIO_OK;
-        }
+        *entry.result = BIO_OK;
     }
     batch.waitRet = ret;
     batch.resultCopied = true;
     return ret;
 }
 
+BResult BdmCopyBatchContext::CopyScratchEntry(SubmittedBatch &batch, uint32_t entryIndex)
+{
+    if (entryIndex >= batch.entries.size()) {
+        return BIO_INVALID_PARAM;
+    }
+    auto &entry = batch.entries[entryIndex];
+    if (entry.result == nullptr || *entry.result != BDM_BATCH_PENDING || entry.tempBuf == nullptr) {
+        return BIO_OK;
+    }
+    if (entryIndex < batch.entryFailed.size() && batch.entryFailed[entryIndex] != 0) {
+        return BIO_OK;
+    }
+
+    CacheSliceOperator sliceOperator;
+    BIO_TRACE_START(BDM_TRACE_READ_BATCH_SCRATCH_COPY);
+    BResult ret = sliceOperator.Copy(entry.tempBuf, entry.to);
+    BIO_TRACE_END(BDM_TRACE_READ_BATCH_SCRATCH_COPY, ret);
+    if (ret != BIO_OK) {
+        *entry.result = ret;
+    }
+    return ret;
+}
+
+BResult BdmCopyBatchContext::CopyScratchEntries(SubmittedBatch &batch, bool parallelCopyEnabled)
+{
+    std::vector<uint32_t> entryIndices;
+    try {
+        entryIndices.reserve(batch.entries.size());
+        for (uint32_t i = 0; i < batch.entries.size(); ++i) {
+            auto &entry = batch.entries[i];
+            if (entry.result != nullptr && *entry.result == BDM_BATCH_PENDING && entry.tempBuf != nullptr &&
+                (i >= batch.entryFailed.size() || batch.entryFailed[i] == 0)) {
+                entryIndices.emplace_back(i);
+            }
+        }
+    } catch (const std::bad_alloc &) {
+        LOG_ERROR("Allocate scratch copy entry indexes failed, entry count:" << batch.entries.size() << ".");
+        for (auto &entry : batch.entries) {
+            if (entry.result != nullptr && *entry.result == BDM_BATCH_PENDING && entry.tempBuf != nullptr) {
+                *entry.result = BIO_ALLOC_FAIL;
+            }
+        }
+        return BIO_ALLOC_FAIL;
+    }
+
+    if (entryIndices.size() < 2 || mCopyExecutor == nullptr || !parallelCopyEnabled) {
+        BResult ret = BIO_OK;
+        for (uint32_t entryIndex : entryIndices) {
+            BResult copyRet = CopyScratchEntry(batch, entryIndex);
+            if (copyRet != BIO_OK) {
+                ret = copyRet;
+            }
+        }
+        return ret;
+    }
+    return CopyScratchEntriesParallel(batch, entryIndices);
+}
+
+BResult BdmCopyBatchContext::CopyScratchEntriesParallel(SubmittedBatch &batch,
+    const std::vector<uint32_t> &entryIndices)
+{
+    std::mutex waitMutex;
+    std::condition_variable waitCv;
+    uint32_t pending = static_cast<uint32_t>(entryIndices.size());
+    BResult result = BIO_OK;
+    auto copyEntry = [&batch, &waitMutex, &waitCv, &pending, &result](uint32_t entryIndex) {
+        BResult ret = CopyScratchEntry(batch, entryIndex);
+        {
+            std::lock_guard<std::mutex> lock(waitMutex);
+            if (ret != BIO_OK && result == BIO_OK) {
+                result = ret;
+            }
+            --pending;
+        }
+        waitCv.notify_one();
+    };
+
+    for (uint32_t entryIndex : entryIndices) {
+        uint64_t queueStartNs = ock::utils::Monotonic::TimeNs();
+        BIO_TRACE_ASYNC_BEGIN(BDM_TRACE_READ_BATCH_SCRATCH_COPY_QUEUE);
+        auto task = [copyEntry, entryIndex, queueStartNs]() {
+            BIO_TRACE_ASYNC_END(BDM_TRACE_READ_BATCH_SCRATCH_COPY_QUEUE, BIO_OK, queueStartNs);
+            copyEntry(entryIndex);
+        };
+        if (!mCopyExecutor->Execute(task)) {
+            BIO_TRACE_ASYNC_END(BDM_TRACE_READ_BATCH_SCRATCH_COPY_QUEUE, BIO_OK, queueStartNs);
+            copyEntry(entryIndex);
+        }
+    }
+    std::unique_lock<std::mutex> lock(waitMutex);
+    waitCv.wait(lock, [&pending]() { return pending == 0; });
+    return result;
+}
+
 BResult BdmCopyBatchContext::WaitSubmittedBatch(SubmittedBatch &batch)
 {
     BResult ret = WaitSubmittedIo(batch);
-    BResult copyRet = CopySubmittedResult(batch);
+    BResult copyRet = CopySubmittedResult(batch, false);
     return ret == BIO_OK ? copyRet : ret;
 }
 
-void BdmCopyBatchContext::WaitAndRecord(SubmittedBatch &batch)
+void BdmCopyBatchContext::WaitAndRecord(SubmittedBatch &batch, bool parallelCopyEnabled)
 {
-    BResult ret = CopySubmittedResult(batch);
+    BResult ret = CopySubmittedResult(batch, parallelCopyEnabled);
     if (ret != BIO_OK) {
         int32_t expected = BIO_OK;
         mResult.compare_exchange_strong(expected, ret);
@@ -802,13 +1066,18 @@ void BdmCopyBatchContext::WaitAndRecord(SubmittedBatch &batch)
 BResult BdmCopyBatchContext::Submit()
 {
     std::vector<Entry> entries;
+    std::vector<std::vector<Entry>> readyWindows;
     std::vector<std::unique_ptr<SubmittedBatch>> submitted;
     {
         std::lock_guard<std::mutex> lock(mLock);
         entries.swap(mEntries);
+        readyWindows.swap(mReadyWindows);
         mPendingBytes = 0;
     }
 
+    for (auto &window : readyWindows) {
+        SubmitWindow(window);
+    }
     if (!entries.empty()) {
         SubmitWindow(entries);
     }
@@ -817,16 +1086,19 @@ BResult BdmCopyBatchContext::Submit()
         std::lock_guard<std::mutex> lock(mLock);
         submitted.swap(mSubmitted);
     }
+    BIO_TRACE_START(BDM_TRACE_READ_BATCH_FINAL_WAIT);
     for (auto &batch : submitted) {
-        WaitAndRecord(*batch);
+        WaitAndRecord(*batch, true);
     }
-    return mResult.load();
+    BResult ret = mResult.load();
+    BIO_TRACE_END(BDM_TRACE_READ_BATCH_FINAL_WAIT, ret);
+    return ret;
 }
 
 bool BdmCopyBatchContext::Empty() const
 {
     std::lock_guard<std::mutex> lock(mLock);
-    return mEntries.empty() && mSubmitted.empty();
+    return mEntries.empty() && mReadyWindows.empty() && mSubmitted.empty();
 }
 
 BResult CacheSliceOperator::Copy(const SlicePtr &from, const SlicePtr &to)

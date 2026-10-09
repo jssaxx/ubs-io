@@ -119,9 +119,15 @@ public:
         } else {
             struct timeval tv {};
             char strTime[24];
+            const char *levelName = "unknown";
+            if (level >= static_cast<int>(Level::LOG_LEVEL_TRACE) &&
+                level < static_cast<int>(Level::LOG_LEVEL_BUTT)) {
+                levelName = spdlog::level::to_string_view(
+                    static_cast<spdlog::level::level_enum>(level)).data();
+            }
             gettimeofday(&tv, nullptr);
             strftime(strTime, sizeof strTime, "%Y-%m-%d %H:%M:%S.", localtime(&tv.tv_sec));
-            std::cout << strTime << tv.tv_usec << " " << level << " " << oss.str() << std::endl;
+            std::cout << strTime << tv.tv_usec << " " << levelName << " " << oss.str() << std::endl;
         }
     }
 

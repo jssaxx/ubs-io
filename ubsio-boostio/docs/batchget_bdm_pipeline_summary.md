@@ -168,20 +168,27 @@ typedef struct {
 ```ini
 ubsio.bdm.batch_read.window_keys = 128
 ubsio.bdm.batch_read.window_bytes_mb = 64
-ubsio.bdm.batch_read.pipeline_depth = 4
+ubsio.batch_read.pipeline_depth = 4
+ubsio.batch_read.copy_workers = 4
 ```
 
 配置含义：
 
 - `window_keys`：单个 BDM 批读窗口最多包含多少个 BatchGet key。
 - `window_bytes_mb`：单个 BDM 批读窗口最多包含多少 MB 数据。
-- `pipeline_depth`：允许同时在途的 BDM 批读窗口数量。
+- `pipeline_depth`：允许同时在途的 BDM 批读窗口数量，同时用于计算 UnderFS BatchGet 最大在途请求数。
+- `copy_workers`：仅 standalone 模式生效。BDM 或 UnderFS I/O 完成后，从 scratch buffer 拷贝到请求目标
+  buffer 的并发 worker 数，同时也是 standalone BatchGet executor 的线程数。
 
 默认值：
 
 - `window_keys = 128`
 - `window_bytes_mb = 64`
 - `pipeline_depth = 4`
+- `copy_workers = 4`，有效范围为 `1` 到 `64`。
+
+`copy_workers` 应结合每个进程的并发 BatchGet 数量和内存带宽调整。提高该值可增加大批量读的拷贝并行度，
+但也会增加线程调度与内存带宽竞争；小批量、单并发场景通常无需设置得高于默认值。
 
 配置约束：
 
@@ -482,7 +489,8 @@ ubsio.bdm.io_uring.sqpoll_mode = auto
 ```ini
 ubsio.bdm.batch_read.window_keys = 128
 ubsio.bdm.batch_read.window_bytes_mb = 64
-ubsio.bdm.batch_read.pipeline_depth = 4
+ubsio.batch_read.pipeline_depth = 4
+ubsio.batch_read.copy_workers = 4
 ```
 
 如果要降低 loop 或分区设备上的瞬时压力，可以减小：
@@ -490,7 +498,8 @@ ubsio.bdm.batch_read.pipeline_depth = 4
 ```ini
 ubsio.bdm.batch_read.window_keys = 32
 ubsio.bdm.batch_read.window_bytes_mb = 32
-ubsio.bdm.batch_read.pipeline_depth = 1
+ubsio.batch_read.pipeline_depth = 1
+ubsio.batch_read.copy_workers = 1
 ```
 
 这不会消除底层 EAGAIN，只是减少一次性提交到块层的压力。

@@ -96,26 +96,9 @@ inline bool KVReader::FromFile(const std::string &filePath)
     bool result = true;
     std::string strLine;
     while (getline(inConfFile, strLine)) {
-        StrUtil::StrTrim(strLine);
-        /* skip the line start with # */
-        if (strLine.empty() || strLine[0] == '#') {
-            continue;
-        }
-
-        /* skip the line without = */
-        std::string::size_type equalDivPos = 0;
-        if (std::string::npos == (equalDivPos = strLine.find('='))) {
-            continue;
-        }
-
-        /* extract the line the value before = is the key, the value after = is the value, after trim */
-        std::string strKey = strLine.substr(0, equalDivPos);
-        std::string strValue = strLine.substr(equalDivPos + 1, strLine.size() - 1);
-        StrUtil::StrTrim(strKey);
-        StrUtil::StrTrim(strValue);
-
-        /* skip the empty key */
-        if (strKey.empty()) {
+        std::string strKey;
+        std::string strValue;
+        if (!FileUtil::ParseConfigLine(strLine, strKey, strValue)) {
             continue;
         }
 

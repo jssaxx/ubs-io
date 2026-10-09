@@ -10,7 +10,9 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include <atomic>
 #include <cerrno>
+#include <condition_variable>
 #include "bio_log.h"
 #include "bio_config_instance.h"
 #include "bio_client.h"
@@ -50,6 +52,80 @@ int WaitSemaphore(sem_t &sem)
 size_t GetBatchGetWireResponseLen(uint32_t count)
 {
     return sizeof(BatchGetWireResponse) + static_cast<size_t>(count) * sizeof(BatchGetResultItem);
+}
+
+uint32_t GetUnderFsBatchMaxInFlight(uint32_t count)
+{
+    const auto &daemonConfig = BioConfig::Instance()->GetDaemonConfig();
+    uint64_t maxInFlight = static_cast<uint64_t>(daemonConfig.batchReadCopyWorkers) *
+        daemonConfig.batchReadPipelineDepth;
+    if (maxInFlight == 0) {
+        maxInFlight = 1;
+    }
+    return maxInFlight < count ? static_cast<uint32_t>(maxInFlight) : count;
+}
+
+class UnderFsBatchContext {
+public:
+    explicit UnderFsBatchContext(uint32_t count) : UnderFsBatchContext(count, count)
+    {
+    }
+
+    UnderFsBatchContext(uint32_t count, uint32_t maxInFlight) : mPending(count), mMaxInFlight(maxInFlight)
+    {
+    }
+
+    void Acquire()
+    {
+        std::unique_lock<std::mutex> lock(mMutex);
+        mCondition.wait(lock, [this]() { return mInFlight < mMaxInFlight; });
+        ++mInFlight;
+    }
+
+    void Complete(bool releaseSlot = false)
+    {
+        std::lock_guard<std::mutex> lock(mMutex);
+        if (releaseSlot) {
+            --mInFlight;
+        }
+        --mPending;
+        if (mPending == 0) {
+            mCondition.notify_all();
+        } else if (releaseSlot) {
+            mCondition.notify_all();
+        }
+    }
+
+    void Cancel(uint32_t count)
+    {
+        std::lock_guard<std::mutex> lock(mMutex);
+        mPending -= count;
+        if (mPending == 0) {
+            mCondition.notify_all();
+        }
+    }
+
+    void Wait()
+    {
+        std::unique_lock<std::mutex> lock(mMutex);
+        mCondition.wait(lock, [this]() { return mPending == 0; });
+    }
+
+private:
+    std::mutex mMutex;
+    std::condition_variable mCondition;
+    uint32_t mPending;
+    uint32_t mMaxInFlight;
+    uint32_t mInFlight = 0;
+};
+
+void GetUnderFsBatchExistResult(const char *key, bool &result, std::atomic<int32_t> &batchResult)
+{
+    BResult ret = Cache::Instance().ExistUnderFsDirect(const_cast<char *>(key));
+    result = ret == BIO_OK;
+    if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
+        batchResult.store(static_cast<int32_t>(ret));
+    }
 }
 }
 
@@ -284,6 +360,10 @@ BResult MirrorServer::CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t 
             LOG_ERROR("Get wCache failed, flowId:" << reuseFlowId << ".");
             return BIO_NOT_EXISTS;
         }
+        if (!wCache->IsWritable()) {
+            LOG_INFO("Skip read-only reuse flow, flowId:" << reuseFlowId << ", ptId:" << ptId << ".");
+            continue;
+        }
         if (wCache->GetPtv() != base) {
             LOG_DEBUG("Check pt version failed, destroy flow, flowId:" << reuseFlowId << ", ptv:" << wCache->GetPtv() <<
                 ", base:" << base << ", isDegrade:" << wCache->GetDegradeState() << ", index:" << wCache->GetIndex() <<
@@ -310,7 +390,17 @@ BResult MirrorServer::CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t 
     }
 
     flowInfo.isDegrade = BioServer::Instance()->GetServiceState(); // 升级过程中，创建降级Cache实例
-    return CreateFlow(procId, ptId, ptv, flowInfo.flowId, flowInfo.isDegrade);
+    ret = CreateFlow(procId, ptId, ptv, flowInfo.flowId, flowInfo.isDegrade);
+    if (UNLIKELY(ret != BIO_OK) || !BioServer::Instance()->IsStandaloneMode() ||
+        BioServer::Instance()->GetPtEntry(ptId).version == ptv) {
+        return ret;
+    }
+
+    auto wcache = WCacheManager::Instance()->GetWCacheForCleanup(flowInfo.flowId);
+    if (wcache != nullptr) {
+        WCacheManager::Instance()->MarkPtFlowsReadOnly(ptId, ptv, wcache->GetDiskId());
+    }
+    return BIO_CHECK_PT_FAIL;
 }
 
 BResult MirrorServer::CreateFlowSlave(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade)
@@ -329,6 +419,27 @@ BResult MirrorServer::CreateFlowSlave(uint64_t procId, uint16_t ptId, uint64_t p
 
 BResult MirrorServer::DestroyFlow(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId)
 {
+    auto bioServer = BioServer::Instance();
+    if (bioServer->IsStandaloneMode()) {
+        auto wcache = WCacheManager::Instance()->GetWCacheForCleanup(flowId);
+        uint64_t currentPtv = bioServer->GetPtEntry(ptId).version;
+        if (wcache != nullptr && wcache->GetPtv() < currentPtv &&
+            bioServer->IsStandaloneDiskFault(wcache->GetDiskId())) {
+            // BioServer::HandleStandaloneDiskFault is the only owner of
+            // disk-level fault cleanup. The PT view has already moved this
+            // flow to a new disk, so the stale flow belongs to the fault
+            // worker whether or not that worker has marked it yet. Returning
+            // BIO_INNER_RETRY here would leave the SDK's invalidated
+            // FlowInstance pinned in mFlowMap with no later trigger to delete
+            // and recreate it, so DestroyFlow must acknowledge success and
+            // let the SDK finish its local cleanup.
+            LOG_INFO("Standalone fault worker owns stale flow cleanup, ptId:" << ptId << ", requestPtv:" <<
+                ptv << ", currentPtv:" << currentPtv << ", flowId:" << flowId << ", diskId:" <<
+                wcache->GetDiskId() << ", takenOver:" << wcache->IsStandaloneFault() << ".");
+            return BIO_OK;
+        }
+    }
+
     auto ret = Cache::Instance().DestroyWCache(procId, ptId, ptv, flowId);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Destroy write cache failed, ret:" << ret << ", procId:" << procId << ", ptId:" << ptId << ".");
@@ -430,7 +541,7 @@ void MirrorServer::QueryNodeView(QueryNodeViewRequest &req, QueryNodeViewRespons
         int32_t ret =
                 strncpy_s(rsp.desc[index].ip, IP_MAX_SIZE, nodeEntry.second.ip.c_str(), nodeEntry.second.ip.size());
         if (ret != BIO_OK) {
-            LOG_ERROR("strncpy_s faild, ret:"<< ret << ".");
+            LOG_ERROR("strncpy_s failed, ret:"<< ret << ".");
             return;
         }
         rsp.desc[index].port = nodeEntry.second.port;
@@ -449,8 +560,14 @@ void MirrorServer::QueryNodeView(QueryNodeViewRequest &req, QueryNodeViewRespons
 void MirrorServer::QueryPtView(QueryPtViewRequest &req, QueryPtViewResponse &rsp)
 {
     std::map<uint16_t, CmPtInfo> ptView = BioServer::Instance()->GetPtView(&rsp.curPtTimes);
+    uint32_t total = static_cast<uint32_t>(ptView.size());
+    uint32_t skip = req.bar;
     uint32_t index = 0;
     for (auto &ptEntry : ptView) {
+        if (skip != 0) {
+            --skip;
+            continue;
+        }
         if (index == PT_SIZE) {
             break;
         }
@@ -468,12 +585,15 @@ void MirrorServer::QueryPtView(QueryPtViewRequest &req, QueryPtViewResponse &rsp
         index++;
     }
     rsp.num = index;
-    rsp.flag = (index == 0) ? 0 : 1;
+    rsp.flag = (req.bar < total && index < total - req.bar) ? 1 : 0;
 }
 
 BResult MirrorServer::ReaderLocal(const SlicePtr &from, const SlicePtr &to, PutRequest &req)
 {
-    if (req.affinity == LOCAL_AFFINITY) {
+    // Data was already copied into the server memory slice by the zero-copy
+    // PrepareFromServer path. Otherwise the copy happens here, under the
+    // WCache admission in-flight reference.
+    if (req.memFromServer && req.affinity == LOCAL_AFFINITY) {
         return BIO_OK;
     }
     return mSliceOp.Copy(from, to);
@@ -986,7 +1106,7 @@ BResult MirrorServer::BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, Bat
         WCacheBatchSliceWriter batchWriter =
             [bdmBatch, keyResult, &writer](const SlicePtr &from, const SlicePtr &to,
                 WCacheSliceRefPtr &sliceRef) -> BResult {
-            if (BioConfig::Instance()->GetDaemonConfig().bdmBatchReadStandaloneUseScratchPool &&
+            if (BioConfig::Instance()->GetDaemonConfig().batchReadStandaloneUseScratchPool &&
                 from->GetFlowType() == FLOW_DISK) {
                 return bdmBatch->EnqueueDiskToTempThenCopy(from, to, keyResult, sliceRef);
             }
@@ -1000,7 +1120,7 @@ BResult MirrorServer::BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, Bat
         ret = Cache::Instance().Get(keyInfo.key, keyInfo.offset, sliceP, writer, realLen);
     }
     BIO_TRACE_END(MIRROR_TRACE_GET, ret);
-    if (UNLIKELY(ret != BIO_OK)) {
+    if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
         LOG_ERROR("Get key from cache failed, ret:" << ret << ", key:" << keyInfo.key <<
                                                     ", offset:" << keyInfo.offset << ".");
     }
@@ -1027,7 +1147,7 @@ BResult MirrorServer::AddDisk(AddDiskRequest &req)
 {
     if (UNLIKELY(req.comm.magic != MESSAGE_MAGIC)) {
         LOG_ERROR("Check message magic failed.");
-        return false;
+        return BIO_INVALID_PARAM;
     }
 
     BResult ret = AddDiskImpl(req);
@@ -1041,21 +1161,12 @@ BResult MirrorServer::AddDisk(AddDiskRequest &req)
 
 BResult MirrorServer::AddDiskImpl(AddDiskRequest &req)
 {
-    if (BioServer::Instance()->IsStandaloneMode()) {
-        LOG_ERROR("Standalone mode does not support adding disk dynamically.");
-        return BIO_INVALID_PARAM;
-    }
-
     if (!mBioConfig->GetDaemonConfig().hasDiskCache) {
         LOG_ERROR("Add disk is not supported when disk cache is disabled.");
         return BIO_INVALID_PARAM;
     }
 
     std::lock_guard<std::mutex> lock(mDiskViewMutex);
-    if (BdmGetNormalDiskNum() >= DISK_DEV_NUM) {
-        LOG_ERROR("The number of available disks must not exceed " << DISK_DEV_NUM << ".");
-        return BIO_ERR;
-    }
     uint32_t diskId = DISK_ID_INVALID;
     BResult ret = BIO_OK;
     req.diskPath[FILE_PATH_MAX_LEN - 1] = '\0';
@@ -1063,6 +1174,9 @@ BResult MirrorServer::AddDiskImpl(AddDiskRequest &req)
     BIO_TP_START(SERVER_NO_DISK_CHECK, 0);
     ChkTrue(FileUtil::CanonicalPath(diskPath), BIO_ERR, "The device does not exist.");
     BIO_TP_END
+    std::string reason;
+    ChkTrue(FileUtil::ValidateRawDisk(diskPath, reason), BIO_ERR,
+        "Disk path is not available for raw cache, path:" << diskPath << ", reason:" << reason << ".");
     bool isExist;
     BIO_TP_START(SERVER_OLD_DISK_EXIST, &isExist, true);
     BIO_TP_START(SERVER_SET_OLD_DISK_ID, &diskId, 0);
@@ -1073,9 +1187,17 @@ BResult MirrorServer::AddDiskImpl(AddDiskRequest &req)
         ret = AddOldDiskImpl(diskPath, diskId);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("Add old disk failed, diskPath: " << diskPath << ".");
-            return BIO_INNER_ERR;
+            return BioServer::Instance()->IsStandaloneMode() ? ret : BIO_INNER_ERR;
         }
         return BIO_OK;
+    }
+    if (BdmGetNormalDiskNum() >= DISK_DEV_NUM) {
+        LOG_ERROR("The number of available disks must not exceed " << DISK_DEV_NUM << ".");
+        return BIO_ERR;
+    }
+
+    if (BioServer::Instance()->IsStandaloneMode()) {
+        return BioServer::Instance()->AddStandaloneDisk(diskPath);
     }
 
     BIO_TP_START(SERVER_ADD_NEW_DISK_FAIL, &ret, BIO_INNER_ERR);
@@ -1091,6 +1213,10 @@ BResult MirrorServer::AddDiskImpl(AddDiskRequest &req)
 
 BResult MirrorServer::AddOldDiskImpl(const std::string &diskPath, uint16_t diskId)
 {
+    if (BioServer::Instance()->IsStandaloneMode()) {
+        return BioServer::Instance()->AddStandaloneOldDisk(diskPath, diskId);
+    }
+
     LOG_DEBUG("Start to add old disk, diskPath: " << diskPath << ".");
     // reset disk
     BResult res = BioServer::Instance()->BioDiskReset(diskId);
@@ -1122,23 +1248,31 @@ BResult MirrorServer::AddNewDiskImpl(std::string &diskPath)
     }
 
     // write diskPath to config
+    bool configChanged = true;
     ret = mBioConfig->CreateDiskConfBak(diskPath);
+    if (ret == BIO_EXISTS) {
+        configChanged = false;
+        ret = BIO_OK;
+    }
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Update disk config failed, diskPath: " << diskPath << ", ret: " << ret);
         return ret;
     }
 
     // add disk to bdm
+    uint32_t diskId = DISK_ID_INVALID;
+    uint64_t diskCapacity = 0;
     BIO_TP_START(SERVER_BDM_UPDATE_SUCCESS, &ret, BIO_OK);
-    ret = BioServer::Instance()->BioBdmUpdate(diskPath);
+    ret = BioServer::Instance()->BioAttachDisk(diskPath, diskId, diskCapacity);
     BIO_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Update new disk to bdm failed, diskPath: " << diskPath << ", ret: " << ret);
         return ret;
     }
+    LOG_DEBUG("Update new disk to bdm success, diskPath:" << diskPath << ", diskId:" << diskId <<
+        ", capacity:" << diskCapacity << ".");
 
     // update info to cm
-    uint32_t diskId = diskCount;
     ret = CmAddNewDisk(diskId, CM_DISK_NORMAL, true);
     if (ret != BIO_OK) {
         LOG_ERROR("Update new disk status failed, ret: " << ret);
@@ -1146,10 +1280,12 @@ BResult MirrorServer::AddNewDiskImpl(std::string &diskPath)
     }
 
     // replace config file
-    ret = mBioConfig->ReplaceFile(CONFIG_PATH, CONFIG_PATH_BAK);
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Update new disk to bdm failed, diskPath: " << diskPath << ", ret: " << ret);
-        return ret;
+    if (configChanged) {
+        ret = mBioConfig->CommitDiskConfBak();
+        if (UNLIKELY(ret != BIO_OK)) {
+            LOG_ERROR("Update new disk to bdm failed, diskPath: " << diskPath << ", ret: " << ret);
+            return ret;
+        }
     }
 
     mBioConfig->ResizeDaemonConfigDisks(diskPath);
@@ -1336,18 +1472,53 @@ BResult MirrorServer::Initialize()
         return BIO_NOT_READY;
     }
 
-    mBatchGetExecutor = ExecutorService::Create(mBioConfig->GetDaemonConfig().batchGetThreadNum,
-                                                SERVER_BATCH_GET_QUEUE_SIZE);
-    if (UNLIKELY(mBatchGetExecutor == nullptr)) {
-        LOG_ERROR("Failed to create execution service for get kv, probably out of memory");
-        return BIO_ALLOC_FAIL;
-    }
-    auto ret = mBatchGetExecutor->Start();
-    if (!ret) {
-        LOG_ERROR("Failed to start execution service for get kv, probably out of memory");
-        return BIO_INNER_ERR;
+    BResult ret = InitializeBatchGetExecutors();
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
     }
     mStarted = true;
+    return BIO_OK;
+}
+
+BResult MirrorServer::InitializeBatchGetExecutors()
+{
+    const auto &daemonConfig = mBioConfig->GetDaemonConfig();
+    uint32_t workerNum = BioServer::Instance()->IsStandaloneMode() ? daemonConfig.batchReadCopyWorkers :
+        daemonConfig.batchGetThreadNum;
+    mBatchGetExecutor = ExecutorService::Create(static_cast<uint16_t>(workerNum), SERVER_BATCH_GET_QUEUE_SIZE);
+    if (UNLIKELY(mBatchGetExecutor == nullptr)) {
+        LOG_ERROR("Create batch get executor failed, worker num:" << workerNum << ".");
+        return BIO_ALLOC_FAIL;
+    }
+    if (UNLIKELY(!mBatchGetExecutor->Start())) {
+        LOG_ERROR("Start batch get executor failed, worker num:" << workerNum << ".");
+        return BIO_INNER_ERR;
+    }
+    BResult ret = InitializeUnderFsExecutor();
+    if (UNLIKELY(ret != BIO_OK)) {
+        mBatchGetExecutor->Stop();
+        mBatchGetExecutor = nullptr;
+    }
+    return ret;
+}
+
+BResult MirrorServer::InitializeUnderFsExecutor()
+{
+    if (!BioServer::Instance()->IsStandaloneMode() || mBioConfig->GetUnderFsConfig().underFsType == "none") {
+        return BIO_OK;
+    }
+    uint32_t workerNum = mBioConfig->GetDaemonConfig().underFsBatchReadWorkerNum;
+    mUnderFsExecutor =
+        ExecutorService::Create(static_cast<uint16_t>(workerNum), SERVER_BATCH_GET_QUEUE_SIZE);
+    if (UNLIKELY(mUnderFsExecutor == nullptr)) {
+        LOG_ERROR("Create underfs batch read executor failed, worker num:" << workerNum << ".");
+        return BIO_ALLOC_FAIL;
+    }
+    if (UNLIKELY(!mUnderFsExecutor->Start())) {
+        LOG_ERROR("Start underfs batch read executor failed, worker num:" << workerNum << ".");
+        mUnderFsExecutor = nullptr;
+        return BIO_INNER_ERR;
+    }
     return BIO_OK;
 }
 
@@ -1811,6 +1982,356 @@ int32_t MirrorServer::MirrorServerGet(ServiceContext &ctx, GetRequest *req)
     return BIO_OK;
 }
 
+BResult MirrorServer::PrepareBatchGetEntries(BatchGetRequest *req, std::vector<uint64_t> &realLengths,
+    std::vector<int32_t> &results, BdmCopyBatchContext &bdmBatch)
+{
+    for (uint32_t i = 0; i < req->count; ++i) {
+        BResult ret = BatchSingleGet(req->keysInfo[i], realLengths[i], req, &bdmBatch, &results[i]);
+        if (ret != BIO_OK) {
+            results[i] = ret;
+        }
+    }
+    return BIO_OK;
+}
+
+BResult MirrorServer::PrepareStandaloneBatchGetEntries(BatchGetRequest &req, BdmCopyBatchContext &bdmBatch)
+{
+    for (uint32_t i = 0; i < req.count; ++i) {
+        GetKeyInfo &keyInfo = req.keysInfo[i];
+        if (UNLIKELY(keyInfo.realLength == nullptr || keyInfo.result == nullptr)) {
+            LOG_ERROR("Invalid standalone batch get result address, index:" << i << ".");
+            return BIO_INVALID_PARAM;
+        }
+    }
+    std::vector<uint32_t> underFsMissIndices;
+    underFsMissIndices.reserve(req.count);
+    for (uint32_t i = 0; i < req.count; ++i) {
+        GetKeyInfo &keyInfo = req.keysInfo[i];
+        BResult ret = BatchSingleGet(keyInfo, *keyInfo.realLength, &req, &bdmBatch, keyInfo.result);
+        if (ret != BIO_OK || *keyInfo.result != BIO_INNER_RETRY) {
+            *keyInfo.result = ret;
+        }
+        if (ret == BIO_NOT_EXISTS) {
+            underFsMissIndices.emplace_back(i);
+        }
+    }
+    return DispatchUnderFsBatchGetEntries(req, underFsMissIndices);
+}
+
+void MirrorServer::GetUnderFsBatchEntry(GetKeyInfo &keyInfo)
+{
+    RCacheSlicePtr sliceP = MakeUnderFsBatchGetSlice(keyInfo, keyInfo.address);
+    if (UNLIKELY(sliceP == nullptr)) {
+        LOG_ERROR("Make underfs batch get slice failed, key:" << keyInfo.key << ".");
+        *keyInfo.result = BIO_ALLOC_FAIL;
+        return;
+    }
+
+    *keyInfo.realLength = 0;
+    BResult ret = ReadUnderFsBatchEntry(keyInfo, sliceP);
+    *keyInfo.result = ret;
+    if (ret == BIO_OK) {
+        *keyInfo.realLength = keyInfo.length;
+    }
+}
+
+RCacheSlicePtr MirrorServer::MakeUnderFsBatchGetSlice(const GetKeyInfo &keyInfo, uintptr_t address)
+{
+    MrInfo mrInfo = { address, keyInfo.size };
+    std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
+    return MakeRef<RCacheSlice>(keyInfo.ptId, keyInfo.length, addrVec);
+}
+
+BResult MirrorServer::ReadUnderFsBatchEntry(GetKeyInfo &keyInfo, const RCacheSlicePtr &sliceP)
+{
+    uint64_t realLength = 0;
+    BIO_TRACE_START(MIRROR_TRACE_GET);
+    BResult ret = Cache::Instance().GetUnderFsDirect(keyInfo.key, keyInfo.offset, sliceP, realLength);
+    BIO_TRACE_END(MIRROR_TRACE_GET, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Get key from underfs failed, ret:" << ret << ", key:" << keyInfo.key <<
+                                                      ", offset:" << keyInfo.offset << ".");
+    }
+    return ret;
+}
+
+void MirrorServer::GetUnderFsBatchEntryWithScratch(GetKeyInfo &keyInfo, const std::function<void()> &complete)
+{
+    *keyInfo.realLength = 0;
+    char *scratch = AllocBatchReadScratchBuffer(keyInfo.length);
+    if (UNLIKELY(scratch == nullptr)) {
+        LOG_ERROR("Alloc underfs batch read scratch buffer failed, key:" << keyInfo.key <<
+            ", length:" << keyInfo.length << ".");
+        *keyInfo.result = BIO_ALLOC_FAIL;
+        complete();
+        return;
+    }
+
+    RCacheSlicePtr scratchSlice = MakeUnderFsBatchGetSlice(keyInfo, reinterpret_cast<uintptr_t>(scratch));
+    RCacheSlicePtr targetSlice = MakeUnderFsBatchGetSlice(keyInfo, keyInfo.address);
+    if (UNLIKELY(scratchSlice == nullptr || targetSlice == nullptr)) {
+        LOG_ERROR("Make underfs batch get scratch slice failed, key:" << keyInfo.key << ".");
+        FreeBatchReadScratchBuffer(scratch, keyInfo.length);
+        *keyInfo.result = BIO_ALLOC_FAIL;
+        complete();
+        return;
+    }
+
+    BResult ret = ReadUnderFsBatchEntry(keyInfo, scratchSlice);
+    if (UNLIKELY(ret != BIO_OK)) {
+        FreeBatchReadScratchBuffer(scratch, keyInfo.length);
+        *keyInfo.result = ret;
+        complete();
+        return;
+    }
+
+    auto copyTask = [this, &keyInfo, scratch, targetSlice, complete]() {
+        BIO_TRACE_START(WCACHE_TRACE_GET_COPY_TO_TARGET);
+        BResult copyRet = mSliceOp.Copy(scratch, targetSlice.Get());
+        BIO_TRACE_END(WCACHE_TRACE_GET_COPY_TO_TARGET, copyRet);
+        FreeBatchReadScratchBuffer(scratch, keyInfo.length);
+        *keyInfo.result = copyRet;
+        if (copyRet == BIO_OK) {
+            *keyInfo.realLength = keyInfo.length;
+        } else {
+            LOG_ERROR("Copy underfs batch read scratch data failed, ret:" << copyRet <<
+                ", key:" << keyInfo.key << ", length:" << keyInfo.length << ".");
+        }
+        complete();
+    };
+    if (UNLIKELY(!mBatchGetExecutor->Execute(copyTask))) {
+        LOG_WARN("Execute underfs batch copy failed, copy data in read worker, key:" << keyInfo.key << ".");
+        copyTask();
+    }
+}
+
+BResult MirrorServer::DispatchUnderFsBatchGetEntries(BatchGetRequest &req,
+    const std::vector<uint32_t> &missIndices)
+{
+    if (missIndices.empty() || mUnderFsExecutor == nullptr) {
+        return BIO_OK;
+    }
+    uint32_t missCount = static_cast<uint32_t>(missIndices.size());
+    bool useScratch = mBioConfig->GetDaemonConfig().batchReadStandaloneUseScratchPool;
+    UnderFsBatchContext context(missCount, GetUnderFsBatchMaxInFlight(missCount));
+    BResult result = BIO_OK;
+    for (uint32_t i = 0; i < missCount; ++i) {
+        uint32_t keyIndex = missIndices[i];
+        auto task = [&, keyIndex]() {
+            if (useScratch) {
+                context.Acquire();
+                GetUnderFsBatchEntryWithScratch(req.keysInfo[keyIndex], [&context]() { context.Complete(true); });
+            } else {
+                GetUnderFsBatchEntry(req.keysInfo[keyIndex]);
+                context.Complete();
+            }
+        };
+        if (UNLIKELY(!mUnderFsExecutor->Execute(task))) {
+            LOG_ERROR("Execute underfs batch get failed, batch num:" << missCount << ", index:" << i << ".");
+            result = BIO_INNER_RETRY;
+            context.Cancel(missCount - i);
+            break;
+        }
+    }
+    context.Wait();
+    return result;
+}
+
+void MirrorServer::PrepareBatchStatEntry(const char *key, const ObjLocation &location, BatchObjStat &stat,
+    uint32_t index, std::vector<uint32_t> &missIndices)
+{
+    stat = {};
+    CopyKey(stat.key, key, MAX_KEY_SIZE);
+    CacheObjStat cacheStat{};
+    uint16_t ptId = static_cast<uint16_t>(location.location[0]);
+    Key cacheKey = const_cast<char *>(key);
+    BResult ret = Cache::Instance().StatWCache(ptId, cacheKey, cacheStat);
+    FillBatchStatResult(key, ret, cacheStat, stat);
+    if (stat.result == BIO_NOT_EXISTS) {
+        missIndices.emplace_back(index);
+    }
+}
+
+void MirrorServer::FillBatchStatResult(const char *key, BResult result, const CacheObjStat &cacheStat,
+    BatchObjStat &stat)
+{
+    stat.result = result;
+    if (result != BIO_OK) {
+        return;
+    }
+    if (UNLIKELY(cacheStat.size > UINT32_MAX)) {
+        LOG_ERROR("Batch stat object size exceeds uint32, key:" << key << ", size:" << cacheStat.size << ".");
+        stat.result = BIO_INNER_ERR;
+        return;
+    }
+    stat.size = static_cast<uint32_t>(cacheStat.size);
+}
+
+void MirrorServer::GetUnderFsBatchStatEntry(const char *key, BatchObjStat &stat)
+{
+    CacheObjStat cacheStat{};
+    Key cacheKey = const_cast<char *>(key);
+    BResult ret = Cache::Instance().StatUnderFsDirect(cacheKey, cacheStat);
+    FillBatchStatResult(key, ret, cacheStat, stat);
+}
+
+BResult MirrorServer::DispatchUnderFsBatchStatEntries(const char **keys, BatchObjStat *stats,
+    const std::vector<uint32_t> &missIndices)
+{
+    if (missIndices.empty() || mUnderFsExecutor == nullptr) {
+        return BIO_OK;
+    }
+    uint32_t missCount = static_cast<uint32_t>(missIndices.size());
+    UnderFsBatchContext context(missCount);
+    BResult result = BIO_OK;
+    for (uint32_t i = 0; i < missCount; ++i) {
+        uint32_t keyIndex = missIndices[i];
+        auto task = [&, keyIndex]() {
+            GetUnderFsBatchStatEntry(keys[keyIndex], stats[keyIndex]);
+            context.Complete();
+        };
+        if (UNLIKELY(!mUnderFsExecutor->Execute(task))) {
+            LOG_ERROR("Execute underfs batch stat failed, batch num:" << missCount << ", index:" << i << ".");
+            result = BIO_INNER_RETRY;
+            context.Cancel(missCount - i);
+            break;
+        }
+    }
+    context.Wait();
+    return result;
+}
+
+BResult MirrorServer::BatchStatConvergence(const char **keys, ObjLocation *locations, uint32_t count,
+    BatchObjStat *stats)
+{
+    if (UNLIKELY(!BioServer::Instance()->IsStandaloneMode())) {
+        LOG_ERROR("Batch stat only supports standalone deployment.");
+        return BIO_INVALID_PARAM;
+    }
+    if (UNLIKELY(keys == nullptr || locations == nullptr || stats == nullptr)) {
+        LOG_ERROR("Invalid standalone batch stat pointer parameter.");
+        return BIO_INVALID_PARAM;
+    }
+    if (UNLIKELY(count == 0 || count > STANDALONE_BATCH_GET_MAX_COUNT)) {
+        LOG_ERROR("Invalid standalone batch stat request, count:" << count << ".");
+        return BIO_INVALID_PARAM;
+    }
+    std::vector<uint32_t> underFsMissIndices;
+    underFsMissIndices.reserve(count);
+    for (uint32_t index = 0; index < count; ++index) {
+        PrepareBatchStatEntry(keys[index], locations[index], stats[index], index, underFsMissIndices);
+    }
+    return DispatchUnderFsBatchStatEntries(keys, stats, underFsMissIndices);
+}
+
+BResult MirrorServer::DispatchUnderFsBatchExistEntries(const char **keys, bool *results,
+    const std::vector<uint32_t> &missIndices)
+{
+    if (UNLIKELY(mUnderFsExecutor == nullptr)) {
+        LOG_ERROR("UnderFS batch exist executor is not initialized, miss count:" << missIndices.size() << ".");
+        return BIO_NOT_READY;
+    }
+
+    uint32_t missCount = static_cast<uint32_t>(missIndices.size());
+    UnderFsBatchContext context(missCount);
+    std::atomic<int32_t> batchResult{ static_cast<int32_t>(BIO_OK) };
+    for (uint32_t index = 0; index < missCount; ++index) {
+        uint32_t keyIndex = missIndices[index];
+        auto task = [&, keyIndex]() {
+            GetUnderFsBatchExistResult(keys[keyIndex], results[keyIndex], batchResult);
+            context.Complete();
+        };
+        if (UNLIKELY(!mUnderFsExecutor->Execute(task))) {
+            LOG_ERROR("Execute underfs batch exist failed, batch num:" << missCount << ", index:" << index << ".");
+            batchResult.store(static_cast<int32_t>(BIO_INNER_RETRY));
+            context.Cancel(missCount - index);
+            break;
+        }
+    }
+    context.Wait();
+    return static_cast<BResult>(batchResult.load());
+}
+
+void MirrorServer::PrepareBatchExistEntries(const char **keys, ObjLocation *locations, uint32_t count, bool *results,
+    std::vector<uint32_t> &missIndices)
+{
+    bool underFsEnabled = mBioConfig->GetUnderFsConfig().underFsType != "none";
+    if (underFsEnabled) {
+        missIndices.reserve(count);
+    }
+    for (uint32_t index = 0; index < count; ++index) {
+        uint16_t ptId = static_cast<uint16_t>(locations[index].location[0]);
+        results[index] = Cache::Instance().Exist(ptId, const_cast<char *>(keys[index]));
+        if (!results[index] && underFsEnabled) {
+            missIndices.emplace_back(index);
+        }
+    }
+}
+
+BResult MirrorServer::BatchExistStandalone(const char **keys, ObjLocation *locations, uint32_t count, bool *results)
+{
+    if (UNLIKELY(!BioServer::Instance()->IsStandaloneMode())) {
+        LOG_ERROR("Batch exist direct call only supports standalone deployment.");
+        return BIO_INVALID_PARAM;
+    }
+    if (UNLIKELY(keys == nullptr || locations == nullptr || results == nullptr || count == 0 ||
+        count > STANDALONE_BATCH_GET_MAX_COUNT)) {
+        LOG_ERROR("Invalid standalone batch exist request, count:" << count << ".");
+        return BIO_INVALID_PARAM;
+    }
+
+    std::vector<uint32_t> missIndices;
+    BIO_TRACE_START(MIRROR_TRACE_BATCH_EXIST);
+    PrepareBatchExistEntries(keys, locations, count, results, missIndices);
+    BResult ret = BIO_OK;
+    if (!missIndices.empty()) {
+        ret = DispatchUnderFsBatchExistEntries(keys, results, missIndices);
+    }
+    BIO_TRACE_END(MIRROR_TRACE_BATCH_EXIST, ret);
+    return ret;
+}
+
+BResult MirrorServer::DispatchBatchGetEntries(BatchGetRequest *req, std::vector<uint64_t> &realLengths,
+    std::vector<int32_t> &results, BdmCopyBatchContext &bdmBatch)
+{
+    sem_t sem;
+    if (sem_init(&sem, 0, 0) != 0) {
+        LOG_ERROR("Init batch get semaphore failed, errno:" << errno << ".");
+        return BIO_INNER_ERR;
+    }
+    std::atomic<uint32_t> pending(req->count);
+    uint32_t submittedNum = 0;
+    BResult result = BIO_OK;
+    for (uint32_t i = 0; i < req->count; ++i) {
+        auto task = [&, i]() {
+            BResult ret = BatchSingleGet(req->keysInfo[i], realLengths[i], req, &bdmBatch, &results[i]);
+            if (ret != BIO_OK) {
+                results[i] = ret;
+            }
+            if (pending.fetch_sub(1) == 1) {
+                sem_post(&sem);
+            }
+        };
+        if (!mBatchGetExecutor->Execute(task)) {
+            LOG_ERROR("Execute batch get lookup failed, batch num:" << req->count << ", index:" << i << ".");
+            result = BIO_INNER_RETRY;
+            uint32_t unsubmittedNum = req->count - submittedNum;
+            if (pending.fetch_sub(unsubmittedNum) == unsubmittedNum) {
+                sem_post(&sem);
+            }
+            break;
+        }
+        ++submittedNum;
+    }
+    int waitRet = WaitSemaphore(sem);
+    sem_destroy(&sem);
+    if (UNLIKELY(waitRet != 0)) {
+        LOG_ERROR("Wait batch get lookup failed, errno:" << waitRet << ".");
+        return BIO_INNER_ERR;
+    }
+    return result;
+}
+
 int32_t MirrorServer::MirrorServerBatchGet(ServiceContext &ctx, BatchGetRequest *req)
 {
     if (UNLIKELY(req->count == 0 || req->count > NET_BATCH_GET_MAX_COUNT)) {
@@ -1825,54 +2346,16 @@ int32_t MirrorServer::MirrorServerBatchGet(ServiceContext &ctx, BatchGetRequest 
         return BIO_OK;
     }
 
-    sem_t sem;
-    if (sem_init(&sem, 0, 0) != 0) {
-        LOG_ERROR("Init batch get semaphore failed, errno:" << errno << ".");
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
-        return BIO_OK;
-    }
     std::vector<uint64_t> realLengths(req->count);
     std::vector<int32_t> results(req->count, BIO_OK);
-    std::atomic<uint32_t> pending(req->count);
-    uint32_t submittedNum = 0;
-    BResult ret = BIO_OK;
-    BdmCopyBatchContext bdmBatch;
+    BdmCopyBatchContext bdmBatch(mBatchGetExecutor);
 
     BIO_TRACE_START(MIRROR_TRACE_BATCH_GET);
     BIO_TRACE_START(MIRROR_TRACE_BATCH_GET_LOOKUP);
-    for (uint32_t i = 0; i < req->count; i++) {
-        uint32_t index = i;
-        std::function<void()> func = [&, index]() {
-            BIO_TRACE_START(MIRROR_TRACE_BATCH_SINGLE_GET);
-            BResult keyRet =
-                BatchSingleGet(req->keysInfo[index], realLengths[index], req, &bdmBatch, &results[index]);
-            if (keyRet != BIO_OK) {
-                results[index] = keyRet;
-            }
-            BIO_TRACE_END(MIRROR_TRACE_BATCH_SINGLE_GET, keyRet);
-            if (pending.fetch_sub(1) == 1) {
-                sem_post(&sem);
-            }
-        };
-
-        if (!mBatchGetExecutor->Execute(func)) {
-            LOG_ERROR("Execute batch get data from shm failed, batch num: " << req->count << " i:" << i);
-            ret = BIO_INNER_RETRY;
-            uint32_t unsubmittedNum = req->count - submittedNum;
-            if (pending.fetch_sub(unsubmittedNum) == unsubmittedNum) {
-                sem_post(&sem);
-            }
-            break;
-        }
-        submittedNum++;
-    }
-    int waitRet = WaitSemaphore(sem);
-    if (UNLIKELY(waitRet != 0)) {
-        LOG_ERROR("Wait batch get task failed, errno:" << waitRet << ".");
-        ret = BIO_INNER_ERR;
-    }
+    BResult ret = BioServer::Instance()->IsStandaloneMode() ?
+        PrepareBatchGetEntries(req, realLengths, results, bdmBatch) :
+        DispatchBatchGetEntries(req, realLengths, results, bdmBatch);
     BIO_TRACE_END(MIRROR_TRACE_BATCH_GET_LOOKUP, ret);
-    sem_destroy(&sem);
     BIO_TRACE_START(MIRROR_TRACE_BATCH_GET_FINAL_FLUSH);
     BResult batchRet = bdmBatch.Submit();
     BIO_TRACE_END(MIRROR_TRACE_BATCH_GET_FINAL_FLUSH, batchRet);
@@ -1904,59 +2387,21 @@ int32_t MirrorServer::MirrorServerBatchGet(ServiceContext &ctx, BatchGetRequest 
 
 BResult MirrorServer::BatchGetConvergence(BatchGetRequest &req, BatchGetResponse &rsp)
 {
-    rsp = {};
+    rsp.count = 0;
     if (UNLIKELY(req.count == 0 || req.count > STANDALONE_BATCH_GET_MAX_COUNT)) {
         LOG_ERROR("Invalid convergence batch get count:" << req.count << ".");
         return BIO_INVALID_PARAM;
     }
-
-    sem_t sem;
-    if (sem_init(&sem, 0, 0) != 0) {
-        LOG_ERROR("Init convergence batch get semaphore failed, errno:" << errno << ".");
-        return BIO_INNER_ERR;
+    if (!BioServer::Instance()->IsStandaloneMode()) {
+        return BatchGetConvergenceParallel(req, rsp);
     }
-    std::vector<uint64_t> realLengths(req.count);
-    std::vector<int32_t> results(req.count, BIO_OK);
-    std::atomic<uint32_t> pending(req.count);
-    uint32_t submittedNum = 0;
-    BResult ret = BIO_OK;
-    BdmCopyBatchContext bdmBatch;
+
+    BdmCopyBatchContext bdmBatch(mBatchGetExecutor);
 
     BIO_TRACE_START(MIRROR_TRACE_BATCH_GET_CONVERGENCE);
     BIO_TRACE_START(MIRROR_TRACE_BATCH_GET_LOOKUP);
-    for (uint32_t i = 0; i < req.count; i++) {
-        uint32_t index = i;
-        std::function<void()> func = [&, index]() {
-            BIO_TRACE_START(MIRROR_TRACE_BATCH_SINGLE_GET_CONVERGENCE);
-            BResult keyRet =
-                BatchSingleGet(req.keysInfo[index], realLengths[index], &req, &bdmBatch, &results[index]);
-            if (keyRet != BIO_OK) {
-                results[index] = keyRet;
-            }
-            BIO_TRACE_END(MIRROR_TRACE_BATCH_SINGLE_GET_CONVERGENCE, keyRet);
-            if (pending.fetch_sub(1) == 1) {
-                sem_post(&sem);
-            }
-        };
-
-        if (!mBatchGetExecutor->Execute(func)) {
-            LOG_ERROR("Execute batch get data from shm failed, batch num: " << req.count << " i:" << i);
-            ret = BIO_INNER_RETRY;
-            uint32_t unsubmittedNum = req.count - submittedNum;
-            if (pending.fetch_sub(unsubmittedNum) == unsubmittedNum) {
-                sem_post(&sem);
-            }
-            break;
-        }
-        submittedNum++;
-    }
-    int waitRet = WaitSemaphore(sem);
-    if (UNLIKELY(waitRet != 0)) {
-        LOG_ERROR("Wait convergence batch get task failed, errno:" << waitRet << ".");
-        ret = BIO_INNER_ERR;
-    }
+    BResult ret = PrepareStandaloneBatchGetEntries(req, bdmBatch);
     BIO_TRACE_END(MIRROR_TRACE_BATCH_GET_LOOKUP, ret);
-    sem_destroy(&sem);
     BIO_TRACE_START(MIRROR_TRACE_BATCH_GET_FINAL_FLUSH);
     BResult batchRet = bdmBatch.Submit();
     BIO_TRACE_END(MIRROR_TRACE_BATCH_GET_FINAL_FLUSH, batchRet);
@@ -1971,6 +2416,36 @@ BResult MirrorServer::BatchGetConvergence(BatchGetRequest &req, BatchGetResponse
     rsp.nodeId = GetLocalVNodeId();
     rsp.count = req.count;
     for (uint32_t i = 0; i < req.count; i++) {
+        rsp.results[i] = *req.keysInfo[i].result;
+        rsp.realLengths[i] = *req.keysInfo[i].realLength;
+    }
+    return BIO_OK;
+}
+
+BResult MirrorServer::BatchGetConvergenceParallel(BatchGetRequest &req, BatchGetResponse &rsp)
+{
+    std::vector<uint64_t> realLengths(req.count);
+    std::vector<int32_t> results(req.count, BIO_OK);
+    BdmCopyBatchContext bdmBatch(mBatchGetExecutor);
+
+    BIO_TRACE_START(MIRROR_TRACE_BATCH_GET_CONVERGENCE);
+    BIO_TRACE_START(MIRROR_TRACE_BATCH_GET_LOOKUP);
+    BResult ret = DispatchBatchGetEntries(&req, realLengths, results, bdmBatch);
+    BIO_TRACE_END(MIRROR_TRACE_BATCH_GET_LOOKUP, ret);
+    BIO_TRACE_START(MIRROR_TRACE_BATCH_GET_FINAL_FLUSH);
+    BResult batchRet = bdmBatch.Submit();
+    BIO_TRACE_END(MIRROR_TRACE_BATCH_GET_FINAL_FLUSH, batchRet);
+    if (batchRet != BIO_OK) {
+        LOG_ERROR("Submit convergence batch get bdm reads failed, ret:" << batchRet << ".");
+    }
+    BIO_TRACE_END(MIRROR_TRACE_BATCH_GET_CONVERGENCE, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+
+    rsp.nodeId = GetLocalVNodeId();
+    rsp.count = req.count;
+    for (uint32_t i = 0; i < req.count; ++i) {
         rsp.results[i] = results[i];
         rsp.realLengths[i] = realLengths[i];
     }
@@ -2783,7 +3258,7 @@ int32_t MirrorServer::MirrorServerGetUnderFsConfig(ServiceContext &ctx, GetUnder
         return BIO_OK;
     }
 
-    GetUnderFsConfigResponse rsp;
+    GetUnderFsConfigResponse rsp{};
     BioConfig::UnderFsConfig config = UnderFsConfig::Instance()->GetUnderFsConfig();
 
     int32_t ret = BIO_INNER_ERR;
@@ -2808,6 +3283,13 @@ int32_t MirrorServer::MirrorServerGetUnderFsConfig(ServiceContext &ctx, GetUnder
             break;
         }
         rsp.hdfsConfig.workingPath[config.hdfsConfig.workingPath.size()] = '\0';
+
+        ret = memcpy_s(rsp.localConfig.rootPath, KEY_MAX_SIZE - 1, config.localConfig.rootPath.c_str(),
+            config.localConfig.rootPath.size());
+        if (UNLIKELY(ret != BIO_OK)) {
+            break;
+        }
+        rsp.localConfig.rootPath[config.localConfig.rootPath.size()] = '\0';
 
         ret = memcpy_s(rsp.cephConfig.user, KEY_MAX_SIZE - 1, config.cephConfig.user.c_str(),
                        config.cephConfig.user.size());

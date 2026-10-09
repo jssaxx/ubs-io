@@ -27,13 +27,13 @@ extern "C" {
 #define BDM_ALIGN_SIZE (2097152UL)
 #define BDM_RESTORE_META_SIZE (2097152UL)
 #define BDM_INVALID_ID (1024UL)
-/* Low 16 bits store standalone mode and device id. Virtual layout uses the high 16 bits. */
+/* Low 16 bits store standalone mode and slot index. Virtual layout uses the high 16 bits. */
 #define BDM_DISK_HEAD_STANDALONE_MAGIC (0x0000BD00U)
 #define BDM_DISK_HEAD_MODE_MASK (0x0000FF00U)
-#define BDM_DISK_HEAD_DEVICE_ID_MASK (0x000000FFU)
-#define BDM_DISK_HEAD_DEVICE_COUNT_MASK (0x00FF0000U)
+#define BDM_DISK_HEAD_SLOT_INDEX_MASK (0x000000FFU)
+#define BDM_DISK_HEAD_SLOT_COUNT_MASK (0x00FF0000U)
 #define BDM_DISK_HEAD_LAYOUT_VERSION_MASK (0xFF000000U)
-#define BDM_DISK_HEAD_DEVICE_COUNT_SHIFT (16U)
+#define BDM_DISK_HEAD_SLOT_COUNT_SHIFT (16U)
 #define BDM_DISK_HEAD_LAYOUT_VERSION_SHIFT (24U)
 #define BDM_DISK_HEAD_VIRTUAL_LAYOUT_VERSION (1U)
 
@@ -86,6 +86,7 @@ typedef enum {
 #define BDM_IO_CTX_RES_LEN (256UL)
 
 typedef void (*BdmIoCb)(void *ctx, int32_t ret);
+typedef int32_t (*BdmDiskFaultHandler)(uint16_t diskId, void *context);
 
 typedef struct {
     BdmIoCb cb;
@@ -121,6 +122,8 @@ int32_t BdmCreate(BdmCreatePara *createPara, uint32_t *bdmId);
 int32_t BdmDestroy(uint32_t bdmId);
 
 int32_t BdmAlloc(uint32_t bdmId, uint64_t bucketId, uint64_t bucketOffset, uint64_t len, uint64_t *chunkId);
+/* Initialize the entire chunk before persisting its new ownership. */
+int32_t BdmAllocZeroed(uint32_t bdmId, uint64_t bucketId, uint64_t bucketOffset, uint64_t len, uint64_t *chunkId);
 
 int32_t BdmFree(uint32_t bdmId, uint64_t len, uint64_t chunkId);
 
@@ -161,12 +164,18 @@ void BdmSetDiskStartupInfo(uint32_t isStandalone, uint32_t deviceId);
 
 int32_t BdmStart(DiskDevices *diskList, uint64_t chunkSize);
 
-int32_t BdmStartVirtual(DiskDevices *diskList, uint64_t chunkSize, uint32_t deviceId, uint32_t deviceCount);
+int32_t BdmStartVirtual(DiskDevices *diskList, uint64_t chunkSize, uint32_t slotIndex, uint32_t slotCount);
 
-int32_t BdmCalculateVirtualRegion(uint64_t capacity, uint64_t chunkSize, uint32_t deviceId, uint32_t deviceCount,
+int32_t BdmCalculateVirtualRegion(uint64_t capacity, uint64_t chunkSize, uint32_t slotIndex, uint32_t slotCount,
     uint64_t *regionOffset, uint64_t *regionLength);
 
 int32_t BdmUpdate(char *diskPath, uint64_t chunkSize, uint64_t diskCap);
+
+int32_t BdmAttachDisk(char *diskPath, uint64_t chunkSize, uint64_t diskCap, uint32_t *diskId,
+    uint64_t *virtualCapacity);
+
+int32_t BdmAttachDiskAt(char *diskPath, uint64_t chunkSize, uint64_t diskCap, uint32_t diskId,
+    uint64_t *diskCapacity);
 
 uint32_t BdmGetDiskCount(void);
 
@@ -175,6 +184,8 @@ int32_t BdmResetDisk(uint16_t diskId);
 BdmDiskState BdmGetDiskStatus(uint32_t bdmId);
 
 void BdmSetDiskUsedStatus(uint32_t bdmId, uint32_t status);
+
+void BdmRegisterDiskFaultHandler(BdmDiskFaultHandler handler, void *context);
 
 #ifdef __cplusplus
 }

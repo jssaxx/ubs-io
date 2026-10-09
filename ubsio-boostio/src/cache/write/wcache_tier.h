@@ -30,6 +30,10 @@ struct WFlowSliceMeta {
     uint64_t hasEvict;
 };
 
+struct WFlowCompactSliceMeta {
+    char key[NO_256];
+};
+
 enum WCacheTierType {
     WCACHE_MEMORY,
     WCACHE_DISK,
@@ -43,7 +47,15 @@ struct WFlowMetaDataSlice {
 
 class WFlowTruncateCursor {
 public:
+    explicit WFlowTruncateCursor(uint64_t preTruncateSliceIndex = 0)
+        : mPreTruncateSliceIndex(preTruncateSliceIndex)
+    {}
+
     WCacheSlicePtr GetTruncateSlice(const WCacheSlicePtr &slice);
+
+    WCacheSlicePtr GetTruncateSlice(const WCacheSlicePtr &slice, uint64_t &preTruncateSliceIndex);
+
+    void MarkEvictedIndex(uint64_t indexInFlow);
 
     uint64_t GetPreTruncateSliceIndex();
 
@@ -62,6 +74,7 @@ private:
 
     std::mutex mEvictedSliceListLock;
     std::set<WCacheSlicePtr, WCacheSliceCmp> mEvictedSlices;
+    std::set<uint64_t> mEvictedIndexes;
     DEFINE_REF_COUNT_VARIABLE;
 };
 using WFlowTruncateCursorPtr = Ref<WFlowTruncateCursor>;
@@ -69,7 +82,7 @@ using WFlowTruncateCursorPtr = Ref<WFlowTruncateCursor>;
 class WCacheTier {
 public:
 
-    BResult Init(WCacheTierType cacheTier, uint64_t flowId, uint16_t diskId);
+    BResult Init(WCacheTierType cacheTier, uint64_t flowId, uint16_t diskId, bool useCompactMeta = false);
 
     BResult Write(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader,
         WCacheSliceRefPtr &destSliceRef);
@@ -82,7 +95,7 @@ public:
 
     BResult GetMetaSlice(uint64_t indexInFlow, WCacheSlicePtr &slice);
 
-    BResult GetDataSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice);
+    BResult GetDataSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice, bool existingOnly = false);
 
     BResult GetMetaDataSlice(uint64_t indexInFlow, uint64_t offset, uint64_t length, WFlowMetaDataSlice &metaDataSlice);
 
@@ -100,7 +113,11 @@ public:
 
     void Destroy();
 
+    BResult ReleaseFaultedResources();
+
     BResult Evict(const WCacheSlicePtr &slice);
+
+    void MarkEvictedIndex(uint64_t indexInFlow);
 
     bool IsEmptyEvictSliceQueue();
 
@@ -118,9 +135,10 @@ public:
 
 private:
     BResult ToFlowType(WCacheTierType tier, FlowType &flowType);
-    static BResult GetSlice(const FlowPtr &flow, const SliceKey &sliceKey, WCacheSlicePtr &slice);
+    static BResult GetSlice(const FlowPtr &flow, const SliceKey &sliceKey, WCacheSlicePtr &slice,
+        bool existingOnly = false);
     static BResult GetSlice(const FlowPtr &flow, uint64_t offset, uint64_t index, uint64_t length,
-        WCacheSlicePtr &slice);
+        WCacheSlicePtr &slice, bool existingOnly = false);
 
 private:
     WCacheTierType type;
@@ -132,6 +150,8 @@ private:
 
     SpinLock mEvictSliceQueueLock;
     std::list<WCacheSliceRefPtr> mEvictSliceQueue;
+    uint64_t mMetaEntrySize{ sizeof(WFlowSliceMeta) };
+    bool mUseCompactMeta{ false };
 
     DEFINE_REF_COUNT_VARIABLE;
 };

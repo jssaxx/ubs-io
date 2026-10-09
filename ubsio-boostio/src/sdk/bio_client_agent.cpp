@@ -61,21 +61,6 @@ BResult BioClientAgent::Initialize(WorkerMode mode)
                 return BIO_INNER_ERR;
             }
         }
-        if (mMode == STANDALONE) {
-            StandaloneDeviceInfo standaloneDeviceInfo;
-            {
-                std::lock_guard<std::mutex> lock(mStandaloneDeviceLock);
-                standaloneDeviceInfo = mStandaloneDeviceInfo;
-            }
-            if (!standaloneDeviceInfo.configured) {
-                CLIENT_LOG_ERROR("Standalone device info is not set. Call BioSetStandaloneDevice before "
-                    "BioInitialize(STANDALONE).");
-                UnloadServerLibrary();
-                return BIO_INVALID_PARAM;
-            }
-            setStandaloneDeviceInfoOp(standaloneDeviceInfo.deviceId);
-        }
-
         // Start the server inside the current process. STANDALONE selects a
         // shorter server module chain; CONVERGENCE keeps the original one.
         int32_t ret = BIO_INNER_ERR;
@@ -91,18 +76,6 @@ BResult BioClientAgent::Initialize(WorkerMode mode)
     return BIO_OK;
 }
 
-void BioClientAgent::SetStandaloneDevice(uint32_t deviceId)
-{
-    if (handler != nullptr) {
-        CLIENT_LOG_ERROR("BioSetStandaloneDevice must be called before BioInitialize.");
-        return;
-    }
-
-    std::lock_guard<std::mutex> lock(mStandaloneDeviceLock);
-    mStandaloneDeviceInfo.configured = true;
-    mStandaloneDeviceInfo.deviceId = deviceId;
-}
-
 BResult BioClientAgent::RegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)
 {
     std::lock_guard<std::mutex> lock(mMetaEventCallbackLock);
@@ -115,12 +88,12 @@ BResult BioClientAgent::RegisterMetaEventCallback(UbsioMetaEventCallbackC callba
     return static_cast<BResult>(registerMetaEventCallbackOp(callback, context));
 }
 
-BResult BioClientAgent::ScanKey(const UbsioKvKeyInfo **items, uint64_t *count)
+BResult BioClientAgent::ScanKey(const UbsioKvKeyInfo **items, uint64_t *count, bool *hasMore)
 {
     if (!IsDirectMode() || scanKeyOp == nullptr) {
         return BIO_NOT_READY;
     }
-    return static_cast<BResult>(scanKeyOp(items, count));
+    return static_cast<BResult>(scanKeyOp(items, count, hasMore));
 }
 
 void BioClientAgent::Exit()
@@ -129,7 +102,6 @@ void BioClientAgent::Exit()
         exitOp();
     }
     UnloadServerLibrary();
-    ResetStandaloneDeviceInfo();
 }
 
 void BioClientAgent::UnloadServerLibrary()
@@ -145,7 +117,6 @@ void BioClientAgent::ResetLoadedOperations()
     handler = nullptr;
     startOp = nullptr;
     standaloneStartOp = nullptr;
-    setStandaloneDeviceInfoOp = nullptr;
     exitOp = nullptr;
     getRuntimeConfigOp = nullptr;
     getCrcFlag = nullptr;
@@ -171,9 +142,11 @@ void BioClientAgent::ResetLoadedOperations()
     getOp = nullptr;
     batchGetOp = nullptr;
     batchExistOp = nullptr;
+    batchExistStandaloneOp = nullptr;
     deleteOp = nullptr;
     addDiskOp = nullptr;
     statOp = nullptr;
+    batchStatOp = nullptr;
     listOp = nullptr;
     loadOp = nullptr;
     cacheHitOp = nullptr;
@@ -181,12 +154,6 @@ void BioClientAgent::ResetLoadedOperations()
     getTracePointsOp = nullptr;
     registerMetaEventCallbackOp = nullptr;
     scanKeyOp = nullptr;
-}
-
-void BioClientAgent::ResetStandaloneDeviceInfo()
-{
-    std::lock_guard<std::mutex> lock(mStandaloneDeviceLock);
-    mStandaloneDeviceInfo = {};
 }
 
 BResult BioClientAgent::InitUpgradeOperation()
@@ -207,10 +174,6 @@ BResult BioClientAgent::InitOperation()
     }
     if ((standaloneStartOp = reinterpret_cast<BioServerStartFuncPtr>(LoadFunction("BioServerStandaloneInit"))) ==
         nullptr) {
-        return BIO_INNER_ERR;
-    }
-    if ((setStandaloneDeviceInfoOp = reinterpret_cast<SetStandaloneDeviceInfoFuncPtr>(
-        LoadFunction("SetStandaloneDeviceInfo"))) == nullptr) {
         return BIO_INNER_ERR;
     }
     if ((exitOp = reinterpret_cast<BioServerExitFuncPtr>(LoadFunction("BioServerExit"))) == nullptr) {
@@ -286,6 +249,10 @@ BResult BioClientAgent::InitOperation()
     if ((batchExistOp = reinterpret_cast<BatchExistFuncPtr>(LoadFunction("BatchExist"))) == nullptr) {
         return BIO_INNER_ERR;
     }
+    if ((batchExistStandaloneOp = reinterpret_cast<BatchExistStandaloneFuncPtr>(
+        LoadFunction("BatchExistStandalone"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
     if ((deleteOp = reinterpret_cast<DeleteFuncPtr>(LoadFunction("Delete"))) == nullptr) {
         return BIO_INNER_ERR;
     }
@@ -296,6 +263,9 @@ BResult BioClientAgent::InitOperation()
         return BIO_INNER_ERR;
     }
     if ((statOp = reinterpret_cast<StatFuncPtr>(LoadFunction("Stat"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
+    if ((batchStatOp = reinterpret_cast<BatchStatFuncPtr>(LoadFunction("BatchStat"))) == nullptr) {
         return BIO_INNER_ERR;
     }
     if ((loadOp = reinterpret_cast<LoadFuncPtr>(LoadFunction("Load"))) == nullptr) {
@@ -533,10 +503,10 @@ BResult BioClientAgent::GetClusterNodeView(uint64_t &curNodeTimes,
 BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtInfo> &ptView)
 {
     BResult ret = BIO_OK;
-    int32_t flag = 0;
     uint32_t progressBar = 0;
     static uint32_t maxRetryCnt = NO_1024;
     uint32_t retryCnt = 0;
+    bool hasMore = true;
     do {
         QueryPtViewRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() }, progressBar };
         QueryPtViewResponse rsp;
@@ -550,10 +520,6 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
             ptView.clear();
             return ret;
         }
-        if (rsp.flag == 0) { // 此处没有获取到视图表示已经完成, 直接退出循环
-            break;
-        }
-
         if (rsp.num > PT_SIZE || rsp.copyNum > PT_COPY_MAX_SIZE) {
             ptView.clear();
             return BIO_INNER_RETRY;
@@ -567,13 +533,14 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
             ptView.insert(std::make_pair(rsp.desc[i].ptId, CmPtInfo(rsp.desc[i].version, rsp.desc[i].ptId,
                 static_cast<CmPtState>(rsp.desc[i].state), rsp.desc[i].masterNodeId, rsp.desc[i].masterDiskId, copys)));
         }
-        flag = rsp.flag;
         progressBar += rsp.num;
         curPtTimes = rsp.curPtTimes;
-        if ((retryCnt++) > maxRetryCnt) { // 限制最大1024次分段获取视图, 因为在1024次内必定可以获取完整的分区视图.
-            break;
+        hasMore = rsp.flag != 0;
+        if (hasMore && (retryCnt++) > maxRetryCnt) { // 限制最大1024次分段获取视图, 防止服务端游标异常时无限循环.
+            ptView.clear();
+            return BIO_INNER_RETRY;
         }
-    } while (flag == 1);
+    } while (hasMore);
 
     return BIO_OK;
 }
@@ -947,10 +914,8 @@ void BioClientAgent::BatchGetLocal(BatchGetRequest *req,  uint32_t reqLen, Callb
         return;
     }
     if (mMode == STANDALONE) {
-        BatchGetResponse rsp {};
-        BIO_TRACE_START(SDK_TRACE_BATCH_GET_LOCAL_SYNC);
-        auto ret = batchGetOp(req, &rsp);
-        BIO_TRACE_END(SDK_TRACE_BATCH_GET_LOCAL_SYNC, ret);
+        BatchGetResponse rsp;
+        BResult ret = BatchGetLocalSync(req, rsp);
         callback.cb(callback.cbCtx, &rsp, sizeof(BatchGetResponse), ret);
     } else {
         BIO_TRACE_START(SDK_TRACE_BATCH_GET_LOCAL_SEND);
@@ -958,6 +923,19 @@ void BioClientAgent::BatchGetLocal(BatchGetRequest *req,  uint32_t reqLen, Callb
                                                      static_cast<void *>(req), reqLen, callback);
         BIO_TRACE_END(SDK_TRACE_BATCH_GET_LOCAL_SEND, BIO_OK);
     }
+}
+
+BResult BioClientAgent::BatchGetLocalSync(BatchGetRequest *req, BatchGetResponse &rsp)
+{
+    if (UNLIKELY(mMode != STANDALONE || req == nullptr)) {
+        CLIENT_LOG_ERROR("Invalid standalone batch get request.");
+        return BIO_INVALID_PARAM;
+    }
+
+    BIO_TRACE_START(SDK_TRACE_BATCH_GET_LOCAL_SYNC);
+    BResult ret = static_cast<BResult>(batchGetOp(req, &rsp));
+    BIO_TRACE_END(SDK_TRACE_BATCH_GET_LOCAL_SYNC, ret);
+    return ret;
 }
 
 BResult BioClientAgent::GetLocal(GetRequest &req, char *value, Callback callback)
@@ -1115,6 +1093,26 @@ BResult BioClientAgent::StatLocal(StatRequest &req, ObjStat &objInfo)
     } else {
         return SendStatRequestLocal(req, objInfo);
     }
+}
+
+BResult BioClientAgent::BatchStatLocalSync(const char **keys, ObjLocation *locations, uint32_t count,
+    BatchObjStat *stats)
+{
+    if (UNLIKELY(mMode != STANDALONE || batchStatOp == nullptr)) {
+        CLIENT_LOG_ERROR("Batch stat only supports standalone direct mode.");
+        return BIO_NOT_READY;
+    }
+    return static_cast<BResult>(batchStatOp(keys, locations, count, stats));
+}
+
+BResult BioClientAgent::BatchExistStandaloneLocalSync(const char **keys, ObjLocation *locations, uint32_t count,
+    bool *results)
+{
+    if (UNLIKELY(mMode != STANDALONE || batchExistStandaloneOp == nullptr)) {
+        CLIENT_LOG_ERROR("Batch exist only supports standalone direct mode.");
+        return BIO_NOT_READY;
+    }
+    return static_cast<BResult>(batchExistStandaloneOp(keys, locations, count, results));
 }
 
 void BioClientAgent::BatchExistLocal(uint32_t reqLen, BatchExistRequest *req, Callback &callback)

@@ -106,13 +106,14 @@ private:
 };
 
 enum SliceState : uint8_t {
+    SLICE_PENDING = 0, // WCache data exists, but its index has not been published.
     SLICE_VALID = 1,
     SLICE_INVALID = 2,
 };
 
 template <typename S> class SliceRef {
 public:
-    explicit SliceRef(const S &slice) : mSlice(slice), mRef(0) {}
+    explicit SliceRef(const S &slice, SliceState state = SLICE_VALID) : mSlice(slice), mRef(0), mState(state) {}
 
     inline bool Aquire()
     {

@@ -35,6 +35,8 @@ void HTracerDelayEndC(int32_t tpId, uint64_t startNs, int32_t retCode);
 #define BDM_DISK_TRACE_READ_SYNC_C HTRACER_C_TRACE_ID(0, 201)
 #define BDM_DISK_TRACE_WRITE_ASYNC_C HTRACER_C_TRACE_ID(0, 202)
 #define BDM_DISK_TRACE_READ_ASYNC_C HTRACER_C_TRACE_ID(0, 203)
+#define BDM_DISK_TRACE_READ_QUEUE_WAIT_C HTRACER_C_TRACE_ID(1, 204)
+#define BDM_DISK_TRACE_READ_PREAD_C HTRACER_C_TRACE_ID(1, 205)
 
 #define HTRACER_C_DELAY_BEGIN(tpId, tpName, startVar) \
     uint64_t startVar = 0;                            \

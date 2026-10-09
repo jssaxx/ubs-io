@@ -32,7 +32,7 @@ public:
      */
     template <int32_t FAILURE_RET> static int32_t InitTickUs()
     {
-        /* get frequ */
+        /* get frequency */
         uint64_t tmpFreq = 0;
         __asm__ volatile("mrs %0, cntfrq_el0" : "=r"(tmpFreq));
         auto freq = static_cast<uint32_t>(tmpFreq);
@@ -221,14 +221,14 @@ private:
 
     static bool NN_Stof(const std::string &str, float &value)
     {
-        constexpr float EPSINON = 0.000001;
+        constexpr float EPSILON = 0.000001;
         char *remain = nullptr;
         errno = 0;
         value = std::strtof(str.c_str(), &remain);
         if (remain == nullptr || strlen(remain) > 0 ||
-            ((value - HUGE_VALF) >= -EPSINON && (value - HUGE_VALF) <= EPSINON && errno == ERANGE)) {
+            ((value - HUGE_VALF) >= -EPSILON && (value - HUGE_VALF) <= EPSILON && errno == ERANGE)) {
             return false;
-        } else if ((value >= -EPSINON && value <= EPSINON) && (str != "0.0")) {
+        } else if ((value >= -EPSILON && value <= EPSILON) && (str != "0.0")) {
             return false;
         }
         return true;

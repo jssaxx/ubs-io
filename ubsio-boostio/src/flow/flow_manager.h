@@ -61,6 +61,9 @@ public:
 
     BResult DestroyObject(FlowType type, uint64_t flowId);
 
+    // Detach a failed-disk Flow without issuing media free operations.
+    BResult AbandonObject(uint64_t flowId);
+
     BResult GetAllObject(FlowType type, std::map<uint64_t, FlowPtr> &objManager);
 
     BResult PreLoadObject(FlowType type, std::function<void(void)> handle);

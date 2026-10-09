@@ -26,6 +26,8 @@
 #include "mirror_server_crb.h"
 #include "net_engine.h"
 #include "standalone_memory_pool.h"
+#include "standalone_slot_lease.h"
+#include "standalone_view.h"
 
 namespace ock {
 namespace bio {
@@ -293,6 +295,11 @@ public:
         return mStandaloneMode;
     }
 
+    inline bool IsStandaloneDiskFault(uint16_t diskId) const
+    {
+        return mStandaloneMode && mStandaloneView.IsDiskFault(diskId);
+    }
+
     // Report service update state.
     // Cluster mode reports to CM; standalone does not support upgrade.
     inline BResult ReportServiceState(bool isUpgrade)
@@ -433,7 +440,13 @@ public:
 
     BResult HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeInfos);
 
-    BResult BioBdmUpdate(std::string diskPath);
+    BResult BioAttachDisk(std::string diskPath);
+
+    BResult BioAttachDisk(std::string diskPath, uint32_t &diskId, uint64_t &diskCapacity);
+
+    BResult AddStandaloneDisk(std::string &diskPath);
+
+    BResult AddStandaloneOldDisk(const std::string &diskPath, uint16_t diskId);
 
     BResult BioDiskReset(uint16_t diskId);
 
@@ -451,7 +464,8 @@ protected:
     void BioTraceExit();
     BResult BioUnderFsInit();
     void BioUnderFsExit();
-    BResult BioStandaloneDeviceIdGatherInit();
+    BResult BioStandaloneSlotLeaseInit();
+    void BioStandaloneSlotLeaseExit();
     BResult BioBdmInit();
     void BioBdmExit();
     BResult BioNetInit();
@@ -462,6 +476,7 @@ protected:
     void BioCmExit();
     // Build and install the local one-node NodeView/PtView used without CM.
     BResult BioStandaloneViewInit();
+    void BioStandaloneViewExit();
     BResult BioMirrorServerInit();
     void BioMirrorServerExit();
     BResult BioCacheInit();
@@ -487,6 +502,7 @@ private:
     BResult ProcessService(std::vector<ModuleDesc> modules);
     void WaitStartReady();
     BResult StartExpireChecker();
+    BResult HandleStandaloneDiskFault(uint16_t diskId);
     BResult StartRpcService(const NetOptions &opt);
     BResult StartIpcService(const NetOptions &opt);
     void ReConnect(uint32_t peerId);
@@ -498,6 +514,8 @@ private:
     BioConfigPtr mConfig = nullptr;
     NetEnginePtr mNetEngine = nullptr;
     StandaloneMemoryPoolPtr mStandaloneMemPool = nullptr;
+    StandaloneView mStandaloneView;
+    StandaloneSlotLease mStandaloneSlotLease;
     CmPtr mCm = nullptr;
     MirrorServerPtr mMirror = nullptr;
     MirrorServerCrbPtr mMirrorCrb = nullptr;
@@ -507,6 +525,7 @@ private:
     std::atomic<bool> mCrbProcessing{false};
     std::mutex mNodeViewMutex;
     std::mutex mPtViewMutex;
+    std::mutex mStandaloneViewUpdateMutex;
     uint64_t mCurNodeTimes = 0;
     uint64_t mCurPtTimes = 0;
     void *mServerDiagnoseHandle = nullptr;

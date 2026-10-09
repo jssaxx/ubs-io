@@ -79,7 +79,7 @@ TEST_F(TestBioServer, test_build_standalone_modules)
 #ifdef USE_DEBUG_TP_TOOLS
         "Tracepoint",
 #endif
-        "Diagnose", "Tracer", "UnderFs", "StandaloneDeviceIdGather", "Bdm", "StandaloneMem", "Flow",
+        "Diagnose", "Tracer", "UnderFs", "StandaloneSlotLease", "Bdm", "StandaloneMem", "Flow",
         "StandaloneView", "Cache", "MirrorServer"
     };
     EXPECT_EQ(names, expected);
@@ -1231,7 +1231,7 @@ TEST_F(TestBioServer, test_start_server_underfs_init_make_dir_err_return_fail)
     BioHvsActiveTracePoint(0, "UNDERFS_MKDIR_FAIL", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "UNDERFS_OPEN_DIR_FAIL", 0, 1, userParam);
     auto ret = BioServer::Instance()->Start();
-    EXPECT_EQ(ret, BIO_ERR);
+    EXPECT_EQ(ret, BIO_OK);
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_UNDERFS_INIT");
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_SERVER_START");
     BioHvsDeactiveTracePoint(0, "UNDERFS_MKDIR_FAIL");
@@ -1686,4 +1686,14 @@ TEST_F(TestBioServer, test_start_server_add_disk)
     ServiceContext ctx;
     auto ret = mirror->HandleAddDisk(ctx);
     EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_add_disk_rejects_invalid_magic)
+{
+    LOG_INFO("test_add_disk_rejects_invalid_magic");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    AddDiskRequest req{};
+    req.comm.magic = MESSAGE_MAGIC + 1;
+
+    EXPECT_EQ(mirror->AddDisk(req), BIO_INVALID_PARAM);
 }

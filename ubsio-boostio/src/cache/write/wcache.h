@@ -30,23 +30,34 @@ namespace ock {
 namespace bio {
 class WCache;
 using WCachePtr = Ref<WCache>;
+enum class WCacheAccessState : uint8_t {
+    READ_WRITE = 0,
+    READ_ONLY,
+};
+
 class WCache {
 public:
     WCache(uint64_t procId, uint64_t flowId, uint16_t ptId, uint64_t ptv, uint16_t diskId, bool isDegrade)
         : mProcId(procId), mFlowId(flowId), mPtId(ptId), mPtv(ptv), mDiskId(diskId), mIsDegrade(isDegrade)
     {}
+    ~WCache();
 
-    using EvictCallback = std::function<BResult(uint16_t ptId, const Key &key, WCacheSliceRefPtr sliceRef,
+    using RecordMetaDeleteEventCallback = std::function<BResult(uint16_t ptId, const Key &key,
+        WCacheSliceRefPtr sliceRef,
         const UbsIoMetaEventBatchPtr &batch)>;
     using RetryCallback = std::function<void(uint64_t flowId, WCacheTierType cacheTier)>;
-    using FlushMetaEventCallback = std::function<void(const UbsIoMetaEventBatchPtr &batch)>;
+    using ScheduleEvictCallback = std::function<void(WCacheTierType cacheTier)>;
+    using SubmitMetaEventBatchCallback = std::function<void(const UbsIoMetaEventBatchPtr &batch)>;
+    using PublishIndexCallback = std::function<BResult(uint16_t, const Key &, const WCacheSliceRefPtr &)>;
 
     BResult Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], const RCacheManagerPtr rCacheManager,
         bool isRecover);
     void Exit();
 
     void RegOp(GetLocDiskStatus getLocDiskStatus, CheckLocRole locRole, const GetGlobEvictOffset evictOffset,
-        EvictCallback evictCallback, const RetryCallback retryCallback, FlushMetaEventCallback flushMetaEventCallback);
+        RecordMetaDeleteEventCallback recordMetaDeleteEventCallback, const RetryCallback retryCallback,
+        SubmitMetaEventBatchCallback submitMetaEventBatchCallback,
+        ScheduleEvictCallback scheduleEvictCallback = nullptr, PublishIndexCallback publishIndexCallback = nullptr);
 
     static void GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &diskCap, uint64_t &diskUsed);
 
@@ -84,14 +95,41 @@ public:
         return mIsNormal.load();
     }
 
+    inline void MarkReadOnly()
+    {
+        mAccessState.store(WCacheAccessState::READ_ONLY);
+    }
+
+    inline bool IsWritable() const
+    {
+        return mAccessState.load() == WCacheAccessState::READ_WRITE;
+    }
+
     inline bool IsIoFinish() const
     {
         return mOnFlyRef == 0;
     }
 
+    inline bool IsEvictIoFinish() const
+    {
+        for (const auto &ref : mEvictOnFlyRef) {
+            if (ref.load() != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     void StartEvictTask(WCacheTierType type);
 
+    void StartDirectUnderFsEvict();
+
     void RetryEvictTask(WCacheTierType type);
+
+    // The manager admits the batch under its map lock, before fault cleanup can fence this flow.
+    bool BeginEvictBatch(WCacheTierType type);
+    BResult EvictBatch(WCacheTierType type, uint32_t maxCount, uint32_t &evictedCount);
+    bool NeedEvict(WCacheTierType type);
 
     uint64_t GetCapacity(WCacheTierType type);
 
@@ -117,6 +155,11 @@ public:
     inline uint64_t GetPtv() const
     {
         return mPtv;
+    }
+
+    inline uint16_t GetDiskId() const
+    {
+        return mDiskId;
     }
 
     inline void IncFlyIo()
@@ -154,6 +197,16 @@ public:
 
     void Flush(const WCachePtr &self);
     void ExpiredClear(const WCachePtr &self);
+    inline void SetStandaloneFault()
+    {
+        mStandaloneFault.store(true);
+    }
+    inline bool IsStandaloneFault() const
+    {
+        return mStandaloneFault.load();
+    }
+    BResult ForceClearMemoryTier();
+    BResult ReleaseFaultedResources();
     void ProcAndCacheBrokenExpiredClear();
     bool IsEmptyEvict(WCacheTierType type);
 
@@ -163,13 +216,38 @@ public:
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
-    BResult EvictAllMemSliceToDisk();
-    BResult EvictAllMemSliceToDiscard();
-    BResult EvictAllDiskSliceToUnderFs();
+    struct SliceOpGuard {
+        const WCacheSliceRefPtr &sliceRef;
+        ~SliceOpGuard()
+        {
+            sliceRef->OpUnLock();
+        }
+    };
+
+    void CompleteMemToDisk(const WCacheSliceRefPtr &sliceRef, const WCacheSlicePtr &oldSlice,
+        const WCacheSlicePtr &memoryMeta, const WCacheSlicePtr &diskMeta);
+    BResult PublishMemorySlice(const Key &key, const WCacheSliceRefPtr &sliceRef);
+
+    // Legacy fault/retry paths may clear mEvictRef before this admitted batch exits.
+    // Only the batch owner returns its independent in-flight count, on every exit path.
+    struct BatchGuard {
+        std::atomic<bool> &evictRef;
+        std::atomic<uint64_t> &onFlyRef;
+        ~BatchGuard()
+        {
+            evictRef.store(false);
+            onFlyRef.fetch_sub(1);
+        }
+    };
+
+    BResult EvictAllMemSliceToDisk(uint32_t maxCount = NO_MAX_VALUE32, uint32_t *evictedCount = nullptr);
+    BResult EvictAllMemSliceWithoutDisk(uint32_t maxCount = NO_MAX_VALUE32, uint32_t *evictedCount = nullptr);
+    BResult EvictAllDiskSliceToUnderFs(uint32_t maxCount = NO_MAX_VALUE32, uint32_t *evictedCount = nullptr);
 
     BResult EvictFromMemToDisk(WCacheSliceRefPtr sliceRef, bool isFront = false,
         const UbsIoMetaEventBatchPtr &batch = nullptr);
     BResult EvictFromMemToDiscard(WCacheSliceRefPtr sliceRef, const UbsIoMetaEventBatchPtr &batch = nullptr);
+    BResult EvictFromMemToUnderFs(WCacheSliceRefPtr sliceRef, const UbsIoMetaEventBatchPtr &batch = nullptr);
     BResult EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront = false,
         const UbsIoMetaEventBatchPtr &batch = nullptr);
 
@@ -196,10 +274,15 @@ private:
 
     BResult PutSetIoStrategy(RealIoStrategy &ioStrategy, CacheAttr &attr);
 
+    BResult CreateMemoryTombstone(const WCacheSlicePtr &srcSlice);
+    BResult CreateDiskTombstone(const WCacheSlicePtr &slice);
+    BResult EvictMemoryTombstone(WCacheSliceRefPtr &sliceRef);
+
     BResult PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
         WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
 
-    BResult StartEvictSlice(const Key &key, WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
+    BResult StartEvictSlice(WCacheSliceRefPtr &destSliceRef, RealIoStrategy ioStrategy);
+    bool IsOwnDiskNormal();
 
 private:
     uint64_t mProcId;
@@ -213,20 +296,25 @@ private:
     bool mIsDegrade;
     bool mIsMaster{ true };
     std::atomic<bool> mIsNormal { true };
-    bool mIsForced { false };
+    std::atomic<WCacheAccessState> mAccessState { WCacheAccessState::READ_WRITE };
+    std::atomic<bool> mStandaloneFault { false };
+    std::atomic<bool> mIsForced { false };
     bool mUfsEnable{ false };
     bool mHasDiskCache{ true };
+    bool mDirectUnderFs{ false };
 
-    EvictCallback mEvictCallback;
+    RecordMetaDeleteEventCallback mRecordMetaDeleteEventCallback;
     RetryCallback mRetryCallback;
-    FlushMetaEventCallback mFlushMetaEventCallback;
+    SubmitMetaEventBatchCallback mSubmitMetaEventBatchCallback;
+    ScheduleEvictCallback mScheduleEvictCallback;
+    PublishIndexCallback mPublishIndexCallback;
 
     WCacheTierPtr mCacheTiers[MAX_WCACHE_TIER];
 
     CacheSliceOperator mSliceOperator;
 
     ExecutorServicePtr mEvictService[MAX_WCACHE_TIER];
-    std::atomic<bool> mEvictRef[MAX_WCACHE_TIER];
+    std::atomic<bool> mEvictRef[MAX_WCACHE_TIER]{};
 
     GetLocDiskStatus mGetLocDiskStatus{ nullptr };
     CheckLocRole mLocRole{ nullptr };
@@ -235,7 +323,10 @@ private:
     RCacheManagerPtr mRCacheManager;
     UfsHelperPtr mUnderFs;
 
-    std::atomic<uint64_t> mOnFlyRef;
+    // Put admission through publication and queue progress; background eviction does not change this count.
+    std::atomic<uint64_t> mOnFlyRef{ 0 };
+    // Admitted global batches, including failure cleanup; queued retries hold no count.
+    std::atomic<uint64_t> mEvictOnFlyRef[MAX_WCACHE_TIER]{};
 
     DEFINE_REF_COUNT_VARIABLE;
 };

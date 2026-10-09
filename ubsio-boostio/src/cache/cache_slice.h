@@ -218,11 +218,8 @@ using WCacheSliceRef = SliceRef<WCacheSlicePtr>;
 using WCacheSliceRefPtr = Ref<WCacheSliceRef>;
 class WCacheSliceCmp {
 public:
-    bool operator () (const WCacheSlicePtr &first, const WCacheSlicePtr &second)
+    bool operator () (const WCacheSlicePtr &first, const WCacheSlicePtr &second) const
     {
-        if (first->GetIndexInFlow() == second->GetIndexInFlow()) {
-            return true;
-        }
         return first->GetIndexInFlow() < second->GetIndexInFlow();
     }
 };

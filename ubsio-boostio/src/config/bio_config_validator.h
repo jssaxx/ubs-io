@@ -589,7 +589,7 @@ public:
         StrUtil::Split(value, ",", ipList);
         if (ipList.empty()) {
             mErrMsg = "Invalid value for <" + mName +
-                ">, it should be ip port list seperated with ',', for example: 127.0.0.1:2909, 127.0.0.1:9987";
+                ">, it should be ip port list separated with ',', for example: 127.0.0.1:2909, 127.0.0.1:9987";
             return false;
         }
 
@@ -598,7 +598,7 @@ public:
         for (auto &item : ipList) {
             if (!subValidator.Validate(item)) {
                 mErrMsg = "Invalid value for <" + mName +
-                    ">, it should be ip port list seperated with ',', for example: 127.0.0.1:2909, 127.0.0.1:9987";
+                    ">, it should be ip port list separated with ',', for example: 127.0.0.1:2909, 127.0.0.1:9987";
                 return false;
             }
         }

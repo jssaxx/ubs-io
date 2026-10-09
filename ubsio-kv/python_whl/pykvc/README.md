@@ -42,6 +42,10 @@ print(ret)
 ret = pykvc.batch_exist(keys)
 print(ret)
 
+stats = pykvc.batch_stat(keys)
+for stat in stats:
+    print(stat["key"], stat["size"], stat["result"])
+
 values = [bytes(6 * 1024), bytes(2 * 6 * 1024), bytes(3 * 6 * 1024)]
 ret = pykvc.batch_get(keys, values)
 print(ret)

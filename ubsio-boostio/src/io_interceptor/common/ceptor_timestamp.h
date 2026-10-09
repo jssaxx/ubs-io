@@ -64,9 +64,9 @@ public:
         return TimeStamp(sum);
     }
 
-    TimeStamp operator+(const double &secondes)
+    TimeStamp operator+(const double &seconds)
     {
-        int64_t delta = static_cast<int64_t>(secondes * TimeStamp::microSecondPerSecond);
+        int64_t delta = static_cast<int64_t>(seconds * TimeStamp::microSecondPerSecond);
         return TimeStamp(microSecondsSinceEpoch + delta);
     }
 

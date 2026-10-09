@@ -356,7 +356,8 @@ static int32_t BdmAllocatorRemoveDiffLen(BdmChunkIndex *chunk, BdmAllocatorReali
 }
 
 static int32_t BdmAllocatorRemove(BdmAllocatorRealize *realize, uint64_t bucketId, uint64_t bucketOffset,
-                                  uint64_t *index, uint64_t chunkSize)
+                                  uint64_t *index, uint64_t chunkSize, BdmChunkInitializer initializer,
+                                  uintptr_t context)
 {
     if (realize == NULL) {
         BDM_LOGERROR(0, "Invalid allocator.");
@@ -379,6 +380,12 @@ static int32_t BdmAllocatorRemove(BdmAllocatorRealize *realize, uint64_t bucketI
         DList *areaNode = realize->free[freeIndex].head.next;
         while (areaNode != &realize->free[freeIndex].head) {
             BdmChunkIndex *chunk = (BdmChunkIndex *)D_LIST_ENTRY(areaNode, BdmChunkIndex, head);
+            if (chunk->length >= length && initializer != NULL) {
+                int32_t ret = initializer(context, chunk->index, chunkSize);
+                if (ret != BDM_CODE_OK) {
+                    return ret; /* The free list and persisted ownership are still unchanged. */
+                }
+            }
             if (chunk->length == length) {
                 return BdmAllocatorRemoveSameLen(chunk, realize, bucketId, bucketOffset, freeIndex, index);
             } else if (chunk->length > length) {
@@ -396,14 +403,21 @@ static int32_t BdmAllocatorRemove(BdmAllocatorRealize *realize, uint64_t bucketI
 int32_t BdmAllocatorAllocChunk(BdmAllocator allocator, uint64_t bucketId, uint64_t bucketOffset, uint64_t chunkSize,
                                uint64_t *chunkId)
 {
+    return BdmAllocatorAllocChunkWithInit(allocator, bucketId, bucketOffset, chunkSize, chunkId, NULL, 0);
+}
+
+int32_t BdmAllocatorAllocChunkWithInit(BdmAllocator allocator, uint64_t bucketId, uint64_t bucketOffset,
+    uint64_t chunkSize, uint64_t *chunkId, BdmChunkInitializer initializer, uintptr_t context)
+{
     BdmAllocatorRealize *realize = (BdmAllocatorRealize *)allocator;
-    if (realize == NULL) {
+    if (realize == NULL || chunkId == NULL || chunkSize == 0 || realize->minChunkSize == 0 ||
+        chunkSize % realize->minChunkSize != 0) {
         BDM_LOGERROR(0, "Invalid allocator.");
         return BDM_CODE_INVALID_PARAM;
     }
 
     BDM_RWLOCK_WRLOCK(&realize->lock);
-    int32_t ret = BdmAllocatorRemove(realize, bucketId, bucketOffset, chunkId, chunkSize);
+    int32_t ret = BdmAllocatorRemove(realize, bucketId, bucketOffset, chunkId, chunkSize, initializer, context);
     if (ret != BDM_CODE_OK) {
         BDM_RWLOCK_UNLOCK(&realize->lock);
         BDM_LOGWARN(0, "Alloc chunk failed, chunk size(%llu), used cap(%llu), total cap(%llu).",

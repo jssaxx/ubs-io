@@ -164,7 +164,7 @@ KvcError KvcInstance::Read(const std::vector<std::string> &keyVector,
             continue;
         }
         void* dramAddr = dramAddrsVector[i];
-        uint32_t offset = 0;
+        size_t offset = 0;
         
         for (uint32_t j = 0; j < npuAddrsVector[i].size(); ++j) {
             void* dst = reinterpret_cast<void*>(npuAddrsVector[i][j]);

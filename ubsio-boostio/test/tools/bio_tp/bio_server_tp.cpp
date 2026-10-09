@@ -15,7 +15,6 @@
 using namespace ock::bio;
 using namespace ock::bio::tp;
 
-#ifdef __aarch64__
 static uint32_t MY_PID = 102;
 
 void tp::ServerTp::Register() noexcept
@@ -38,7 +37,7 @@ void tp::ServerTp::Register() noexcept
     BIO_TP_REG(DESERIALIZE_SET_VSIZE, "set vsize", CommonTp::IntValueCallback);
     BIO_TP_REG(MIRRIR_SERVER_CHECK_FREE_MEM_REQ_PASS_CHECK, "pass check", CommonTp::NoProcessCallback);
     BIO_TP_REG(MIRROR_SERVER_TRACE_EXCEED_ARRAY_SIZE, "get trace fail", CommonTp::IntValueCallback);
-    BIO_TP_REG(SERVER_GET_TRACEDATA_ERR, "server get tace data err", CommonTp::PointerValueCallback);
+    BIO_TP_REG(SERVER_GET_TRACEDATA_ERR, "server get trace data err", CommonTp::PointerValueCallback);
     BIO_TP_REG(SERVER_BDM_UPDATE_SUCCESS, "server bdm update success", CommonTp::IntValueCallback);
     BIO_TP_REG(SERVER_ADD_NEW_DISK_FAIL, "server add new disk fail", CommonTp::IntValueCallback);
     BIO_TP_REG(SERVER_OLD_DISK_EXIST, "server old disk exist", CommonTp::BoolValueCallback);
@@ -75,8 +74,3 @@ void tp::ServerTp::Deregister() noexcept
     BIO_TP_UNREG(SERVER_SET_OLD_DISK_ID);
     BIO_TP_UNREG(SERVER_NET_ADD_CHANNEL_FAIL);
 }
-#else
-void tp::ServerTp::Register() noexcept {}
-
-void tp::ServerTp::Deregister() noexcept {}
-#endif

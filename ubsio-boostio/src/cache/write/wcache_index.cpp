@@ -11,6 +11,7 @@
  */
 
 #include "bio_tracepoint_helper.h"
+#include "cache_flow.h"
 #include "wcache_index.h"
 
 #include <new>
@@ -32,6 +33,8 @@ inline uint32_t WCacheIndex::Hash(const Key &key)
 
 BResult WCacheIndex::Insert(uint16_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)
 {
+    ChkTrueNot(sliceRef != nullptr, BIO_INVALID_PARAM);
+    ChkTrueNot(sliceRef->GetState() != SLICE_INVALID, BIO_NOT_EXISTS);
     WCacheIndexTable *table = GetIndexTable(ptId);
     ChkTrue(table != nullptr, BIO_INVALID_PARAM, "Get write cache index table fail, ptId:" << ptId << ", key:" << key);
     auto bucket = Hash(key);
@@ -40,7 +43,11 @@ BResult WCacheIndex::Insert(uint16_t ptId, const Key &key, const WCacheSliceRefP
     if (UNLIKELY(sliceMeta != table->sliceIndex[bucket].end())) {
         LOG_WARN("Repeat put, key:" << key);
     }
-    table->sliceIndex[bucket].emplace(key, sliceRef);
+    auto inserted = table->sliceIndex[bucket].emplace(key, sliceRef);
+    if (sliceRef->GetState() == SLICE_PENDING) {
+        // Publish under the bucket lock; duplicate keys retain the original reference.
+        sliceRef->SetState(inserted.second || inserted.first->second == sliceRef ? SLICE_VALID : SLICE_INVALID);
+    }
     return BIO_OK;
 }
 
@@ -212,6 +219,30 @@ void WCacheIndex::ExpiredClear(uint16_t ptId)
         }
     }
     return;
+}
+
+void WCacheIndex::EraseFlowEntries(uint16_t ptId, const std::unordered_set<uint64_t> &flowIds,
+    std::vector<std::string> &removedKeys)
+{
+    if (flowIds.empty()) {
+        return;
+    }
+    WCacheIndexTable *table = GetIndexTable(ptId);
+    ChkTrueExNot(table != nullptr);
+
+    for (uint32_t bucket = 0; bucket < HASH_BUCKET_NUM; ++bucket) {
+        WriteLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
+        for (auto iter = table->sliceIndex[bucket].begin(); iter != table->sliceIndex[bucket].end();) {
+            auto slice = iter->second->GetSlice();
+            if (slice != nullptr &&
+                flowIds.count(CacheFlowIdManager::GenOutFlowId(slice->GetFlowId())) != 0) {
+                removedKeys.push_back(iter->first);
+                iter = table->sliceIndex[bucket].erase(iter);
+            } else {
+                ++iter;
+            }
+        }
+    }
 }
 
 void WCacheIndex::Exit()

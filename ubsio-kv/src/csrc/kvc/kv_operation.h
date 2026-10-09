@@ -60,6 +60,11 @@ public:
                            void **bufs,
                            std::vector<size_t> &lengths,
                            std::vector<int> &results);
+    int32_t BatchKvGetData(const char **keys,
+                           uint32_t keysCount,
+                           void **bufs,
+                           size_t *lengths,
+                           int *results);
     int32_t BatchKvExistKey(const std::vector<std::string> &key, bool *results);
     int32_t BatchKvDeleteKey(const std::vector<std::string> &key, std::vector<int> &results);
     int32_t BatchGetLengthKey(const std::vector<std::string> &key, std::vector<uint32_t> &lengths, std::vector<int> &results);    

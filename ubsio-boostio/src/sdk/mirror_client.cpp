@@ -302,6 +302,26 @@ BResult MirrorClient::DestroyFlow(uint16_t ptId, uint64_t flowId)
     return BIO_OK;
 }
 
+void MirrorClient::Delete(uint16_t ptId, uint64_t flowId)
+{
+    if (mMode != STANDALONE) {
+        sleep(BIO_IO_DELAY_TIME);
+    }
+    mLock.LockWrite();
+    auto it = mFlowMap.find(ptId);
+    if (UNLIKELY(it == mFlowMap.end())) {
+        mLock.UnLock();
+        return;
+    }
+    if (it->second->FlowId() != flowId) {
+        mLock.UnLock();
+        return;
+    }
+    mFlowMap.erase(it);
+    mLock.UnLock();
+    DestroyFlow(ptId, flowId);
+}
+
 BResult MirrorClient::LoadAffinityFlow()
 {
     std::vector<uint16_t> ptVec = ListLocalAffinityPt();
@@ -797,6 +817,10 @@ BResult MirrorClient::Initialize(UpdateView updateView, uint32_t scene, uint32_t
         return ret;
     }
 
+    if (mMode == STANDALONE) {
+        return BIO_OK;
+    }
+
     mBatchGetExecutor = ExecutorService::Create(SDK_DISPATH_BATCH_GET_THREAD_NUM,
                                                 SDK_DISPATH_BATCH_GET_QUEUE_SIZE);
     if (UNLIKELY(mBatchGetExecutor == nullptr)) {
@@ -871,6 +895,9 @@ BResult MirrorClient::Put(MirrorPut &param)
         isRetry = false;
         // 1. Get pt view entry.
         if (UNLIKELY((ret = GetPtEntry(ptId, ptEntry)) != BIO_OK)) {
+            if (mMode == STANDALONE && ret == BIO_CHECK_PT_FAIL) {
+                mUpdateView();
+            }
             break;
         }
 
@@ -1480,6 +1507,9 @@ BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
         CLIENT_LOG_ERROR("Invalid batch get count:" << param.count << ".");
         return BIO_INVALID_PARAM;
     }
+    if (mMode == STANDALONE) {
+        return BatchGetStandalone(param);
+    }
 
     std::vector<uint32_t> nodes(param.count);
     std::unordered_map<uint16_t, BatchGetPlan> planSend;
@@ -1584,6 +1614,45 @@ BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
     }
 
     releaseRequests();
+    return ret;
+}
+
+BResult MirrorClient::BatchGetStandalone(MirrorBatchGet &param)
+{
+    size_t reqLen = sizeof(BatchGetRequest) + static_cast<size_t>(param.count) * sizeof(GetKeyInfo);
+    auto *req = static_cast<BatchGetRequest *>(malloc(reqLen));
+    if (UNLIKELY(req == nullptr)) {
+        CLIENT_LOG_ERROR("Allocate standalone batch get request failed, count:" << param.count << ".");
+        return BIO_ALLOC_FAIL;
+    }
+
+    req->count = param.count;
+    req->pid = getpid();
+    req->srcNid = mLocalNid.VNodeId();
+    req->isConvDeploy = false;
+    for (uint32_t i = 0; i < param.count; ++i) {
+        if (UNLIKELY(param.valuesAddr[i] == 0)) {
+            CLIENT_LOG_ERROR("Standalone batch get buffer is invalid, index:" << i << ".");
+            free(req);
+            return BIO_INVALID_PARAM;
+        }
+        GetKeyInfo &keyInfo = req->keysInfo[i];
+        FillBatchGetBufferInfo(keyInfo, param.valuesAddr[i], param.lengths[i]);
+        CopyKey(keyInfo.key, param.keys[i], KEY_MAX_SIZE);
+        keyInfo.offset = param.offsets[i];
+        keyInfo.length = param.lengths[i];
+        keyInfo.ptId = ParseLocation(param.locations[i]);
+        keyInfo.result = &param.results[i];
+        keyInfo.realLength = &param.realLengths[i];
+        param.results[i] = BIO_OK;
+        param.realLengths[i] = 0;
+    }
+
+    BatchGetResponse rsp;
+    BIO_TRACE_START(SDK_TRACE_BATCH_GET_SEND);
+    BResult ret = agent::BioClientAgent::Instance()->BatchGetLocalSync(req, rsp);
+    BIO_TRACE_END(SDK_TRACE_BATCH_GET_SEND, ret);
+    free(req);
     return ret;
 }
 
@@ -1730,6 +1799,15 @@ BResult MirrorClient::StatObject(const char *key, const ObjLocation &location, O
     return ret;
 }
 
+BResult MirrorClient::BatchStat(const char **keys, ObjLocation *locations, uint32_t count, BatchObjStat *stats)
+{
+    if (UNLIKELY(mMode != STANDALONE)) {
+        CLIENT_LOG_ERROR("Batch stat only supports standalone deployment.");
+        return BIO_INVALID_PARAM;
+    }
+    return agent::BioClientAgent::Instance()->BatchStatLocalSync(keys, locations, count, stats);
+}
+
 BResult MirrorClient::StatObjectImpl(const char *key, const ObjLocation &location, ObjStat &stat)
 {
     uint16_t ptId = ParseLocation(location);
@@ -1763,6 +1841,14 @@ BResult MirrorClient::DispathBatchExist(const char *key[], ObjLocation location[
         return BIO_INVALID_PARAM;
     }
 
+    if (mMode == STANDALONE) {
+        return agent::BioClientAgent::Instance()->BatchExistStandaloneLocalSync(key, location, count, result);
+    }
+
+    if (count <= KEY_MAX_COUNT) {
+        return BatchExist(key, location, count, result);
+    }
+
     uint32_t parallelNum = (count + SDK_DISPATH_BATCH_COUNT_MAX_NUM - 1) / SDK_DISPATH_BATCH_COUNT_MAX_NUM;
     volatile uint32_t taskNum = parallelNum;
     sem_t sem;
@@ -1794,7 +1880,7 @@ BResult MirrorClient::DispathBatchExist(const char *key[], ObjLocation location[
         };
 
         if (!mBatchExistExecutor->Execute(func)) {
-            LOG_ERROR("Execute disapth batch get failed, batch num: " << count << " i:" << i);
+            LOG_ERROR("Execute dispatch batch get failed, batch num: " << count << " i:" << i);
             taskResults[resultIndex] = BIO_INNER_ERR;
             ret = BIO_INNER_ERR;
             if (__sync_sub_and_fetch(&taskNum, 1) == 0) {
@@ -2012,6 +2098,9 @@ BResult MirrorClient::AddDisk(const char *diskPath)
         isRetry = false;
         ret = AddDiskImpl(diskPath);
         if (LIKELY(ret == BIO_OK)) {
+            if (mMode == STANDALONE && mUpdateView != nullptr) {
+                mUpdateView();
+            }
             return BIO_OK;
         }
         if (ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY || ret == BIO_CHECK_PT_FAIL) {
@@ -2202,7 +2291,8 @@ BResult MirrorClient::AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, 
         return BIO_INNER_RETRY;
     }
     if (UNLIKELY(flowInst->Version() != ptv)) {
-        Delete(ptId, flowInst->FlowId()); // Flow版本号不一致则需要删除Flow, 再重新创建Flow.
+        // The server distinguishes an add-disk READ_ONLY flow from a failed-disk flow.
+        Delete(ptId, flowInst->FlowId());
         BResult ret = CreateFlow(ptId);
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Create flow instance failed, need retry, ret: " << ret << ", ptId:" << ptId << ".");
@@ -2424,11 +2514,12 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
 
 BResult MirrorClient::Prepare(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req)
 {
-    if (IsExistLocalCopy(ptEntry) && param.attr.affinity != GLOBAL_BALANCE) {
+    if (mMode != STANDALONE && IsExistLocalCopy(ptEntry) && param.attr.affinity != GLOBAL_BALANCE) {
         return PrepareFromServer(ptEntry, param, req); // 写资源从本地server申请.
-    } else {
-        return PrepareFromClient(ptEntry, param, req); // 写资源从client端申请.
     }
+    // Standalone direct mode defers the user-to-server-memory copy until the
+    // server-side WCache admission protects it with the in-flight reference.
+    return PrepareFromClient(ptEntry, param, req); // 写资源从client端申请.
 }
 
 void MirrorClient::PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &indexVec, Callback &callback)

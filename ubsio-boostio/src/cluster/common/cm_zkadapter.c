@@ -1638,7 +1638,7 @@ static void CmServerZkRoleWatchFunc(zhandle_t *zh, int evtype, int state, const 
     CM_LOGINFO("Event type(%d) state(%d) path(%s).", evtype, state, path);
 
     if (evtype == ZOO_DELETED_EVENT) {
-        CM_LOGWARN("Master discontact, retry select role.");
+        CM_LOGWARN("Master disconnected, retry select role.");
         ret = CmServerZkSubRoleChange(g_sZkMgr.roleChange);
         if (ret != CM_OK) {
             CM_LOGERROR("Select role failed, ret(%d).", ret);

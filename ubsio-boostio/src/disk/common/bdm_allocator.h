@@ -33,12 +33,16 @@ typedef struct {
 } BdmAllocatorPara;
 
 typedef uintptr_t BdmAllocator;
+/* Runs under the allocator lock, before the selected free range is published as allocated. */
+typedef int32_t (*BdmChunkInitializer)(uintptr_t context, uint64_t chunkId, uint64_t chunkSize);
 
 int32_t BdmAllocatorGetSplitSize(uint64_t head, uint64_t chunkSize, uint64_t totalSize, uint64_t *metaSize,
     uint64_t *dataSize);
 
 int32_t BdmAllocatorAllocChunk(BdmAllocator allocator, uint64_t bucketId, uint64_t bucketOffset, uint64_t chunkSize,
     uint64_t *chunkId);
+int32_t BdmAllocatorAllocChunkWithInit(BdmAllocator allocator, uint64_t bucketId, uint64_t bucketOffset,
+    uint64_t chunkSize, uint64_t *chunkId, BdmChunkInitializer initializer, uintptr_t context);
 
 int32_t BdmAllocatorFreeChunk(BdmAllocator allocator, uint64_t chunkSize, uint64_t chunkId);
 

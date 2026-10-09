@@ -21,7 +21,7 @@
 
 namespace ock {
 namespace bio {
-constexpr uint64_t IO_MAX_LEN = 4194304;
+constexpr uint64_t IO_MAX_LEN = (1UL << 32UL);
 class FileSystem {
 public:
     struct ObjStat {
@@ -37,7 +37,21 @@ public:
 
     virtual BResult Get(const char *key, char *value, const size_t len, const uint64_t off) = 0;
 
+    virtual BResult GetWithRealLen(const char *key, char *value, const size_t len, const uint64_t off,
+        size_t &realLen)
+    {
+        BResult ret = Get(key, value, len, off);
+        realLen = ret == BIO_OK ? len : 0;
+        return ret;
+    }
+
     virtual BResult Delete(const char *key) = 0;
+
+    virtual BResult Exist(const char *key)
+    {
+        ObjStat objStat{};
+        return Stat(key, objStat);
+    }
 
     virtual BResult Stat(const char *key, ObjStat &objStat) = 0;
 

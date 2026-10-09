@@ -10,7 +10,11 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include <ctime>
+#include <iomanip>
 #include <iostream>
+#include <sys/syscall.h>
+#include <unistd.h>
 #include "bio_tracepoint_helper.h"
 #include "spdlog/sinks/rotating_file_sink.h"
 #include "spdlog/sinks/stdout_sinks.h"
@@ -21,6 +25,7 @@ namespace bio {
 Logger *Logger::gInstance = nullptr;
 std::mutex Logger::gMutex;
 bool Logger::gInited = false;
+std::atomic<bool> Logger::gInitErrorScreenEnabled{ false };
 
 const int STDOUT_TYPE = 0;
 const int FILE_TYPE = 1;
@@ -36,26 +41,29 @@ constexpr auto ROTATION_FILE_SIZE_MIN_MB = 2;                                   
 constexpr auto ROTATION_FILE_SIZE_MIN = ROTATION_FILE_SIZE_MIN_MB << SIZE_MB_SHIFT; // 2MB
 constexpr int ROTATION_FILE_COUNT_MAX = 50;
 
-#define BIO_LOG_STD_ERR(msg)      \
-    do {                          \
-        std::ostringstream oss;   \
-        oss.str("");              \
-        oss.clear();              \
-        oss << msg;               \
-        Logger::LogToStdErr(oss); \
-    } while (0)
-
-void Logger::LogToStdErr(const std::ostringstream &oss)
+void Logger::LogToStdErr(int32_t level, const std::string &message)
 {
     struct timeval tv {};
-    char strTime[24];
+    struct tm localTime {};
+    char strTime[20] {};
+    const char *levelName = "UNKNOWN";
+    if (level >= BIOLOG_LEVEL_TRACE && level <= BIOLOG_LEVEL_CRITICAL) {
+        levelName = LOG_LEVEL_NAMES[level];
+    }
 
     gettimeofday(&tv, nullptr);
-    if (strftime(strTime, sizeof strTime, "%Y-%m-%d %H:%M:%S.", localtime(&tv.tv_sec)) != 0) {
-        std::cout << strTime << tv.tv_usec << " INFO " << syscall(SYS_gettid) << " " << oss.str() << std::endl;
+    std::ostringstream oss;
+    if (localtime_r(&tv.tv_sec, &localTime) != nullptr &&
+        strftime(strTime, sizeof strTime, "%Y-%m-%d %H:%M:%S", &localTime) != 0) {
+        oss << strTime << "." << std::setfill('0') << std::setw(6) << tv.tv_usec;
     } else {
-        std::cout << " Invalid time INFO " << syscall(SYS_gettid) << " " << oss.str() << std::endl;
+        oss << "Invalid time info";
     }
+    oss << " " << syscall(SYS_gettid) << " " << levelName << " " << message;
+
+    static std::mutex outputMutex;
+    std::lock_guard<std::mutex> guard(outputMutex);
+    std::cerr << oss.str() << std::endl;
 }
 
 bool Logger::ValidateParams(const LoggerOptions &options)
@@ -158,7 +166,7 @@ int32_t Logger::Init()
             spdlog::flush_every(std::chrono::seconds(1));
         } else if (mOptions.logType == STDERR_TYPE) { // stderr
             mSpdLogger = spdlog::stderr_logger_mt("console");
-            mSpdLogger->set_pattern("%C/%m/%d %H:%M:%S.%f %t %v");
+            mSpdLogger->set_pattern("%Y-%m-%d %H:%M:%S.%f %t %v");
         }
         mSpdLogger->set_level(static_cast<spdlog::level::level_enum>(mOptions.minLogLevel));
         mSpdLogger->flush_on(spdlog::level::err);
@@ -181,16 +189,31 @@ void Logger::Exit()
 
 int32_t Logger::Log(int level, const std::string &message) const
 {
-    if (mSpdLogger == nullptr) {
-        return -2L;
-    }
-
     if (level < 0 || level > 5) { // 5
         return -3L;
     }
 
+    if (level >= BIOLOG_LEVEL_ERROR && mOptions.logType == FILE_TYPE &&
+        gInitErrorScreenEnabled.load(std::memory_order_relaxed)) {
+        LogToStdErr(level, message);
+    }
+
+    if (mSpdLogger == nullptr) {
+        return -2L;
+    }
+
     mSpdLogger->log(static_cast<spdlog::level::level_enum>(level), "{} {}", LOG_LEVEL_NAMES[level], message);
     return 0L;
+}
+
+void Logger::SetInitErrorScreenEnabled(bool enabled) noexcept
+{
+    gInitErrorScreenEnabled.store(enabled, std::memory_order_relaxed);
+}
+
+bool Logger::IsInitErrorScreenEnabled() noexcept
+{
+    return gInitErrorScreenEnabled.load(std::memory_order_relaxed);
 }
 
 void Logger::ResetLogLevel(int32_t logLevel)

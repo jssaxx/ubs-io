@@ -60,13 +60,16 @@ static uint32_t BdmObjAllocBdmId(uint32_t bdmId)
         return BDM_INVALID_ID;
     }
 
-    if (UNLIKELY(bdmId < BDM_INVALID_ID && g_bdmObj.list[bdmId].used == TRUE)) {
+    // A faulted object has used == FALSE but still owns the slot. Only an
+    // entry with no object can be filled by a startup-missing disk.
+    if (UNLIKELY(bdmId < BDM_INVALID_ID &&
+        (g_bdmObj.list[bdmId].used == TRUE || g_bdmObj.list[bdmId].obj != NULL))) {
         BDM_SPIN_UNLOCK(&g_bdmObj.lock);
         BDM_LOGERROR(0, "Invalid bdm id(%u).", bdmId);
         return BDM_INVALID_ID;
     }
 
-    if (bdmId < BDM_INVALID_ID && g_bdmObj.list[bdmId].used == FALSE) {
+    if (bdmId < BDM_INVALID_ID) {
         g_bdmObj.list[bdmId].used = TRUE;
         g_bdmObj.num++;
         BDM_SPIN_UNLOCK(&g_bdmObj.lock);
@@ -75,7 +78,7 @@ static uint32_t BdmObjAllocBdmId(uint32_t bdmId)
 
     uint32_t index = BDM_INVALID_ID;
     for (uint32_t i = 0; i < BDM_MAX_NUM; i++) {
-        if (g_bdmObj.list[g_bdmObj.index].used == FALSE) {
+        if (g_bdmObj.list[g_bdmObj.index].used == FALSE && g_bdmObj.list[g_bdmObj.index].obj == NULL) {
             g_bdmObj.list[g_bdmObj.index].used = TRUE;
             index = g_bdmObj.index;
             g_bdmObj.index = (g_bdmObj.index + 1) % BDM_MAX_NUM;

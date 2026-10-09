@@ -10,12 +10,17 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include <algorithm>
 #include <cerrno>
+#include <cstdlib>
 #include <cstdio>
 #include <cstring>
+#include <fcntl.h>
 #include <set>
 #include <sstream>
+#include <sys/file.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include "bio_log.h"
 #include "bio_ip_util.h"
 #include "bio_file_util.h"
@@ -23,9 +28,30 @@
 
 namespace ock {
 namespace bio {
+namespace {
+constexpr const char *BIO_CONFIG_ENV = "UBSIO_CONFIG_PATH";
+constexpr uint32_t LOG_DIR_MODE = S_IRWXU | S_IRGRP | S_IXGRP;
 constexpr uint64_t GB_SIZE = 1024 * 1024 * 1024;
 constexpr uint64_t MB_SIZE = 1024 * 1024;
 constexpr uint32_t DISK_PATH_CONFIG_MAX_NUM = DEVICE_SIZE * NO_4;
+
+bool ResolveConfigPath(std::string &configPath)
+{
+#ifdef DEBUG_UT
+    configPath = "./ubsio_old.conf";
+    return true;
+#else
+    const char *envConfPath = getenv(BIO_CONFIG_ENV);
+    if (envConfPath != nullptr && envConfPath[0] != '\0') {
+        configPath = envConfPath;
+        return FileUtil::IsAbsoluteRegularFile(configPath);
+    }
+    configPath = CONFIG_PATH;
+    return true;
+#endif
+}
+
+} // namespace
 
 void BioConfig::LoadDefaultConf()
 {
@@ -48,6 +74,7 @@ void BioConfig::LoadDefaultConf()
 
     /* load log info */
     AddStrConf(LOG_LEVEL, VStrEnum::Create(LOG_LEVEL.first, "error||warn||info||debug||trace"));
+    AddStrConf(LOG_PATH, VStrNotNull::Create(LOG_PATH.first));
     AddIntConf(SEGMENT_SIZE_MB, VIntRange::Create(SEGMENT_SIZE_MB.first, NO_1, NO_16));
     AddIntConf(MEM_CAPACITY_SIZE_GB, VIntRange::Create(MEM_CAPACITY_SIZE_GB.first, NO_U64_0, NO_3 * NO_1024));
     AddIntConf(SDK_MEM_CAPACITY_SIZE_MB, VIntRange::Create(SDK_MEM_CAPACITY_SIZE_MB.first, NO_U64_0, NO_4194304));
@@ -57,8 +84,6 @@ void BioConfig::LoadDefaultConf()
         VStrEnum::Create(BDM_IO_URING_SQPOLL_MODE.first, "auto||required||disabled"));
     AddIntConf(BDM_SYNC_WORKER_NUM, VIntRange::Create(BDM_SYNC_WORKER_NUM.first, NO_1, NO_64));
     AddIntConf(STANDALONE_DEVICE_COUNT, VIntRange::Create(STANDALONE_DEVICE_COUNT.first, 0, DEVICE_SIZE));
-    AddIntConf(STANDALONE_DEVICE_ID_GATHER_TIMEOUT_SEC,
-        VIntRange::Create(STANDALONE_DEVICE_ID_GATHER_TIMEOUT_SEC.first, NO_1, INT32_MAX));
     AddStrConf(STANDALONE_FORCE_NEW_DISK, VStrBoolRange::Create(STANDALONE_FORCE_NEW_DISK.first));
     AddIntConf(SDK_MEM_CAPACITY_SIZE_MB);
 
@@ -83,12 +108,14 @@ void BioConfig::LoadDefaultConf()
     AddIntConf(BDM_BATCH_READ_WINDOW_KEYS, VIntRange::Create(BDM_BATCH_READ_WINDOW_KEYS.first, NO_1, NO_1024));
     AddIntConf(BDM_BATCH_READ_WINDOW_BYTES_MB,
         VIntRange::Create(BDM_BATCH_READ_WINDOW_BYTES_MB.first, NO_1, NO_1024));
-    AddIntConf(BDM_BATCH_READ_PIPELINE_DEPTH,
-        VIntRange::Create(BDM_BATCH_READ_PIPELINE_DEPTH.first, NO_1, NO_64));
+    AddIntConf(BATCH_READ_PIPELINE_DEPTH,
+        VIntRange::Create(BATCH_READ_PIPELINE_DEPTH.first, NO_1, NO_64));
+    AddIntConf(BATCH_READ_COPY_WORKERS,
+        VIntRange::Create(BATCH_READ_COPY_WORKERS.first, NO_1, NO_64));
     AddIntConf(BDM_BATCH_READ_TEMP_POOL_MB,
         VIntRange::Create(BDM_BATCH_READ_TEMP_POOL_MB.first, 0, NO_65535));
-    AddStrConf(BDM_BATCH_READ_STANDALONE_USE_SCRATCH_POOL,
-        VStrBoolRange::Create(BDM_BATCH_READ_STANDALONE_USE_SCRATCH_POOL.first));
+    AddStrConf(BATCH_READ_STANDALONE_USE_SCRATCH_POOL,
+        VStrBoolRange::Create(BATCH_READ_STANDALONE_USE_SCRATCH_POOL.first));
 
     /* load cluster manager config */
     AddIntConf(CM_INITIAL_NODE_NUM, VIntRange::Create(CM_INITIAL_NODE_NUM.first, NO_1, NO_256));
@@ -99,13 +126,16 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(CM_ZK_HOST, VIpv4PortListValidator::Create(CM_ZK_HOST.first));
 
     /* load underfs config */
-    AddStrConf(UNDERFS_FILE_SYSTEM_TYPE, VStrEnum::Create(UNDERFS_FILE_SYSTEM_TYPE.first, "ceph||hdfs||none"));
+    AddStrConf(UNDERFS_FILE_SYSTEM_TYPE, VStrEnum::Create(UNDERFS_FILE_SYSTEM_TYPE.first, "ceph||hdfs||local||none"));
     AddStrConf(UNDERFS_CEPH_CFG_PATH);
     AddStrConf(UNDERFS_CEPH_CLUSTER, VStrNotNull::Create(UNDERFS_CEPH_CLUSTER.first));
     AddStrConf(UNDERFS_CEPH_USER, VStrNotNull::Create(UNDERFS_CEPH_USER.first));
     AddStrConf(UNDERFS_CEPH_POOL, VStrCephPool::Create(UNDERFS_CEPH_POOL.first));
     AddStrConf(UNDERFS_HDFS_NAMENODE);
     AddStrConf(UNDERFS_HDFS_WORKING_PATH);
+    AddStrConf(UNDERFS_LOCAL_ROOT_PATH);
+    AddIntConf(UNDERFS_BATCH_READ_WORKER_NUM,
+        VIntRange::Create(UNDERFS_BATCH_READ_WORKER_NUM.first, NO_1, NO_64));
 
     /* load net config for security */
     AddStrConf(NET_TLS_ENABLE_SWITCH, VStrBoolRange::Create(NET_TLS_ENABLE_SWITCH.first));
@@ -153,7 +183,7 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
     /* fetch ip from ip mask, example:x.x.x.x/24 to x.x.x.x */
     std::vector<std::string> goodIps;
     if (!IpUtil::FilterIpByMask(mNetConfig.dataIpMask, goodIps) || goodIps.empty()) {
-        LOG_ERROR("Failed to find ip with ip mask " << mNetConfig.dataIpMask);
+        BIO_LOG_STD_ERR("Failed to find ip with ip mask " << mNetConfig.dataIpMask);
         return BIO_ERR;
     }
     mNetConfig.dataIp = std::move(goodIps[0]);
@@ -177,27 +207,27 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
                            && FileUtil::CanonicalPath(mNetConfig.tlsServerCertPath)
                            && FileUtil::CanonicalPath(mNetConfig.tlsServerKeyPath);
         if (!checkCaPath) {
-            LOG_ERROR("Invalid ca path.");
+            BIO_LOG_STD_ERR("Invalid ca path.");
             return BIO_ERR;
         }
 
         if (!mNetConfig.tlsCaCrlPath.empty()) {
             if (!FileUtil::CanonicalPath(mNetConfig.tlsCaCrlPath)) {
-                LOG_ERROR("Invalid crl path.");
+                BIO_LOG_STD_ERR("Invalid crl path.");
                 return BIO_ERR;
             }
         }
 
         if (!mNetConfig.tlsServerKeyPassPath.empty()) {
             if (!FileUtil::CanonicalPath(mNetConfig.tlsServerKeyPassPath)) {
-                LOG_ERROR("Invalid key password path.");
+                BIO_LOG_STD_ERR("Invalid key password path.");
                 return BIO_ERR;
             }
         }
 
         if (!mNetConfig.decrypterLibPath.empty()) {
             if (!FileUtil::CanonicalPath(mNetConfig.decrypterLibPath)) {
-                LOG_ERROR("Invalid decrypter Lib Path.");
+                BIO_LOG_STD_ERR("Invalid decrypter Lib Path.");
                 return BIO_ERR;
             }
         }
@@ -209,7 +239,7 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
     } else if (protocol == "tcp") {
         mNetConfig.protocol = 1;
     } else {
-        LOG_ERROR("Invalid configuration with protocol items: " << protocol);
+        BIO_LOG_STD_ERR("Invalid configuration with protocol items: " << protocol);
         mNetConfig.protocol = NO_255;
     }
 
@@ -248,6 +278,7 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
 
 BResult BioConfig::AutoConfigDaemonLogAndOther(const ConfigurationPtr &conf)
 {
+    mDaemonConfig.logPath = conf->GetStr(LOG_PATH.first);
     auto logLevel = conf->GetStr(LOG_LEVEL.first);
     if (logLevel == "trace") {
         mDaemonConfig.logLevel = BIOLOG_LEVEL_TRACE;
@@ -260,7 +291,7 @@ BResult BioConfig::AutoConfigDaemonLogAndOther(const ConfigurationPtr &conf)
     } else if (logLevel == "error") {
         mDaemonConfig.logLevel = BIOLOG_LEVEL_ERROR;
     } else {
-        LOG_ERROR("Failed to load daemon log level config, invalid level " << logLevel);
+        BIO_LOG_STD_ERR("Failed to load daemon log level config, invalid level " << logLevel);
         return BIO_ERR;
     }
 
@@ -278,7 +309,7 @@ BResult BioConfig::AutoConfigDaemonLogAndOther(const ConfigurationPtr &conf)
     } else if (scene == "bigdata") {
         mDaemonConfig.workScene = NO_1;
     } else {
-        LOG_ERROR("Invalid configuration with scene items: " << scene);
+        BIO_LOG_STD_ERR("Invalid configuration with scene items: " << scene);
         return BIO_INVALID_PARAM;
     }
 
@@ -295,16 +326,17 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
     mDaemonConfig.bdmBatchReadWindowKeys = static_cast<uint32_t>(conf->GetInt(BDM_BATCH_READ_WINDOW_KEYS.first));
     mDaemonConfig.bdmBatchReadWindowBytesMb =
         static_cast<uint32_t>(conf->GetInt(BDM_BATCH_READ_WINDOW_BYTES_MB.first));
-    mDaemonConfig.bdmBatchReadPipelineDepth = static_cast<uint32_t>(conf->GetInt(BDM_BATCH_READ_PIPELINE_DEPTH.first));
+    mDaemonConfig.batchReadPipelineDepth = static_cast<uint32_t>(conf->GetInt(BATCH_READ_PIPELINE_DEPTH.first));
+    mDaemonConfig.batchReadCopyWorkers = static_cast<uint32_t>(conf->GetInt(BATCH_READ_COPY_WORKERS.first));
     mDaemonConfig.bdmBatchReadTempPoolMb = static_cast<uint32_t>(conf->GetInt(BDM_BATCH_READ_TEMP_POOL_MB.first));
-    mDaemonConfig.bdmBatchReadStandaloneUseScratchPool =
-        conf->GetStr(BDM_BATCH_READ_STANDALONE_USE_SCRATCH_POOL.first) == "true";
+    mDaemonConfig.batchReadStandaloneUseScratchPool =
+        conf->GetStr(BATCH_READ_STANDALONE_USE_SCRATCH_POOL.first) == "true";
+    mDaemonConfig.underFsBatchReadWorkerNum =
+        static_cast<uint32_t>(conf->GetInt(UNDERFS_BATCH_READ_WORKER_NUM.first));
 
     mDaemonConfig.segment = static_cast<uint32_t>(conf->GetInt(SEGMENT_SIZE_MB.first) * MB_SIZE);
     mDaemonConfig.sdkPoolSize = static_cast<uint64_t>(conf->GetInt(SDK_MEM_CAPACITY_SIZE_MB.first) * MB_SIZE);
     mDaemonConfig.standaloneDeviceCount = static_cast<uint32_t>(conf->GetInt(STANDALONE_DEVICE_COUNT.first));
-    mDaemonConfig.standaloneDeviceIdGatherTimeoutSec =
-        static_cast<uint32_t>(conf->GetInt(STANDALONE_DEVICE_ID_GATHER_TIMEOUT_SEC.first));
     mDaemonConfig.standaloneForceNewDisk = conf->GetStr(STANDALONE_FORCE_NEW_DISK.first) == "true";
     mDaemonConfig.negotiateDelay = static_cast<uint32_t>(conf->GetInt(BIO_WCACHE_NEGOTIATE_DELAY.first) * NO_1000);
     mDaemonConfig.memCap = static_cast<uint64_t>(conf->GetInt(MEM_CAPACITY_SIZE_GB.first) * GB_SIZE);
@@ -317,12 +349,14 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
 
     uint64_t sysFreeMemCap = GetSysFreeMemCap();
     if (mDaemonConfig.memCap > sysFreeMemCap) {
-        LOG_ERROR("Failed to set mem cap " << mDaemonConfig.memCap << ", over system free mem cap " << sysFreeMemCap);
+        BIO_LOG_STD_ERR("Failed to set mem cap " << mDaemonConfig.memCap <<
+            ", over system free mem cap " << sysFreeMemCap);
         return BIO_ERR;
     }
     mDaemonConfig.wcacheMemEvictLevel = static_cast<uint64_t>(conf->GetInt(WCACHE_EVICT_WATER_LEVEL.first));
     mDaemonConfig.wcacheDiskEvictLevel = static_cast<uint64_t>(conf->GetInt(WCACHE_DISK_EVICT_WATER_LEVEL.first));
-    if (!mDaemonConfig.hasDiskCache && mDaemonConfig.wcacheMemEvictLevel == 0) {
+    bool underFsEnabled = conf->GetStr(UNDERFS_FILE_SYSTEM_TYPE.first) != "none";
+    if (!mDaemonConfig.hasDiskCache && !underFsEnabled && mDaemonConfig.wcacheMemEvictLevel == 0) {
         mDaemonConfig.wcacheMemEvictLevel = NO_90;
     }
     mDaemonConfig.rcacheMemEvictLevel = static_cast<uint64_t>(conf->GetInt(RCACHE_EVICT_WATER_LEVEL.first));
@@ -353,19 +387,20 @@ BResult BioConfig::AutoConfigDaemonDisk(const ConfigurationPtr &conf)
     if (!mDaemonConfig.hasDiskCache) {
         mDaemonConfig.diskList.clear();
         mDaemonConfig.diskCaps.clear();
+        mDaemonConfig.diskPhysicalCaps.clear();
         LOG_INFO("Disk cache is disabled, skip disk config.");
         return BIO_OK;
     }
 
     StrUtil::Split(diskMask, ":", mDaemonConfig.diskList);
     if (mDaemonConfig.diskList.size() > DISK_PATH_CONFIG_MAX_NUM) {
-        LOG_ERROR("Failed to spilt disk path, number of paths cannot exceed " << DISK_PATH_CONFIG_MAX_NUM << ". " <<
-            diskMask);
+        BIO_LOG_STD_ERR("Failed to split disk path, number of paths cannot exceed " <<
+            DISK_PATH_CONFIG_MAX_NUM << ". " << diskMask);
         return BIO_ERR;
     }
-    bool useStandaloneVirtualDisks = mStandaloneDeviceInfo.configured && mDaemonConfig.standaloneDeviceCount != 0;
+    bool useStandaloneVirtualDisks = mStandaloneMode && mDaemonConfig.standaloneDeviceCount != 0;
     if (useStandaloneVirtualDisks && mDaemonConfig.diskList.size() > DEVICE_SIZE) {
-        LOG_ERROR("Standalone virtual disk path num limit:" << DEVICE_SIZE << ", input:" <<
+        BIO_LOG_STD_ERR("Standalone virtual disk path num limit:" << DEVICE_SIZE << ", input:" <<
             mDaemonConfig.diskList.size() << ".");
         return BIO_ERR;
     }
@@ -373,26 +408,26 @@ BResult BioConfig::AutoConfigDaemonDisk(const ConfigurationPtr &conf)
     std::set<dev_t> virtualDiskIds;
     for (std::string &diskPath : mDaemonConfig.diskList) {
         if (!FileUtil::CanonicalPath(diskPath)) {
-            LOG_ERROR("Disk path not exist, value " << diskPath);
+            BIO_LOG_STD_ERR("Disk path not exist, value " << diskPath);
             return BIO_ERR;
         }
         std::string reason;
         if (!FileUtil::ValidateRawDisk(diskPath, reason)) {
-            LOG_ERROR("Disk path is not available for raw cache, value " << diskPath << ", reason: " << reason);
+            BIO_LOG_STD_ERR("Disk path is not available for raw cache, value " << diskPath << ", reason: " << reason);
             return BIO_ERR;
         }
         if (useStandaloneVirtualDisks) {
             struct stat diskStat {};
             if (stat(diskPath.c_str(), &diskStat) != 0) {
                 int32_t statError = errno;
-                LOG_ERROR("UBSIO initial block-device metadata access failed, path:" << diskPath <<
+                BIO_LOG_STD_ERR("UBSIO initial block-device metadata access failed, path:" << diskPath <<
                     ", operation:stat, errno:" << statError << ", reason:" << std::strerror(statError) <<
                     ". Possible causes: the device path disappeared or is not visible in the current mount namespace, "
                     "path traversal/stat permission is denied, or an LSM policy blocks metadata access.");
                 return BIO_ERR;
             }
             if (!virtualDiskIds.insert(diskStat.st_rdev).second) {
-                LOG_ERROR("Duplicate standalone virtual block device, value " << diskPath << ".");
+                BIO_LOG_STD_ERR("Duplicate standalone virtual block device, value " << diskPath << ".");
                 return BIO_ERR;
             }
         }
@@ -402,7 +437,7 @@ BResult BioConfig::AutoConfigDaemonDisk(const ConfigurationPtr &conf)
         int64_t diskCapacity =
             FileUtil::GetDiskCapacityWithDiagnostics(diskPath, failedOperation, capacityProbeError);
         if (useStandaloneVirtualDisks && diskCapacity <= 0) {
-            LOG_ERROR("UBSIO initial raw block-device capacity probe failed, path:" << diskPath <<
+            BIO_LOG_STD_ERR("UBSIO initial raw block-device capacity probe failed, path:" << diskPath <<
                 ", operation:" << (failedOperation.empty() ? "capacity-validation" : failedOperation) <<
                 ", errno:" << capacityProbeError << ", reason:" <<
                 (capacityProbeError == 0 ? "device returned a zero capacity" : std::strerror(capacityProbeError)) <<
@@ -412,6 +447,7 @@ BResult BioConfig::AutoConfigDaemonDisk(const ConfigurationPtr &conf)
             return BIO_ERR;
         }
         mDaemonConfig.diskCaps.emplace_back(diskCapacity);
+        mDaemonConfig.diskPhysicalCaps.emplace_back(diskCapacity);
     }
 
     if (mDaemonConfig.diskCaps.size() == 0) {
@@ -421,7 +457,14 @@ BResult BioConfig::AutoConfigDaemonDisk(const ConfigurationPtr &conf)
     }
 
     if (mDaemonConfig.diskCaps.size() > DISK_PATH_CONFIG_MAX_NUM) {
-        LOG_ERROR("Disk path num limit:" << DISK_PATH_CONFIG_MAX_NUM << ", input:" << mDaemonConfig.diskCaps.size());
+        BIO_LOG_STD_ERR("Disk path num limit:" << DISK_PATH_CONFIG_MAX_NUM <<
+            ", input:" << mDaemonConfig.diskCaps.size());
+        return BIO_ERR;
+    }
+
+    if (mDaemonConfig.diskPhysicalCaps.size() != mDaemonConfig.diskList.size()) {
+        BIO_LOG_STD_ERR("Standalone physical disk capacity config is inconsistent, disk path num:" <<
+            mDaemonConfig.diskList.size() << ", physical cap num:" << mDaemonConfig.diskPhysicalCaps.size() << ".");
         return BIO_ERR;
     }
 
@@ -440,7 +483,7 @@ BResult BioConfig::AutoConfigUnderFs(const ConfigurationPtr &conf)
     mUnderFsConfig.cephConfig.cfgPath = conf->GetStr(UNDERFS_CEPH_CFG_PATH.first);
     if (mUnderFsConfig.underFsType == "ceph") {
         if (!FileUtil::CanonicalPath(mUnderFsConfig.cephConfig.cfgPath)) {
-            LOG_ERROR("Ceph config path not exist, value:" << mUnderFsConfig.cephConfig.cfgPath);
+            BIO_LOG_STD_ERR("Ceph config path not exist, value:" << mUnderFsConfig.cephConfig.cfgPath);
             return BIO_ERR;
         }
     }
@@ -448,6 +491,13 @@ BResult BioConfig::AutoConfigUnderFs(const ConfigurationPtr &conf)
     mUnderFsConfig.cephConfig.user = conf->GetStr(UNDERFS_CEPH_USER.first);
     mUnderFsConfig.hdfsConfig.nameNode = conf->GetStr(UNDERFS_HDFS_NAMENODE.first);
     mUnderFsConfig.hdfsConfig.workingPath = conf->GetStr(UNDERFS_HDFS_WORKING_PATH.first);
+    mUnderFsConfig.localConfig.rootPath = conf->GetStr(UNDERFS_LOCAL_ROOT_PATH.first);
+    if (mUnderFsConfig.underFsType == "local") {
+        if (!FileUtil::CanonicalPath(mUnderFsConfig.localConfig.rootPath)) {
+            LOG_ERROR("Local underfs root path does not exist, value:" << mUnderFsConfig.localConfig.rootPath << ".");
+            return BIO_ERR;
+        }
+    }
 
     std::vector<std::string> idWithPoolNames;
     StrUtil::Split(conf->GetStr(UNDERFS_CEPH_POOL.first), ",", idWithPoolNames);
@@ -474,53 +524,82 @@ void BioConfig::BakFileProcess(const std::string &configPath)
     initConfPath = "./" + CONF_INIT_BAK_SUFFIX;
     bakConfPath = "./" + CONF_BAK_SUFFIX;
     currentConfigPath = "./" + CONF_SUFFIX;
+    homePath = "./";
 #endif
-    // 1、查看是否存在.bak.init文件，存在则将其重命名为.bak文件,不存在不做处理
+    // 1、.bak.init 表示加盘事务尚未完成（PREPARED），启动时只能丢弃，不能提升为 .bak。
     if (FileUtil::Exist(initConfPath)) {
-        if (std::rename(initConfPath.c_str(), bakConfPath.c_str()) != 0) {
-            LOG_WARN("Replace bak init path to bak path failed!");
+        LOG_INFO("Discard prepared disk config backup, path:" << initConfPath << ".");
+        if (!FileUtil::RemoveFile(initConfPath)) {
+            LOG_WARN("Discard prepared disk config backup failed, path:" << initConfPath << ".");
         }
     }
 
-    // 2、判断是否存在.bak文件，不存在不做处理，
+    // 2、只有事务成功后才生成 .bak（COMMITTED），此时才允许 roll-forward。
     if (!FileUtil::Exist(bakConfPath)) {
         return;
     }
 
-    // 3、存在则删除老conf文件（存在，不存在则忽略），并将.bak重命名问ubsio.conf
-    if (FileUtil::Exist(currentConfigPath)) {
-        if (std::remove(currentConfigPath.c_str()) != 0) {
-            LOG_ERROR("Remove configPath error.");
-            return;
-        }
+    // 3、同目录 rename 原子替换旧配置；目标不存在时同样成立。
+    if (!FileUtil::RenameFile(bakConfPath, currentConfigPath)) {
+        BIO_LOG_STD_ERR("Replace config with committed backup failed, bak:" << bakConfPath <<
+            ", config:" << currentConfigPath << ".");
+        return;
     }
-    if (std::rename(bakConfPath.c_str(), currentConfigPath.c_str()) != 0) {
-        LOG_ERROR("Replace bak path to conf path failed!");
+    if (!FileUtil::SyncDir(homePath)) {
+        BIO_LOG_STD_ERR("Sync config directory after roll-forward failed, path:" << homePath << ".");
     }
+}
+
+BResult BioConfig::PrepareLogDirectories()
+{
+    StrUtil::StrTrim(mDaemonConfig.logPath);
+    if (!FileUtil::PrepareDirectory(mDaemonConfig.logPath, LOG_DIR_MODE)) {
+        BIO_LOG_STD_ERR("Failed to prepare log directory: " << mDaemonConfig.logPath << ".");
+        return BIO_ERR;
+    }
+
+    std::string traceDirectory = FileUtil::JoinPath(mDaemonConfig.logPath, "trace");
+    if (!FileUtil::PrepareDirectory(traceDirectory, LOG_DIR_MODE)) {
+        BIO_LOG_STD_ERR("Failed to prepare trace directory: " << traceDirectory << ".");
+        return BIO_ERR;
+    }
+    return BIO_OK;
+}
+
+BResult BioConfig::Initialize()
+{
+    std::string configPath;
+    if (!ResolveConfigPath(configPath)) {
+        BIO_LOG_STD_ERR(BIO_CONFIG_ENV << " must be an absolute regular file path, value: " << configPath);
+        return BIO_ERR;
+    }
+    return Initialize(configPath);
 }
 
 BResult BioConfig::Initialize(const std::string &configPath)
 {
+    auto dirEndPos = configPath.find_last_of('/');
+    std::string homePath = (dirEndPos == std::string::npos) ? "./" : configPath.substr(0, dirEndPos + 1);
+    mConfigPath = configPath;
+    mConfigBakPath = homePath + CONF_BAK_SUFFIX;
+    mConfigBakInitPath = homePath + CONF_INIT_BAK_SUFFIX;
+    mConfigLockPath = configPath + ".lock";
     BakFileProcess(configPath);
     std::string configurePath = configPath;
-    LOG_INFO("Start to read config file.");
-
     if (mInited) {
         return BIO_OK;
     }
 
     ConfigurationPtr conf = Configuration::GetInstance<BioConfig>();
     if (conf.Get() == nullptr) {
-        LOG_INFO("Create config object failed.");
+        BIO_LOG_STD_ERR("Create config object failed.");
         return BIO_ERR;
     }
 
     if (!conf->ReadConf<BioConfig>(configurePath)) {
-        LOG_ERROR("Read config file failed.");
+        BIO_LOG_STD_ERR("Read config file failed: " << configurePath << ".");
         return BIO_ERR;
     }
-
-    DumpToLog();
 
     std::ostringstream ossTmp;
     /* validate based on validation */
@@ -530,14 +609,19 @@ BResult BioConfig::Initialize(const std::string &configPath)
             ossTmp << item << "\n";
         }
 
-        LOG_ERROR("Invalid configuration with un-proper items: \n" << ossTmp.str() << "\n");
+        BIO_LOG_STD_ERR("Invalid configuration with un-proper items:\n" << ossTmp.str());
         return BIO_ERR;
     }
 
     /* auto config something */
     auto ret = AutoConfAfterLoadFromFile(conf);
     if (ret != BIO_OK) {
-        LOG_ERROR("Module load config file failed");
+        BIO_LOG_STD_ERR("Module load config file failed.");
+        return BIO_ERR;
+    }
+
+    ret = PrepareLogDirectories();
+    if (ret != BIO_OK) {
         return BIO_ERR;
     }
 
@@ -584,36 +668,13 @@ BResult BioConfig::SelectStandaloneDiskByDeviceInfo()
             ", disk cap num:" << mDaemonConfig.diskCaps.size() << ".");
         return BIO_ERR;
     }
-
-    if (mDaemonConfig.standaloneDeviceCount != 0) {
-        return SelectStandaloneVirtualDisks(diskNum);
+    if (mDaemonConfig.diskPhysicalCaps.size() != mDaemonConfig.diskList.size()) {
+        LOG_ERROR("Standalone physical disk config is inconsistent, disk path num:" << mDaemonConfig.diskList.size() <<
+            ", physical cap num:" << mDaemonConfig.diskPhysicalCaps.size() << ".");
+        return BIO_ERR;
     }
 
-    return SelectStandaloneDiskLegacy(diskNum);
-}
-
-BResult BioConfig::SelectStandaloneDiskLegacy(uint16_t diskNum)
-{
-    uint32_t diskIndex = mStandaloneDeviceInfo.deviceId;
-    if (diskIndex >= diskNum) {
-        LOG_ERROR("Invalid standalone device info, deviceId:" << diskIndex <<
-            ", diskPathNum:" << diskNum << ". The device id must match the index in ubsio.disk.path.");
-        return BIO_INVALID_PARAM;
-    }
-    if (mDaemonConfig.diskCaps[diskIndex] <= 0) {
-        LOG_ERROR("Invalid standalone disk capacity, diskIndex:" << diskIndex << ", cap:" <<
-            mDaemonConfig.diskCaps[diskIndex] << ".");
-        return BIO_INVALID_PARAM;
-    }
-
-    std::string selectedPath = mDaemonConfig.diskList[diskIndex];
-    int64_t selectedCapacity = mDaemonConfig.diskCaps[diskIndex];
-    mDaemonConfig.diskList.assign(1, selectedPath);
-    mDaemonConfig.diskCaps.assign(1, selectedCapacity);
-    mStandaloneDiskIndex = diskIndex;
-    LOG_INFO("Standalone selects cache disk by device info, deviceId:" << diskIndex <<
-        ", configuredDiskNum:" << diskNum << ", selectedPath:" << selectedPath << ".");
-    return BIO_OK;
+    return SelectStandaloneVirtualDisks(diskNum);
 }
 
 BResult BioConfig::SelectStandaloneVirtualDisks(uint16_t diskNum)
@@ -639,31 +700,131 @@ BResult BioConfig::SelectStandaloneVirtualDisks(uint16_t diskNum)
     return BIO_OK;
 }
 
+BResult BioConfig::LockDiskConfig()
+{
+    if (mDiskConfigLockFd >= 0) {
+        return BIO_OK;
+    }
+    if (mConfigLockPath.empty()) {
+        LOG_ERROR("Lock disk config failed, lock path is empty.");
+        return BIO_INNER_ERR;
+    }
+
+    int32_t fd = open(mConfigLockPath.c_str(), O_CREAT | O_RDWR | O_CLOEXEC, S_IRUSR | S_IWUSR);
+    if (fd < 0) {
+        LOG_ERROR("Open disk config lock failed, path:" << mConfigLockPath << ", errno:" << errno <<
+            ", reason:" << strerror(errno) << ".");
+        return BIO_INNER_ERR;
+    }
+    int32_t ret;
+    do {
+        ret = flock(fd, LOCK_EX);
+    } while (ret != 0 && errno == EINTR);
+    if (ret != 0) {
+        LOG_ERROR("Lock disk config failed, path:" << mConfigLockPath << ", errno:" << errno <<
+            ", reason:" << strerror(errno) << ".");
+        close(fd);
+        return BIO_INNER_ERR;
+    }
+    mDiskConfigLockFd = fd;
+    return BIO_OK;
+}
+
+void BioConfig::UnlockDiskConfig()
+{
+    if (mDiskConfigLockFd < 0) {
+        return;
+    }
+    if (flock(mDiskConfigLockFd, LOCK_UN) != 0) {
+        LOG_WARN("Unlock disk config failed, path:" << mConfigLockPath << ", errno:" << errno <<
+            ", reason:" << strerror(errno) << ".");
+    }
+    close(mDiskConfigLockFd);
+    mDiskConfigLockFd = -1;
+}
+
+bool BioConfig::FindDiskInConfig(const std::string &configPath, const std::string &diskPath)
+{
+    std::vector<std::string> lines;
+    if (!FileUtil::ReadFile(configPath, lines)) {
+        return false;
+    }
+    int32_t lineIndex = FileUtil::FindTargetLine(lines, "ubsio.disk.path");
+    if (lineIndex < 0) {
+        return false;
+    }
+    std::string configKey;
+    std::string configValue;
+    if (!FileUtil::ParseConfigLine(lines[lineIndex], configKey, configValue) || configKey != "ubsio.disk.path") {
+        return false;
+    }
+
+    std::vector<std::string> diskPaths;
+    StrUtil::Split(configValue, ":", diskPaths);
+    for (const auto &configuredPath : diskPaths) {
+        size_t begin = configuredPath.find_first_not_of(" \t");
+        if (begin == std::string::npos) {
+            continue;
+        }
+        size_t end = configuredPath.find_last_not_of(" \t");
+        if (configuredPath.substr(begin, end - begin + 1) == diskPath) {
+            return true;
+        }
+    }
+    return false;
+}
+
 BResult BioConfig::CreateDiskConfBak(const std::string &diskPath)
 {
+    if (FindDiskInConfig(mConfigPath, diskPath)) {
+        LOG_INFO("Disk path already exists in config file, skip config update, diskPath:" << diskPath << ".");
+        return BIO_EXISTS;
+    }
+
     LOG_DEBUG("Start to backup disk config.");
-    auto ret = FileUtil::BackUpFile(CONFIG_PATH, CONFIG_PATH_BAK_INIT);
+    auto ret = FileUtil::BackUpFile(mConfigPath, mConfigBakInitPath);
     if (UNLIKELY(!ret)) {
         LOG_ERROR("Backup config file failed.");
         return BIO_INNER_ERR;
     }
 
-    BResult res = AddDiskPath(diskPath, CONFIG_PATH_BAK_INIT);
+    BResult res = AddDiskPath(diskPath, mConfigBakInitPath);
     if (UNLIKELY(res != BIO_OK)) {
         LOG_ERROR("Add disk path to config file failed.");
-        FileUtil::RemoveFile(CONFIG_PATH_BAK_INIT);
+        FileUtil::RemoveFile(mConfigBakInitPath);
         return BIO_INNER_ERR;
     }
 
-    ret = FileUtil::RenameFile(CONFIG_PATH_BAK_INIT, CONFIG_PATH_BAK);
-    if (UNLIKELY(!ret)) {
-        LOG_ERROR("Rename backup config file failed.");
-        FileUtil::RemoveFile(CONFIG_PATH_BAK_INIT);
-        return BIO_INNER_ERR;
-    }
-
-    LOG_DEBUG("Finish to backup disk config.");
+    // .bak.init 只表示 PREPARED，等到加盘所有可失败步骤都成功后，
+    // 由 CommitDiskConfBak 才把它提升为 .bak（COMMITTED）。
+    LOG_DEBUG("Finish to prepare disk config backup.");
     return BIO_OK;
+}
+
+BResult BioConfig::CommitDiskConfBak()
+{
+    LOG_DEBUG("Start to commit disk config backup.");
+    auto ret = FileUtil::RenameFile(mConfigBakInitPath, mConfigBakPath);
+    if (UNLIKELY(!ret)) {
+        LOG_ERROR("Promote prepared disk config backup failed, init:" << mConfigBakInitPath <<
+            ", bak:" << mConfigBakPath << ".");
+        return BIO_INNER_ERR;
+    }
+
+    auto dirEndPos = mConfigPath.find_last_of('/');
+    std::string homePath = (dirEndPos == std::string::npos) ? "./" : mConfigPath.substr(0, dirEndPos + 1);
+    if (!FileUtil::SyncDir(homePath)) {
+        LOG_ERROR("Sync config directory after backup promotion failed, path:" << homePath << ".");
+        return BIO_INNER_ERR;
+    }
+
+    return ReplaceFile(mConfigPath, mConfigBakPath);
+}
+
+void BioConfig::DiscardDiskConfBak()
+{
+    FileUtil::RemoveFile(mConfigBakInitPath);
+    FileUtil::RemoveFile(mConfigBakPath);
 }
 
 BResult BioConfig::AddDiskPath(const std::string &diskPath, const std::string &configPath)
@@ -697,13 +858,16 @@ BResult BioConfig::AddDiskPath(const std::string &diskPath, const std::string &c
 BResult BioConfig::ReplaceFile(const std::string &oldFile, const std::string &newFile)
 {
     LOG_DEBUG("Start to replace file.");
-    if (std::remove(oldFile.c_str()) != 0) {
-        LOG_ERROR("Old file is not exist, oldFile: " << oldFile << ".");
+    // 同目录 rename 原子覆盖已存在的目标文件，避免先 remove 再 rename 留下的空窗。
+    if (!FileUtil::RenameFile(newFile, oldFile)) {
+        LOG_ERROR("Replace file failed, oldFile: " << oldFile << " , newFile: " << newFile << ".");
         return BIO_INNER_ERR;
     }
 
-    if (std::rename(newFile.c_str(), oldFile.c_str()) != 0) {
-        LOG_ERROR("Rename file failed, oldFile: " << oldFile << " , newFile: " << newFile << ".");
+    auto dirEndPos = oldFile.find_last_of('/');
+    std::string dirPath = (dirEndPos == std::string::npos) ? "./" : oldFile.substr(0, dirEndPos + 1);
+    if (!FileUtil::SyncDir(dirPath)) {
+        LOG_ERROR("Sync config directory after replace failed, path:" << dirPath << ".");
         return BIO_INNER_ERR;
     }
 
@@ -726,8 +890,17 @@ bool BioConfig::CheckDiskIsExist(std::string &newDiskPath, uint32_t &diskId)
 
 void BioConfig::ResizeDaemonConfigDisks(std::string &newDiskPath)
 {
+    int64_t physicalCapacity = FileUtil::GetDiskCapacity(newDiskPath);
     mDaemonConfig.diskList.emplace_back(newDiskPath);
-    mDaemonConfig.diskCaps.emplace_back(FileUtil::GetDiskCapacity(newDiskPath));
+    mDaemonConfig.diskCaps.emplace_back(physicalCapacity);
+    mDaemonConfig.diskPhysicalCaps.emplace_back(physicalCapacity);
+}
+
+void BioConfig::AppendDaemonDisk(const std::string &diskPath, int64_t diskCapacity, int64_t physicalCapacity)
+{
+    mDaemonConfig.diskList.emplace_back(diskPath);
+    mDaemonConfig.diskCaps.emplace_back(diskCapacity);
+    mDaemonConfig.diskPhysicalCaps.emplace_back(physicalCapacity);
 }
 
 void BioConfig::DumpToLog()

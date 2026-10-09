@@ -15,6 +15,7 @@
 
 #include <unistd.h>
 #include <atomic>
+#include <exception>
 #include <functional>
 #include <mutex>
 #include <thread>
@@ -138,7 +139,11 @@ public:
         }
 
         tmp->IncreaseRef();
-        return mRunnableQueue.Enqueue(tmp);
+        if (UNLIKELY(!mRunnableQueue.Enqueue(tmp))) {
+            tmp->DecreaseRef();
+            return false;
+        }
+        return true;
     }
 
     /*
@@ -193,6 +198,7 @@ private:
     uint16_t mThreadNum = 0;
     int16_t mCpuSetStartIdx = -1;
     std::vector<std::thread *> mThreads;
+    RunnablePtr mStopTask;
 
     std::atomic<bool> mStarted;
     std::atomic<bool> mStopped;
@@ -205,6 +211,9 @@ private:
 
 inline bool ExecutorService::Start()
 {
+    if (mStopped) {
+        return false;
+    }
     if (mStarted) {
         return true;
     }
@@ -217,16 +226,30 @@ inline bool ExecutorService::Start()
         return false;
     }
 
-    for (uint16_t i = 0; i < mThreadNum; i++) {
-        auto cpuId = mCpuSetStartIdx < 0 ? -1 : mCpuSetStartIdx + i;
-        std::thread *thr = nullptr;
-        thr = new (std::nothrow) std::thread(&ExecutorService::RunInThread, this, cpuId);
-        if (thr == nullptr) {
-            LOG_ERROR("Failed to create executor thread " << i);
+    try {
+        // Reserve before starting threads so recording a live thread cannot allocate.
+        mThreads.reserve(mThreadNum);
+        mStopTask = new (std::nothrow) Runnable();
+        if (mStopTask == nullptr) {
+            Stop();
             return false;
         }
+        mStopTask->Type(RunnableType::STOP);
 
-        mThreads.push_back(thr);
+        for (uint16_t i = 0; i < mThreadNum; i++) {
+            auto cpuId = mCpuSetStartIdx < 0 ? -1 : mCpuSetStartIdx + i;
+            auto *thr = new (std::nothrow) std::thread(&ExecutorService::RunInThread, this, cpuId);
+            if (thr == nullptr) {
+                LOG_ERROR("Failed to create executor thread " << i);
+                Stop();
+                return false;
+            }
+            mThreads.push_back(thr);
+        }
+    } catch (const std::exception &ex) {
+        LOG_ERROR("Failed to start executor, error " << ex.what());
+        Stop();
+        return false;
     }
 
     while (mStartedThreadNum < mThreadNum) {
@@ -239,22 +262,16 @@ inline bool ExecutorService::Start()
 
 inline void ExecutorService::Stop()
 {
-    if (!mStarted || mStopped) {
+    if (mStopped) {
         return;
     }
 
+    // Drain accepted work before STOP; retain each queue reference until enqueue succeeds.
     for (uint32_t i = 0; i < mThreads.size(); ++i) {
-        RunnablePtr stopTask = new (std::nothrow) Runnable();
-        if (stopTask == nullptr) {
-            LOG_ERROR("Failed to new stop task, probably out of memory");
-            break;
-        }
-        stopTask->Type(RunnableType::STOP);
-
-        Runnable *tmp = stopTask.Get();
+        Runnable *tmp = mStopTask.Get();
         tmp->IncreaseRef();
-        if (!mRunnableQueue.EnqueueFirst(tmp)) {
-            continue;
+        while (!mRunnableQueue.Enqueue(tmp)) {
+            std::this_thread::yield();
         }
     }
 
@@ -264,6 +281,7 @@ inline void ExecutorService::Stop()
         }
     }
 
+    mStopTask = nullptr;
     mStopped = true;
     mRunnableQueue.UnInitialize();
 }

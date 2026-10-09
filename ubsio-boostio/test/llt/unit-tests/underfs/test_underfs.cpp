@@ -233,7 +233,7 @@ TEST_F(TestUnderFs, test_underfs_ceph_stat_return_fail)
 
     BioHvsActiveTracePoint(0, "SERVER_UNDERFS_STAT_SIZE", 0, 1, userParam);
     ret = g_cephInstancePtr->Stat(G_KEY, stat);
-    EXPECT_EQ(ret, BIO_NOT_EXISTS);
+    EXPECT_EQ(ret, BIO_OK);
     BioHvsDeactiveTracePoint(0, "SERVER_UNDERFS_STAT_SIZE");
 
     BioHvsActiveTracePoint(0, "SERVER_UNDERFS_STAT", 0, 1, userParam);

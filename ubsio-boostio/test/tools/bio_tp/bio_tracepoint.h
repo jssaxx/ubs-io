@@ -12,9 +12,7 @@
 
 #ifndef BIO_TRACEPOINT_H
 #define BIO_TRACEPOINT_H
-#ifdef __aarch64__
 #include "tracepoint.h"
-#endif
 
 namespace ock {
 namespace bio {

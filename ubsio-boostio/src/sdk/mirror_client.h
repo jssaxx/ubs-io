@@ -188,6 +188,8 @@ public:
 
     BResult StatObject(const char *key, const ObjLocation &location, ObjStat &stat);
 
+    BResult BatchStat(const char **keys, ObjLocation *locations, uint32_t count, BatchObjStat *stats);
+
     BResult BatchExist(const char *key[], ObjLocation location[], uint32_t count, bool *result);
 
     BResult DispathBatchExist(const char *key[], ObjLocation location[], uint32_t count, bool *result);
@@ -299,6 +301,8 @@ private:
     BResult BatchGetKeyDiskAddrImpl(MirrorBatchGetKeyAddr &param);
 
     BResult BatchGetImpl(MirrorBatchGet &param);
+
+    BResult BatchGetStandalone(MirrorBatchGet &param);
 
     BResult GetImpl(MirrorGet &param, AsyncOpParam &opParam);
 
@@ -458,24 +462,7 @@ private:
         return BIO_NOT_EXISTS;
     }
 
-    inline void Delete(uint16_t ptId, uint64_t flowId)
-    {
-        sleep(BIO_IO_DELAY_TIME);
-        mLock.LockWrite();
-        auto it = mFlowMap.find(ptId);
-        if (UNLIKELY(it == mFlowMap.end())) {
-            mLock.UnLock();
-            return;
-        }
-        if (it->second->FlowId() != flowId) {
-            mLock.UnLock();
-            return;
-        }
-        mFlowMap.erase(it);
-        mLock.UnLock();
-
-        DestroyFlow(ptId, flowId);
-    }
+    void Delete(uint16_t ptId, uint64_t flowId);
 
 private:
     std::unordered_map<uint16_t, FlowInstancePtr> mFlowMap;

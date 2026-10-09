@@ -15,14 +15,7 @@
 
 #include <utility>
 
-#ifdef __aarch64__
 #include "tracepoint.h"
-#else
-#define BIO_TRACEP_PARAM_SIZE 32UL
-typedef struct {
-    char tpParamData[BIO_TRACEP_PARAM_SIZE];
-} BioTracepointParam;
-#endif
 
 namespace ock {
 namespace bio {

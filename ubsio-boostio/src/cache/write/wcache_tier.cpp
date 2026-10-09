@@ -11,6 +11,7 @@
  */
 
 #include "wcache_tier.h"
+#include <unistd.h>
 #include "flow_manager.h"
 #include "securec.h"
 #include "cache_flow.h"
@@ -22,9 +23,11 @@
 
 namespace ock {
 namespace bio {
-BResult WCacheTier::Init(WCacheTierType cacheTier, uint64_t flowId, uint16_t diskId)
+BResult WCacheTier::Init(WCacheTierType cacheTier, uint64_t flowId, uint16_t diskId, bool useCompactMeta)
 {
     type = cacheTier;
+    mUseCompactMeta = useCompactMeta;
+    mMetaEntrySize = mUseCompactMeta ? sizeof(WFlowCompactSliceMeta) : sizeof(WFlowSliceMeta);
     FlowType flowType;
     auto ret = ToFlowType(cacheTier, flowType);
     ChkTrueNot(ret == BIO_OK, ret);
@@ -48,7 +51,9 @@ BResult WCacheTier::Init(WCacheTierType cacheTier, uint64_t flowId, uint16_t dis
 
     LOG_INFO("Data flowId:" << dataFlowId << ", flowType:" << flowType);
 
-    mFlowTruncateCursor = MakeRef<WFlowTruncateCursor>();
+    uint64_t preTruncateSliceIndex =
+        (mMetaFlow->GetTruncateOffset() + mMetaEntrySize - 1) / mMetaEntrySize;
+    mFlowTruncateCursor = MakeRef<WFlowTruncateCursor>(preTruncateSliceIndex);
     ChkTrueNot(mFlowTruncateCursor != nullptr, BIO_ALLOC_FAIL);
 
     return BIO_OK;
@@ -59,27 +64,34 @@ BResult WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice, const Sli
 {
     // fill meta flow.
     BResult res;
-    if (slice->GetIndexInFlow() != 0 && UINT64_MAX / slice->GetIndexInFlow() < sizeof(WFlowSliceMeta)) {
-        LOG_ERROR("Index in flow error " << slice->GetIndexInFlow() << ", flow meta size:" << sizeof(WFlowSliceMeta));
+    if (slice->GetIndexInFlow() != 0 && UINT64_MAX / slice->GetIndexInFlow() < mMetaEntrySize) {
+        LOG_ERROR("Index in flow error, index:" << slice->GetIndexInFlow() << ", flowMetaSize:" <<
+            mMetaEntrySize << ".");
         return BIO_INNER_RETRY;
     }
-    auto metaFlowOffset = slice->GetIndexInFlow() * sizeof(WFlowSliceMeta);
+    auto metaFlowOffset = slice->GetIndexInFlow() * mMetaEntrySize;
     WCacheSlicePtr metaSlice;
     BIO_TP_START(WCACHE_GET_MEM_SLICE_FAIL, &res, BIO_INNER_RETRY);
-    res = GetSlice(mMetaFlow, metaFlowOffset, slice->GetIndexInFlow(), sizeof(WFlowSliceMeta), metaSlice);
+    res = GetSlice(mMetaFlow, metaFlowOffset, slice->GetIndexInFlow(), mMetaEntrySize, metaSlice);
     BIO_TP_END;
     ChkTrue(res == BIO_OK, res, "Failed to get meta slice, flowId" <<
         mMetaFlow->GetFlowId() << " ret:" << res);
-    WFlowSliceMeta sliceMeta{};
-    auto ret = memcpy_s(sliceMeta.key, (NO_512 - NO_32), key, (strlen(key) + 1UL));
-    if (ret != 0) {
-        return BIO_INNER_RETRY;
+    BResult ret = BIO_OK;
+    if (mUseCompactMeta) {
+        WFlowCompactSliceMeta sliceMeta{};
+        ret = memcpy_s(sliceMeta.key, sizeof(sliceMeta.key), key, strlen(key) + 1UL);
+        ChkTrue(ret == BIO_OK, BIO_INNER_RETRY, "Copy compact wcache key failed, keyLength:" << strlen(key) << ".");
+        ret = mSliceOperator.Copy(reinterpret_cast<const char *>(&sliceMeta), metaSlice.Get());
+    } else {
+        WFlowSliceMeta sliceMeta{};
+        ret = memcpy_s(sliceMeta.key, sizeof(sliceMeta.key), key, strlen(key) + 1UL);
+        ChkTrue(ret == BIO_OK, BIO_INNER_RETRY, "Copy wcache key failed, keyLength:" << strlen(key) << ".");
+        sliceMeta.offset = slice->GetOffsetInFlow();
+        sliceMeta.length = slice->GetLength();
+        sliceMeta.magic = slice->GetFlowId();
+        sliceMeta.hasEvict = 0;
+        ret = mSliceOperator.Copy(reinterpret_cast<const char *>(&sliceMeta), metaSlice.Get());
     }
-    sliceMeta.offset = slice->GetOffsetInFlow();
-    sliceMeta.length = slice->GetLength();
-    sliceMeta.magic = slice->GetFlowId();
-    sliceMeta.hasEvict = 0;
-    ret = mSliceOperator.Copy(reinterpret_cast<const char *>(&sliceMeta), metaSlice.Get());
     ChkTrueNot(ret == BIO_OK, ret);
 
     // fill data flow.
@@ -101,7 +113,7 @@ BResult WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice, const Sli
         }
     }
 
-    destSliceRef = MakeRef<WCacheSliceRef>(dataSlice);
+    destSliceRef = MakeRef<WCacheSliceRef>(dataSlice, SLICE_PENDING);
     ChkTrueNot(destSliceRef != nullptr, BIO_INNER_RETRY);
     LOG_DEBUG("Wcache write memory success, key: " << key << ".");
     return BIO_OK;
@@ -158,18 +170,19 @@ uint64_t WCacheTier::GetTruncateIndex()
 
 BResult WCacheTier::GetMetaSlice(uint64_t indexInFlow, WCacheSlicePtr &slice)
 {
+    ChkTrueNot(mMetaEntrySize != 0 && indexInFlow <= UINT64_MAX / mMetaEntrySize, BIO_INVALID_PARAM);
     BResult ret = BIO_ERR;
     BIO_TP_START(WCACHE_GET_META_SLICE_FAIL, ret, BIO_ERR);
-    ret = GetSlice(mMetaFlow, indexInFlow * sizeof(WFlowSliceMeta), indexInFlow, sizeof(WFlowSliceMeta), slice);
+    ret = GetSlice(mMetaFlow, indexInFlow * mMetaEntrySize, indexInFlow, mMetaEntrySize, slice, true);
     BIO_TP_END;
     ChkTrue(ret == BIO_OK, ret,
         "Failed to get meta slice, flowId " << mMetaFlow->GetFlowId() << " indexInFlow:" << indexInFlow);
     return BIO_OK;
 }
 
-BResult WCacheTier::GetDataSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
+BResult WCacheTier::GetDataSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice, bool existingOnly)
 {
-    BResult ret = GetSlice(mDataFlow, sliceKey, slice);
+    BResult ret = GetSlice(mDataFlow, sliceKey, slice, existingOnly);
     ChkTrueNot(ret == BIO_OK, ret);
     return BIO_OK;
 }
@@ -178,8 +191,7 @@ BResult WCacheTier::GetMetaDataSlice(uint64_t indexInFlow, uint64_t offset, uint
     WFlowMetaDataSlice &metaDataSlice)
 {
     WCacheSlicePtr metaSlice;
-    BResult ret = GetSlice(mMetaFlow, indexInFlow * sizeof(WFlowSliceMeta), indexInFlow, sizeof(WFlowSliceMeta),
-        metaSlice);
+    BResult ret = GetSlice(mMetaFlow, indexInFlow * mMetaEntrySize, indexInFlow, mMetaEntrySize, metaSlice);
     ChkTrue(ret == BIO_OK, ret,
         "Failed to get slice, metaFlow id: " << mMetaFlow->GetFlowId() << " indexInFlow:" << indexInFlow);
 
@@ -264,18 +276,47 @@ void WCacheTier::Destroy()
     }
 }
 
+BResult WCacheTier::ReleaseFaultedResources()
+{
+    FlowPtr *flows[] = { &mMetaFlow, &mDataFlow };
+    for (const auto *flowPtr : flows) {
+        const FlowPtr &flow = *flowPtr;
+        if (flow == nullptr) {
+            continue;
+        }
+        // The tier and FlowManager own two stable references. Any extra reference is an existing preload task.
+        while (flow->GetRef() > 2) {
+            usleep(1000);
+        }
+        BResult ret = BIO_OK;
+        if (type == WCACHE_MEMORY) {
+            ret = flow->Seal();
+            if (LIKELY(ret == BIO_OK)) {
+                ret = FlowManager::Instance()->DestroyObject(flow->GetFlowType(), flow->GetFlowId());
+            }
+        } else {
+            ret = FlowManager::Instance()->AbandonObject(flow->GetFlowId());
+        }
+        if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
+            return ret;
+        }
+    }
+    return BIO_OK;
+}
+
 BResult WCacheTier::Evict(const WCacheSlicePtr &slice)
 {
     if (slice == nullptr) {
         LOG_ERROR("slice is null.");
         return BIO_INNER_ERR;
     }
-    auto truncateSlice = mFlowTruncateCursor->GetTruncateSlice(slice);
+    uint64_t preTruncateSliceIndex = 0;
+    auto truncateSlice = mFlowTruncateCursor->GetTruncateSlice(slice, preTruncateSliceIndex);
     if (truncateSlice == nullptr) {
         return BIO_OK;
     }
 
-    auto ret = mMetaFlow->TruncateOffset((truncateSlice->GetIndexInFlow() + 1) * sizeof(WFlowSliceMeta));
+    auto ret = mMetaFlow->TruncateOffset(preTruncateSliceIndex * mMetaEntrySize);
     ChkTrue(ret == BIO_OK, ret,
         "Failed to truncateOffset in metaFlow, FlowId:" << truncateSlice->GetFlowId() << ", fLowType:" <<
         truncateSlice->GetFlowType() << ", flowOffset:" << truncateSlice->GetOffsetInFlow() << ", flowIndex:" <<
@@ -293,10 +334,18 @@ BResult WCacheTier::Evict(const WCacheSlicePtr &slice)
     return BIO_OK;
 }
 
-inline BResult WCacheTier::GetSlice(const FlowPtr &flow, const SliceKey &sliceKey, WCacheSlicePtr &slice)
+void WCacheTier::MarkEvictedIndex(uint64_t indexInFlow)
 {
+    mFlowTruncateCursor->MarkEvictedIndex(indexInFlow);
+}
+
+inline BResult WCacheTier::GetSlice(const FlowPtr &flow, const SliceKey &sliceKey, WCacheSlicePtr &slice,
+    bool existingOnly)
+{
+    ChkTrueNot(sliceKey.length <= UINT32_MAX, BIO_INVALID_PARAM);
     std::vector<FlowAddr> flowAddrs;
-    auto ret = flow->GetAddrByOffset(sliceKey.flowOffset, sliceKey.length, flowAddrs);
+    auto ret = existingOnly ? flow->GetExistingAddrByOffset(sliceKey.flowOffset, sliceKey.length, flowAddrs) :
+        flow->GetAddrByOffset(sliceKey.flowOffset, sliceKey.length, flowAddrs);
     ChkTrueNot(ret == BIO_OK, ret);
 
     slice = MakeRef<WCacheSlice>(sliceKey.flowId, sliceKey.flowOffset, sliceKey.indexInFlow,
@@ -308,10 +357,12 @@ inline BResult WCacheTier::GetSlice(const FlowPtr &flow, const SliceKey &sliceKe
 }
 
 inline BResult WCacheTier::GetSlice(const FlowPtr &flow, uint64_t offset, uint64_t index, uint64_t length,
-    WCacheSlicePtr &slice)
+    WCacheSlicePtr &slice, bool existingOnly)
 {
+    ChkTrueNot(length <= UINT32_MAX, BIO_INVALID_PARAM);
     std::vector<FlowAddr> flowAddrs;
-    auto ret = flow->GetAddrByOffset(offset, length, flowAddrs);
+    auto ret = existingOnly ? flow->GetExistingAddrByOffset(offset, length, flowAddrs) :
+        flow->GetAddrByOffset(offset, length, flowAddrs);
     ChkTrueNot(ret == BIO_OK, ret);
 
     slice = MakeRef<WCacheSlice>(flow->GetFlowId(), offset, index, length, flowAddrs, flow->GetFlowType());
@@ -338,32 +389,95 @@ void WCacheTier::SetIsNormal(bool isNormal)
 
 WCacheSlicePtr WFlowTruncateCursor::GetTruncateSlice(const WCacheSlicePtr &slice)
 {
+    uint64_t preTruncateSliceIndex = 0;
+    return GetTruncateSlice(slice, preTruncateSliceIndex);
+}
+
+WCacheSlicePtr WFlowTruncateCursor::GetTruncateSlice(const WCacheSlicePtr &slice,
+    uint64_t &preTruncateSliceIndex)
+{
     std::lock_guard<std::mutex> lock(mEvictedSliceListLock);
+    preTruncateSliceIndex = mPreTruncateSliceIndex;
+    if (slice == nullptr) {
+        LOG_ERROR("Get truncate slice failed, slice is null.");
+        return nullptr;
+    }
     LOG_DEBUG("FlowId:" << slice->GetFlowId() << ", fLowType:" << slice->GetFlowType() << ", flowOffset:" <<
                         slice->GetOffsetInFlow() << ", flowIndex:" << slice->GetIndexInFlow() <<
                         ", len:" << slice->GetLength());
 
     // insert to set and sort by indexInFlow.
-    mEvictedSlices.emplace(slice);
+    uint64_t sliceIndex = slice->GetIndexInFlow();
+    if (sliceIndex == NO_MAX_VALUE64) {
+        LOG_ERROR("Get truncate slice failed, index reaches uint64 max, flowId:" << slice->GetFlowId());
+        return nullptr;
+    }
+    if (sliceIndex >= mPreTruncateSliceIndex) {
+        mEvictedSlices.emplace(slice);
+    } else {
+        LOG_DEBUG("Ignore stale evicted slice, flowId:" << slice->GetFlowId() << ", flowIndex:" << sliceIndex <<
+            ", truncateIndex:" << mPreTruncateSliceIndex);
+    }
 
     // obtain the last truncate slice from the indexInFlow that is truncated last time.
     WCacheSlicePtr truncateSlice = nullptr;
     uint64_t truncateSliceIndex = mPreTruncateSliceIndex;
-    auto evictSliceIt = mEvictedSlices.begin();
-    while (evictSliceIt != mEvictedSlices.end()) {
-        auto evictSlice = evictSliceIt->Get();
-        if (evictSlice->GetIndexInFlow() == truncateSliceIndex) {
-            truncateSlice = evictSlice;
+    size_t maxProcessCount = mEvictedSlices.size() + mEvictedIndexes.size();
+    for (size_t processedCount = 0; processedCount < maxProcessCount; ++processedCount) {
+        auto evictSliceIt = mEvictedSlices.begin();
+        if (evictSliceIt != mEvictedSlices.end() &&
+            evictSliceIt->Get()->GetIndexInFlow() < truncateSliceIndex) {
             mEvictedSlices.erase(evictSliceIt);
-            evictSliceIt = mEvictedSlices.begin();
-            truncateSliceIndex++;
-            mPreTruncateSliceIndex = truncateSliceIndex;
-        } else {
+            continue;
+        }
+
+        auto evictedIndexIt = mEvictedIndexes.begin();
+        if (evictedIndexIt != mEvictedIndexes.end() && *evictedIndexIt < truncateSliceIndex) {
+            mEvictedIndexes.erase(evictedIndexIt);
+            continue;
+        }
+
+        if (truncateSliceIndex == NO_MAX_VALUE64) {
+            LOG_ERROR("Stop advancing truncate cursor at uint64 max.");
             break;
         }
+
+        if (evictSliceIt != mEvictedSlices.end() &&
+            evictSliceIt->Get()->GetIndexInFlow() == truncateSliceIndex) {
+            truncateSlice = evictSliceIt->Get();
+            mEvictedSlices.erase(evictSliceIt);
+            ++truncateSliceIndex;
+            mPreTruncateSliceIndex = truncateSliceIndex;
+            continue;
+        }
+
+        if (evictedIndexIt == mEvictedIndexes.end() || *evictedIndexIt != truncateSliceIndex) {
+            break;
+        }
+        mEvictedIndexes.erase(evictedIndexIt);
+        ++truncateSliceIndex;
+        mPreTruncateSliceIndex = truncateSliceIndex;
     }
 
+    preTruncateSliceIndex = mPreTruncateSliceIndex;
     return truncateSlice;
+}
+
+void WFlowTruncateCursor::MarkEvictedIndex(uint64_t indexInFlow)
+{
+    std::lock_guard<std::mutex> lock(mEvictedSliceListLock);
+    if (indexInFlow == NO_MAX_VALUE64) {
+        LOG_ERROR("Mark evicted index failed, index reaches uint64 max.");
+        return;
+    }
+    if (indexInFlow < mPreTruncateSliceIndex) {
+        return;
+    }
+    mEvictedIndexes.emplace(indexInFlow);
+    while (mPreTruncateSliceIndex != NO_MAX_VALUE64 &&
+        mEvictedIndexes.erase(mPreTruncateSliceIndex) > 0) {
+        ++mPreTruncateSliceIndex;
+    }
 }
 
 inline uint64_t WFlowTruncateCursor::GetPreTruncateSliceIndex()
@@ -378,7 +492,7 @@ void WFlowTruncateCursor::SetGlobMinTruncateIndex(uint64_t globMinTruncateIndex)
 
 inline bool WFlowTruncateCursor::IsEmptyEvictSlices()
 {
-    return mEvictedSlices.empty();
+    return mEvictedSlices.empty() && mEvictedIndexes.empty();
 }
 
 void WFlowTruncateCursor::SetIsNormal(bool isNormal)

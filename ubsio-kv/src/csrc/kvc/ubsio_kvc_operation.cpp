@@ -28,18 +28,15 @@ static KvOperation *g_kvOperation = KvOperation::Instance();
 
 int32_t KvcOperationInit(int32_t devId)
 {
-    int32_t logicDevId = -1;
+    if (UNLIKELY(devId < -1)) {
+        LOG_ERROR("Invalid device id: " << devId);
+        return UBSIO_KVC_INVALID_PARAM;
+    }
     // 1. init acl stream
     if (devId >= 0) {
         if (ACLApi::LoadLibrary() != UBSIO_KVC_OK) {
             return UBSIO_KVC_ERR;
         }
-        int32_t logicIdRet = ACLApi::AclrtGetLogicDevIdByUserDevId(devId, &logicDevId);
-        if (logicIdRet != UBSIO_KVC_OK || logicDevId < 0) {
-            LOG_ERROR("get logic dev id by user dev id failed, userDevId=" << devId << ", ret=" << logicIdRet);
-            return UBSIO_KVC_ERR;
-        }
-        LOG_INFO("userDevId=" << devId << ", logicDevId=" << logicDevId);
         if (KvcStreamManager::InitAclStream(devId) != UBSIO_KVC_OK) {
             return UBSIO_KVC_ERR;
         }
@@ -51,7 +48,7 @@ int32_t KvcOperationInit(int32_t devId)
         LOG_ERROR("dlopen boostio library failed, ret:" << ret);
         return UBSIO_KVC_ERR;
     }
-    ret = DlBioSdkApi::KvBioInit(logicDevId >= 0 ? logicDevId : devId);
+    ret = DlBioSdkApi::KvBioInit();
     if (UNLIKELY(ret != UBSIO_KVC_OK)) {
         LOG_ERROR("init boostio failed, ret:" << ret);
         return UBSIO_KVC_ERR;
@@ -125,6 +122,17 @@ int32_t KvcBatchGetData(const std::vector<std::string> &key,
                         uint32_t flags)
 {
     return g_kvOperation->BatchKvGetData(key, bufs, lengths, results);
+}
+
+int32_t KvcBatchGetData(const char **keys,
+                        uint32_t keysCount,
+                        void **bufs,
+                        size_t *lengths,
+                        int *results,
+                        uint32_t flags)
+{
+    (void)flags;
+    return g_kvOperation->BatchKvGetData(keys, keysCount, bufs, lengths, results);
 }
 
 int32_t KvcBatchDeleteKey(const std::vector<std::string> &key, std::vector<int> &results, uint32_t flags)

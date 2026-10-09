@@ -19,8 +19,8 @@ void FakeBioSetStatSize(uint32_t size);
 void FakeBioSetBatchItemResult(int result);
 void FakeBioSetResourceDiskCount(uint16_t count);
 void FakeBioSetScanCount(uint32_t count);
+void FakeBioSetLogLevel(int32_t level);
 void FakeBioSetDiskInfo(const char *path, uint64_t offset, uint64_t length, int result);
-uint32_t FakeBioGetStandaloneDevice();
 
 void FakeAclReset();
 void FakeAclSetResult(const char *name, int result);

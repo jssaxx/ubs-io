@@ -66,6 +66,15 @@ typedef enum {
     STDERR_TYPE
 } LogType;
 
+typedef enum {
+    BIO_LOG_LEVEL_TRACE = 0,
+    BIO_LOG_LEVEL_DEBUG = 1,
+    BIO_LOG_LEVEL_INFO = 2,
+    BIO_LOG_LEVEL_WARN = 3,
+    BIO_LOG_LEVEL_ERROR = 4,
+    BIO_LOG_LEVEL_BUTT
+} BioLogLevel;
+
 #define MAX_KEY_SIZE (256)
 #define LOCATION_SIZE (2)
 #define NODE_DESC_SIZE (16)
@@ -115,6 +124,17 @@ typedef struct {
     time_t time;
 } ObjStat;
 
+#ifndef UBSIO_KV_BATCH_STAT_DEFINED
+#define UBSIO_KV_BATCH_STAT_DEFINED
+typedef struct {
+    char key[UBSIO_KV_MAX_KEY_SIZE];
+    uint32_t size;
+    int32_t result;
+} UbsioKvBatchStat;
+#endif
+
+typedef UbsioKvBatchStat BatchObjStat;
+
 typedef struct {
     uint64_t location[LOCATION_SIZE];
 } ObjLocation;
@@ -137,6 +157,8 @@ typedef struct {
     uint32_t size;
 } CacheAddress;
 
+// Describes space returned by the two-phase copy-free APIs. The standalone KVC path uses BioPut directly and does
+// not call BioAllocCacheSpace or BioPutWithCopyFree.
 typedef struct {
     uint8_t allocLoc;
     uint16_t addressNum;
@@ -215,11 +237,12 @@ typedef struct {
 CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf);
 
 /**
- * @brief: Set standalone local device mapping before BioInitialize(STANDALONE, ...)
+ * @brief Get the effective SDK log level after initialization.
  *
- * @param[in]: deviceId: local standalone device/process id of the current process
+ * @param level [out] Effective SDK log level.
+ * @return RET_CACHE_OK on success; otherwise, an error code.
  */
-void BioSetStandaloneDevice(uint32_t deviceId);
+CResult BioGetLogLevel(BioLogLevel *level);
 
 /**
  * @brief Register a same-process UBS IO metadata event callback.
@@ -455,8 +478,9 @@ CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **objs, uint64
  *
  * The returned snapshot includes objects recovered from BDM and objects written to disk after startup.
  * The caller must release the result with BioFreeScanKeyResult. Result ordering is unspecified.
+ * If *hasMore is true, release the current result and call BioScanKey again for the remaining objects.
  */
-CResult BioScanKey(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *count);
+CResult BioScanKey(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *count, bool *hasMore);
 
 void BioFreeScanKeyResult(const UbsioKvKeyInfo **items);
 
@@ -479,6 +503,19 @@ void BioFreeListResources(ObjStat **objs, uint64_t objNum);
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
 CResult BioStat(uint64_t tenantId, const char *key, ObjLocation location, ObjStat *stat);
+
+/**
+ * @brief: Stat multiple objects in standalone mode
+ *
+ * @param[in]: tenantId: tenant id
+ * @param[in]: keys: key array
+ * @param[in]: locations: location info array
+ * @param[in]: count: key count
+ * @param[out]: stats: key, size and result for each object
+ * @return: return RET_CACHE_OK when the batch is processed, others return a batch-level error
+ */
+CResult BioBatchStat(uint64_t tenantId, const char **keys, ObjLocation *locations, uint32_t count,
+    BatchObjStat *stats);
 
 /**
  * @brief: Batch exist object
@@ -524,6 +561,7 @@ CResult BioCheckUpgradeReady(uint64_t tenantId);
  * @param[in]: length : alloc space length
  * @param[out]: space: cache space describe
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ * @note: The standalone KVC path does not call this copy-free API.
  */
 CResult BioAllocCacheSpace(uint64_t tenantId, uint64_t objectId, uint64_t length, CacheSpaceDesc *space);
 
@@ -534,6 +572,7 @@ CResult BioAllocCacheSpace(uint64_t tenantId, uint64_t objectId, uint64_t length
  * @param[in]: key: write key
  * @param[in]: space : cache space describe
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ * @note: The standalone KVC path does not call this copy-free API.
  */
 CResult BioPutWithCopyFree(uint64_t tenantId, const char *key, CacheSpaceDesc *space);
 

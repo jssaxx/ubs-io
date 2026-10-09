@@ -19,6 +19,7 @@
 namespace ock {
 namespace bio {
 const auto LOG_LEVEL = std::make_pair("ubsio.log.level", "info");
+const auto LOG_PATH = std::make_pair("ubsio.log.path", "/var/log/ubsio");
 
 const auto NET_DATA_PROTOCOL = std::make_pair("ubsio.net.data.protocol", "tcp");
 const auto NET_RPC_DATA_BUSY_POLL_MODE = std::make_pair("ubsio.net.rpc.data.busy_polling_mode", "false");
@@ -58,13 +59,11 @@ const auto SEGMENT_SIZE_MB = std::make_pair("ubsio.segment.size_in_mb", 4);
 
 const auto MEM_CAPACITY_SIZE_GB = std::make_pair("ubsio.mem.size_in_gb", 50);
 
-const auto DISK_CONF_PATH = std::make_pair("ubsio.disk.path", "xxx:xxx:xxx");
+const auto DISK_CONF_PATH = std::make_pair("ubsio.disk.path", "");
 const auto BDM_IO_ENGINE = std::make_pair("ubsio.bdm.io_engine", "sync");
 const auto BDM_IO_URING_SQPOLL_MODE = std::make_pair("ubsio.bdm.io_uring.sqpoll_mode", "auto");
 const auto BDM_SYNC_WORKER_NUM = std::make_pair("ubsio.bdm.sync.worker_num", 16);
-const auto STANDALONE_DEVICE_COUNT = std::make_pair("ubsio.standalone.device_count", 0);
-const auto STANDALONE_DEVICE_ID_GATHER_TIMEOUT_SEC =
-    std::make_pair("ubsio.standalone.device_id_gather_timeout_sec", 180);
+const auto STANDALONE_DEVICE_COUNT = std::make_pair("ubsio.standalone.device_count", 1);
 const auto STANDALONE_FORCE_NEW_DISK = std::make_pair("ubsio.standalone.force_new_disk", "false");
 const auto SDK_MEM_CAPACITY_SIZE_MB = std::make_pair("ubsio.sdkmem.size_in_mb", 0);
 
@@ -87,10 +86,11 @@ const auto WORK_NET_TIMEOUT = std::make_pair("ubsio.work.net.timeout", 20);
 const auto BATCH_GET_THREAD_NUM = std::make_pair("ubsio.batchget.thread.num", 32);
 const auto BDM_BATCH_READ_WINDOW_KEYS = std::make_pair("ubsio.bdm.batch_read.window_keys", 128);
 const auto BDM_BATCH_READ_WINDOW_BYTES_MB = std::make_pair("ubsio.bdm.batch_read.window_bytes_mb", 64);
-const auto BDM_BATCH_READ_PIPELINE_DEPTH = std::make_pair("ubsio.bdm.batch_read.pipeline_depth", 4);
+const auto BATCH_READ_PIPELINE_DEPTH = std::make_pair("ubsio.batch_read.pipeline_depth", 4);
+const auto BATCH_READ_COPY_WORKERS = std::make_pair("ubsio.batch_read.copy_workers", 4);
 const auto BDM_BATCH_READ_TEMP_POOL_MB = std::make_pair("ubsio.bdm.batch_read.temp_pool_mb", 0);
-const auto BDM_BATCH_READ_STANDALONE_USE_SCRATCH_POOL =
-    std::make_pair("ubsio.bdm.batch_read.standalone.use_scratch_pool", "true");
+const auto BATCH_READ_STANDALONE_USE_SCRATCH_POOL =
+    std::make_pair("ubsio.batch_read.standalone.use_scratch_pool", "true");
 
 const auto WCACHE_PARTITION_COUNT = std::make_pair("ubsio.wcache.partition_count", 1);
 const auto WCACHE_COMPACTION_THRESHOLD = std::make_pair("ubsio.wcache.compaction_threshold", 30);
@@ -103,6 +103,8 @@ const auto UNDERFS_CEPH_POOL = std::make_pair("ubsio.underfs.ceph.pool", "0:jfsp
 
 const auto UNDERFS_HDFS_NAMENODE = std::make_pair("ubsio.underfs.hdfs.name_node", "default:0");
 const auto UNDERFS_HDFS_WORKING_PATH = std::make_pair("ubsio.underfs.hdfs.working_path", "/hdfs");
+const auto UNDERFS_LOCAL_ROOT_PATH = std::make_pair("ubsio.underfs.local.root_path", "/mnt/a800/kv");
+const auto UNDERFS_BATCH_READ_WORKER_NUM = std::make_pair("ubsio.underfs.batch_read.worker_num", 8);
 
 const auto PROMETHEUS_ENABLE = std::make_pair("ubsio.prometheus.enable", "false");
 const auto PROMETHEUS_LISTEN_ADDRESS = std::make_pair("ubsio.prometheus.exposer", "127.0.0.1:7204");
@@ -152,6 +154,7 @@ public:
 
     struct DaemonConfig {
         int32_t logLevel = 0;
+        std::string logPath = "/var/log/ubsio";
         uint32_t negotiateDelay = 100;
         uint32_t segment = 4194304;    // 4MB
         uint64_t memCap = 53687091200; // 50GB
@@ -168,11 +171,14 @@ public:
         long diskWriteRatio = 5;
         std::vector<std::string> diskList;
         std::vector<int64_t> diskCaps;
+        // Startup-time physical capacity snapshot. diskCaps is overwritten with
+        // BDM data-region capacity in virtual-region mode, so a rejoin needs
+        // this untouched value to detect a replaced disk with different size.
+        std::vector<int64_t> diskPhysicalCaps;
         std::string bdmIoEngine = "sync";
         std::string bdmIoUringSqpollMode = "auto";
         uint32_t bdmSyncWorkerNum = 16;
-        uint32_t standaloneDeviceCount = 0;
-        uint32_t standaloneDeviceIdGatherTimeoutSec = 180;
+        uint32_t standaloneDeviceCount = 1;
         bool standaloneForceNewDisk = false;
         uint32_t workScene = 0;
         uint32_t workIoAlignSize = 1;
@@ -181,9 +187,11 @@ public:
         uint32_t batchGetThreadNum = 32;
         uint32_t bdmBatchReadWindowKeys = 128;
         uint32_t bdmBatchReadWindowBytesMb = 64;
-        uint32_t bdmBatchReadPipelineDepth = 4;
+        uint32_t batchReadPipelineDepth = 4;
+        uint32_t batchReadCopyWorkers = 4;
         uint32_t bdmBatchReadTempPoolMb = 0;
-        bool bdmBatchReadStandaloneUseScratchPool = true;
+        bool batchReadStandaloneUseScratchPool = true;
+        uint32_t underFsBatchReadWorkerNum = 8;
         bool enableCrc = false;
         bool enableTrace = true;
         bool enableQos = true;
@@ -213,10 +221,15 @@ public:
         std::string workingPath;
     };
 
+    struct LocalConfig {
+        std::string rootPath;
+    };
+
     struct UnderFsConfig {
         std::string underFsType;
         CephConfig cephConfig;
         HdfsConfig hdfsConfig;
+        LocalConfig localConfig;
     };
 
 public:
@@ -228,9 +241,18 @@ public:
 
     void BakFileProcess(const std::string &configPath);
 
+    BResult Initialize();
+
     BResult Initialize(const std::string &configPath);
 
+    void SetStandaloneMode(bool standaloneMode) noexcept
+    {
+        mStandaloneMode = standaloneMode;
+    }
+
     void LoadDefaultConf() override;
+
+    void DumpToLog();
 
     const NetConfig &GetNetConfig() const noexcept
     {
@@ -276,6 +298,13 @@ public:
 
     BResult CreateDiskConfBak(const std::string &diskPath);
 
+    BResult LockDiskConfig();
+    void UnlockDiskConfig();
+
+    BResult CommitDiskConfBak();
+
+    void DiscardDiskConfBak();
+
     BResult AddDiskPath(const std::string &diskPath, const std::string &configPath);
 
     BResult ReplaceFile(const std::string &oldFile, const std::string &newFile);
@@ -284,9 +313,9 @@ public:
 
     void ResizeDaemonConfigDisks(std::string &newDiskPath);
 
-private:
-    void DumpToLog();
+    void AppendDaemonDisk(const std::string &diskPath, int64_t diskCapacity, int64_t physicalCapacity);
 
+private:
     BResult AutoConfAfterLoadFromFile(const ConfigurationPtr &conf);
 
     BResult AutoConfigNet(const ConfigurationPtr &conf);
@@ -305,9 +334,11 @@ private:
 
     BResult AutoConfigUnderFs(const ConfigurationPtr &conf);
 
-    BResult SelectStandaloneDiskLegacy(uint16_t diskNum);
+    BResult PrepareLogDirectories();
 
     BResult SelectStandaloneVirtualDisks(uint16_t diskNum);
+
+    bool FindDiskInConfig(const std::string &configPath, const std::string &diskPath);
 
 private:
     struct StandaloneDeviceInfo {
@@ -320,9 +351,14 @@ private:
     DaemonConfig mDaemonConfig;
     ClientConfig mClientConfig;
     UnderFsConfig mUnderFsConfig;
+    bool mStandaloneMode{ false };
     bool mInited{ false };
-    uint32_t mStandaloneDiskIndex{ 0 };
     StandaloneDeviceInfo mStandaloneDeviceInfo;
+    std::string mConfigPath;
+    std::string mConfigBakPath;
+    std::string mConfigBakInitPath;
+    std::string mConfigLockPath;
+    int32_t mDiskConfigLockFd{ -1 };
 };
 }
 }

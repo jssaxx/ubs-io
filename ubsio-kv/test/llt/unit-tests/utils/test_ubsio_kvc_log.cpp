@@ -32,10 +32,10 @@ TEST_F(KvTest, LoggerAndFileDescriptorHelpersAreSafe)
     EXPECT_EQ(logger.SetLogLevel(DEBUG_LEVEL), 0);
     EXPECT_EQ(logger.SetLogLevel(BUTT_LEVEL), -1);
     EXPECT_EQ(logger.SetLogLevel(static_cast<LogLevel>(-1)), -1);
-    EXPECT_EQ(logger.GetLogLevel("DEBUG"), DEBUG_LEVEL);
-    EXPECT_EQ(logger.GetLogLevel("INFO"), INFO_LEVEL);
-    EXPECT_EQ(logger.GetLogLevel("WARN"), WARN_LEVEL);
-    EXPECT_EQ(logger.GetLogLevel("ERROR"), ERROR_LEVEL);
+    EXPECT_EQ(logger.GetLogLevel("debug"), DEBUG_LEVEL);
+    EXPECT_EQ(logger.GetLogLevel("info"), INFO_LEVEL);
+    EXPECT_EQ(logger.GetLogLevel("warn"), WARN_LEVEL);
+    EXPECT_EQ(logger.GetLogLevel("error"), ERROR_LEVEL);
     EXPECT_EQ(logger.GetLogLevel("missing"), INFO_LEVEL);
 
     gLogCalls = 0;

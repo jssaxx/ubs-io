@@ -65,11 +65,19 @@ public:
     BResult GetWCacheBatch(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
         const WCacheBatchSliceWriter &sliceWriter, uint64_t &realLen);
 
+    BResult GetUnderFsDirect(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, uint64_t &realLen);
+
     bool CanBatchWCacheRead() const;
 
     BResult Load(uint16_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen);
 
     BResult Stat(uint16_t ptId, const Key &key, CacheObjStat &cacheObjStat);
+
+    BResult StatWCache(uint16_t ptId, const Key &key, CacheObjStat &cacheObjStat);
+
+    BResult StatUnderFsDirect(const Key &key, CacheObjStat &cacheObjStat);
+
+    BResult ExistUnderFsDirect(const Key &key);
 
     bool Exist(uint16_t ptId, const Key &key);
 

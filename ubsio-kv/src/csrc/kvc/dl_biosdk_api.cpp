@@ -20,18 +20,46 @@
 #include "ubsio_kvc_def.h"
 #include "dl_biosdk_api.h"
 
-namespace {
-constexpr int32_t KVC_NO_DEVICE_ID = -1;
-constexpr uint32_t DEFAULT_STANDALONE_DEVICE_ID = 0;
-
-uint32_t GetStandaloneDeviceId(int32_t devId)
-{
-    return devId == KVC_NO_DEVICE_ID ? DEFAULT_STANDALONE_DEVICE_ID : static_cast<uint32_t>(devId);
-}
-}
-
 namespace ock {
 namespace ubsio {
+
+namespace {
+constexpr LogLevel BIO_TO_KVC_LOG_LEVEL[BIO_LOG_LEVEL_BUTT] = {
+    DEBUG_LEVEL, DEBUG_LEVEL, INFO_LEVEL, WARN_LEVEL, ERROR_LEVEL
+};
+
+inline bool IsBioLogLevelValid(int32_t level)
+{
+    return level >= static_cast<int32_t>(BIO_LOG_LEVEL_TRACE) &&
+        level < static_cast<int32_t>(BIO_LOG_LEVEL_BUTT);
+}
+
+void SetKvcLogLevel(LogLevel level)
+{
+    int32_t ret = UbsioLog::Instance().SetLogLevel(level);
+    if (UNLIKELY(ret != 0)) {
+        LOG_WARN("Set KVC log level failed, ret:" << ret << ", level:" << static_cast<int32_t>(level) << ".");
+    }
+}
+
+void SyncKvcLogLevel()
+{
+    BioLogLevel bioLogLevel = BIO_LOG_LEVEL_INFO;
+    CResult ret = DlBioSdkApi::GetLogLevel(&bioLogLevel);
+    if (UNLIKELY(ret != RET_CACHE_OK)) {
+        LOG_WARN("Get effective boostio log level failed, ret:" << ret << ". Use default KVC log level.");
+        SetKvcLogLevel(INFO_LEVEL);
+        return;
+    }
+    int32_t levelIndex = static_cast<int32_t>(bioLogLevel);
+    if (UNLIKELY(!IsBioLogLevelValid(levelIndex))) {
+        LOG_WARN("Get invalid boostio log level, level:" << levelIndex << ". Use default KVC log level.");
+        SetKvcLogLevel(INFO_LEVEL);
+        return;
+    }
+    SetKvcLogLevel(BIO_TO_KVC_LOG_LEVEL[static_cast<size_t>(levelIndex)]);
+}
+}
 
 bool DlBioSdkApi::gLoaded = false;
 std::mutex DlBioSdkApi::gMutex;
@@ -40,12 +68,13 @@ const std::string DlBioSdkApi::gBioSdkLibName = "libbio_sdk.so";
 
 BioExitFunc DlBioSdkApi::pBioExit = nullptr;
 BioInitFunc DlBioSdkApi::pBioInitialize = nullptr;
-BioSetStandaloneDeviceFunc DlBioSdkApi::pBioSetStandaloneDevice = nullptr;
+BioGetLogLevelFunc DlBioSdkApi::pBioGetLogLevel = nullptr;
 BioCreateCacheFunc DlBioSdkApi::pBioCreateCache = nullptr;
 BioCalLocationFunc DlBioSdkApi::pBioCalcLocation = nullptr;
 BioGetFunc DlBioSdkApi::pBioGet = nullptr;
 BioPutFunc DlBioSdkApi::pBioPut = nullptr;
 BioStatFunc DlBioSdkApi::pBioStat = nullptr;
+BioBatchStatFunc DlBioSdkApi::pBioBatchStat = nullptr;
 BioBatchGetFunc DlBioSdkApi::pBioBatchGet = nullptr;
 BioBatchExistFunc DlBioSdkApi::pBioBatchExist = nullptr;
 BioBatchFreeFunc DlBioSdkApi::pBioBatchGetFree = nullptr;
@@ -73,10 +102,11 @@ int32_t DlBioSdkApi::LoadLibrary()
     /* load sym */
     DL_LOAD_SYM(pBioExit, BioExitFunc, bioSdkHandle, "BioExit");
     DL_LOAD_SYM(pBioInitialize, BioInitFunc, bioSdkHandle, "BioInitialize");
-    DL_LOAD_SYM(pBioSetStandaloneDevice, BioSetStandaloneDeviceFunc, bioSdkHandle, "BioSetStandaloneDevice");
+    pBioGetLogLevel = reinterpret_cast<BioGetLogLevelFunc>(dlsym(bioSdkHandle, "BioGetLogLevel"));
     DL_LOAD_SYM(pBioGet, BioGetFunc, bioSdkHandle, "BioGet");
     DL_LOAD_SYM(pBioPut, BioPutFunc, bioSdkHandle, "BioPut");
     DL_LOAD_SYM(pBioStat, BioStatFunc, bioSdkHandle, "BioStat");
+    DL_LOAD_SYM(pBioBatchStat, BioBatchStatFunc, bioSdkHandle, "BioBatchStat");
     DL_LOAD_SYM(pBioCreateCache, BioCreateCacheFunc, bioSdkHandle, "BioCreateCache");
     DL_LOAD_SYM(pBioCalcLocation, BioCalLocationFunc, bioSdkHandle, "BioCalcLocation");
     DL_LOAD_SYM(pBioBatchGet, BioBatchGetFunc, bioSdkHandle, "BioBatchGet");
@@ -104,10 +134,11 @@ void DlBioSdkApi::CleanupLibrary()
 
     pBioExit = nullptr;
     pBioInitialize = nullptr;
-    pBioSetStandaloneDevice = nullptr;
+    pBioGetLogLevel = nullptr;
     pBioGet = nullptr;
     pBioPut = nullptr;
     pBioStat = nullptr;
+    pBioBatchStat = nullptr;
     pBioCreateCache = nullptr;
     pBioCalcLocation = nullptr;
     pBioBatchGet = nullptr;
@@ -127,20 +158,9 @@ void DlBioSdkApi::CleanupLibrary()
     gLoaded = false;
 }
 
-int32_t DlBioSdkApi::KvBioInit(int32_t devId)
+int32_t DlBioSdkApi::KvBioInit()
 {
     LOG_INFO("Start boostio begin...");
-    if (devId < KVC_NO_DEVICE_ID) {
-        LOG_ERROR("Invalid device id:" << devId << ".");
-        return -1;
-    }
-
-    auto standaloneDeviceId = GetStandaloneDeviceId(devId);
-    if (devId == KVC_NO_DEVICE_ID) {
-        LOG_INFO("Use default standalone device id:" << standaloneDeviceId << " for kv device id:" << devId << ".");
-    }
-    SetStandaloneDevice(standaloneDeviceId);
-
     ClientOptionsConfig optConf{};
     optConf.logType = (LogType)(1);
     optConf.enable = false;
@@ -152,6 +172,7 @@ int32_t DlBioSdkApi::KvBioInit(int32_t devId)
         LOG_ERROR("boostio initialize failed, ret: " << ret);
         return -1;
     }
+    SyncKvcLogLevel();
     LOG_INFO("Start boostio success.");
 
     LOG_INFO("boostio createcache...");

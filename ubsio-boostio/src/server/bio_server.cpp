@@ -10,9 +10,9 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include <algorithm>
 #include <dlfcn.h>
-#include <cstdlib>
-#include <sys/stat.h>
+#include <limits>
 #include <unistd.h>
 #include <mutex>
 #include <utility>
@@ -26,37 +26,37 @@
 #include "bio_monotonic.h"
 #include "bio_server_c.h"
 #include "cache.h"
+#include "cache_flow.h"
 #include "cache_overload_ctrl.h"
 #include "cm_c.h"
 #include "expire_checker.h"
 #include "flow_manager.h"
 #include "htracer.h"
 #include "interceptor_server.h"
-#include "standalone_device_id_gather.h"
 #include "standalone_view.h"
 #include "bio_server.h"
 
 namespace ock {
 namespace bio {
 namespace {
-constexpr const char* BIO_CONFIG_ENV = "UBSIO_CONFIG_PATH";
-constexpr uint32_t LOG_DIR_MODE = S_IRWXU | S_IRGRP | S_IXGRP;
-
-bool IsAbsoluteRegularFile(const std::string &path)
-{
-    if (path.empty() || path.front() != '/') {
-        return false;
-    }
-
-    struct stat pathStat {};
-    return stat(path.c_str(), &pathStat) == 0 && S_ISREG(pathStat.st_mode);
-}
-
 std::mutex gMetaEventCallbackLock;
 UbsioMetaEventCallbackC gMetaEventCallback = nullptr;
 void *gMetaEventCallbackContext = nullptr;
 bool gMetaEventCallbackConfigured = false;
 bool gMetaEventCallbackApplicable = false;
+
+class InitErrorScreenGuard {
+public:
+    InitErrorScreenGuard()
+    {
+        Logger::SetInitErrorScreenEnabled(true);
+    }
+
+    ~InitErrorScreenGuard()
+    {
+        Logger::SetInitErrorScreenEnabled(false);
+    }
+};
 
 UbsIoMetaEventCallback BuildMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)
 {
@@ -134,8 +134,8 @@ std::vector<ModuleDesc> BioServer::BuildStandaloneModules()
         std::bind(&BioServer::BioTraceExit, this));
     modules.emplace_back("UnderFs", std::bind(&BioServer::BioUnderFsInit, this), nullptr, nullptr,
         std::bind(&BioServer::BioUnderFsExit, this));
-    modules.emplace_back("StandaloneDeviceIdGather", std::bind(&BioServer::BioStandaloneDeviceIdGatherInit, this),
-        nullptr, nullptr, nullptr);
+    modules.emplace_back("StandaloneSlotLease", std::bind(&BioServer::BioStandaloneSlotLeaseInit, this),
+        nullptr, nullptr, std::bind(&BioServer::BioStandaloneSlotLeaseExit, this));
     modules.emplace_back("Bdm", std::bind(&BioServer::BioBdmInit, this), nullptr, nullptr,
         std::bind(&BioServer::BioBdmExit, this));
     modules.emplace_back("StandaloneMem", std::bind(&BioServer::BioStandaloneMemInit, this), nullptr, nullptr,
@@ -143,7 +143,7 @@ std::vector<ModuleDesc> BioServer::BuildStandaloneModules()
     modules.emplace_back("Flow", std::bind(&BioServer::BioFlowInit, this), nullptr, nullptr,
         std::bind(&BioServer::BioFlowExit, this));
     modules.emplace_back("StandaloneView", std::bind(&BioServer::BioStandaloneViewInit, this), nullptr, nullptr,
-        nullptr);
+        std::bind(&BioServer::BioStandaloneViewExit, this));
     modules.emplace_back("Cache", std::bind(&BioServer::BioCacheInit, this), nullptr, nullptr,
         std::bind(&BioServer::BioCacheExit, this));
     modules.emplace_back("MirrorServer", std::bind(&BioServer::BioMirrorServerInit, this), nullptr, nullptr,
@@ -158,17 +158,17 @@ BioServer::BioServer() noexcept
 
 BResult BioServer::InitializeRuntime()
 {
-    std::string path = "/var/log/ubsio/";
-#ifdef DEBUG_UT
-    path = "./";
-#endif
-    FileUtil::MakeDirRecursive(path, LOG_DIR_MODE);
-    std::string logPath = path + "bio" + std::to_string(getpid()) + ".log";
-    if (BioLoggerInit(logPath) != BIO_OK || BioConfigInit() != BIO_OK) {
+    if (BioConfigInit() != BIO_OK) {
         return BIO_INNER_ERR;
     }
 
-    auto &daemonConfig = mConfig->GetDaemonConfig();
+    const auto &daemonConfig = mConfig->GetDaemonConfig();
+    std::string logPath = FileUtil::JoinPath(daemonConfig.logPath, "bio" + std::to_string(getpid()) + ".log");
+    if (BioLoggerInit(logPath) != BIO_OK) {
+        return BIO_INNER_ERR;
+    }
+
+    mConfig->DumpToLog();
     BIO_LOG_RESET_LEVEL(daemonConfig.logLevel);
     return BIO_OK;
 }
@@ -217,10 +217,9 @@ BResult BioServer::Start()
     BIO_TP_END;
 
     // 1. Initialize infrastructure
+    mStandaloneMode = false;
     auto ret = InitializeRuntime();
     ChkTrue(ret == BIO_OK, ret, "Initialize runtime failed, result:" << ret << ".");
-
-    mStandaloneMode = false;
 
     // 2. Initialize boostio service
     ret = ProcessService(BuildClusterModules());
@@ -238,16 +237,16 @@ BResult BioServer::Start()
 BResult BioServer::StartStandalone()
 {
     std::lock_guard<std::mutex> lock(mStartLock);
+    InitErrorScreenGuard initErrorScreenGuard;
     BIO_TP_START(NO_PROCESS_SERVER_START, 0);
     if (mStarted) {
         return BIO_OK;
     }
     BIO_TP_END;
 
+    mStandaloneMode = true;
     auto ret = InitializeRuntime();
     ChkTrue(ret == BIO_OK, ret, "Initialize runtime failed, result:" << ret << ".");
-
-    mStandaloneMode = true;
     ret = ProcessService(BuildStandaloneModules());
     ChkTrue(ret == BIO_OK, ret, "Process standalone service failed, result:" << ret << ".");
 
@@ -287,29 +286,16 @@ BResult BioServer::BioConfigInit()
 
     mConfig = BioConfig::Instance();
     if (mConfig == nullptr) {
-        LOG_ERROR("Create bio configuration instance failed.");
+        BIO_LOG_STD_ERR("Create bio configuration instance failed.");
         return BIO_ERR;
     }
+    mConfig->SetStandaloneMode(mStandaloneMode);
 
     BResult result = BIO_INNER_ERR;
     BIO_TP_START(CONFIG_INIT_FAIL, &result, -1);
-#ifdef DEBUG_UT
-    const std::string confPath = "./ubsio_old.conf";
-#else
-    std::string confPath = CONFIG_PATH;
-    const char *envConfPath = getenv(BIO_CONFIG_ENV);
-    if (envConfPath != nullptr && envConfPath[0] != '\0') {
-        confPath = envConfPath;
-        if (!IsAbsoluteRegularFile(confPath)) {
-            LOG_ERROR(BIO_CONFIG_ENV << " must be an absolute regular file path, value: " << confPath);
-            return BIO_ERR;
-        }
-    }
-#endif
-    result = mConfig->Initialize(confPath);
+    result = mConfig->Initialize();
     BIO_TP_END;
     if (result != BIO_OK) {
-        LOG_ERROR("Failed to initialize configuration, result: " << result << ".");
         return BIO_ERR;
     }
 
@@ -324,7 +310,7 @@ BResult BioServer::BioLoggerInit(std::string pathName)
     loggerOptions.path = std::move(pathName);
     Logger *logger = Logger::Instance(loggerOptions);
     if (logger == nullptr) {
-        std::cout << "Failed to create logger instance." << std::endl;
+        BIO_LOG_STD_ERR("Failed to create logger instance.");
         return BIO_ERR;
     }
 
@@ -333,7 +319,7 @@ BResult BioServer::BioLoggerInit(std::string pathName)
     ret = logger->Init();
     BIO_TP_END;
     if (ret != BIO_OK) {
-        std::cout << "Failed to init logger, result:" << ret << ", log path:" << loggerOptions.path << "." << std::endl;
+        BIO_LOG_STD_ERR("Failed to init logger, result:" << ret << ", log path:" << loggerOptions.path << ".");
         return BIO_ERR;
     }
     return BIO_OK;
@@ -346,12 +332,7 @@ void BioServer::BioLoggerExit()
 
 BResult BioServer::BioTraceInit()
 {
-#ifdef DEBUG_UT
-    const std::string dumpDir = "./";
-#else
-    const std::string dumpDir = "/var/log/ubsio/trace/";
-#endif
-    FileUtil::MakeDirRecursive(dumpDir, LOG_DIR_MODE);
+    const std::string dumpDir = FileUtil::JoinPath(mConfig->GetDaemonConfig().logPath, "trace");
     auto ret = ock::htracer::HTracerInit(dumpDir);
     ock::htracer::HTracerSetEnable(BioConfig::Instance()->GetDaemonConfig().enableTrace);
     ChkTrue(ret == BIO_OK, BIO_ERR, "Failed to init tracer, result:" << ret << ", dumpDir:" << dumpDir << ".");
@@ -378,29 +359,28 @@ void BioServer::BioUnderFsExit()
     UfsHelper::Instance()->Stop();
 }
 
-BResult BioServer::BioStandaloneDeviceIdGatherInit()
+BResult BioServer::BioStandaloneSlotLeaseInit()
 {
     auto &daemonConfig = mConfig->GetDaemonConfig();
-    if (!daemonConfig.hasDiskCache || daemonConfig.standaloneDeviceCount == 0) {
+    if (!daemonConfig.hasDiskCache) {
         return mConfig->SelectStandaloneDiskByDeviceInfo();
     }
-
-    uint32_t logicDeviceId = mConfig->GetStandaloneDeviceId();
-    uint32_t virtualDeviceIndex = 0;
-    uint64_t gatherTimeoutMs =
-        static_cast<uint64_t>(daemonConfig.standaloneDeviceIdGatherTimeoutSec) * NO_1000;
-    auto ret = StandaloneDeviceIdGather::Gather(logicDeviceId, daemonConfig.standaloneDeviceCount,
-        virtualDeviceIndex, gatherTimeoutMs);
-    ChkTrue(ret == BIO_OK, ret, "Gather standalone logic device IDs failed, logicDeviceId:" << logicDeviceId <<
-        ", deviceCount:" << daemonConfig.standaloneDeviceCount << ", timeoutSec:" <<
-        daemonConfig.standaloneDeviceIdGatherTimeoutSec << ", result:" << ret << ".");
-
-    LOG_INFO("Overwrite standalone device ID with virtual index, logicDeviceId:" << logicDeviceId <<
-        ", virtualDeviceIndex:" << virtualDeviceIndex << ".");
-    mConfig->SetStandaloneDeviceInfo(virtualDeviceIndex);
+    ChkTrue(daemonConfig.standaloneDeviceCount > 0, BIO_INVALID_PARAM,
+        "Standalone disk cache requires ubsio.standalone.device_count in range [1," << DEVICE_SIZE << "].");
+    uint32_t slotIndex = UINT32_MAX;
+    auto ret = mStandaloneSlotLease.Acquire(daemonConfig.standaloneDeviceCount, slotIndex);
+    ChkTrue(ret == BIO_OK, ret, "Acquire standalone slot failed, result:" << ret << ".");
+    mConfig->SetStandaloneDeviceInfo(slotIndex);
     ret = mConfig->SelectStandaloneDiskByDeviceInfo();
-    ChkTrue(ret == BIO_OK, ret, "Select standalone disk failed, ret:" << ret << ".");
-    return BIO_OK;
+    if (ret != BIO_OK) {
+        mStandaloneSlotLease.Release();
+    }
+    return ret;
+}
+
+void BioServer::BioStandaloneSlotLeaseExit()
+{
+    mStandaloneSlotLease.Release();
 }
 
 BResult BioServer::BioBdmInit()
@@ -428,7 +408,7 @@ BResult BioServer::BioBdmInit()
                                                            << ".");
     ret = BdmInit();
     ChkTrue(ret == BDM_CODE_OK, BIO_ERR, "Failed to init BDM, result:" << ret << ".");
-    bool useVirtualRegions = mStandaloneMode && daemonConfig.standaloneDeviceCount != 0;
+    bool useVirtualRegions = mStandaloneMode && daemonConfig.hasDiskCache;
     if (!useVirtualRegions) {
         BdmSetDiskStartupInfo(mStandaloneMode ? 1U : 0U, mStandaloneMode ? mConfig->GetStandaloneDeviceId() : 0U);
     }
@@ -459,6 +439,11 @@ BResult BioServer::BioBdmInit()
     ChkTrue(ret == BDM_CODE_OK, BIO_ERR, "Failed to start BDM, result:" << ret << ".");
 
     if (useVirtualRegions) {
+        ret = mStandaloneSlotLease.PublishReady();
+        ChkTrue(ret == BIO_OK, ret, "Publish standalone initialization ready failed, result:" << ret << ".");
+    }
+
+    if (useVirtualRegions) {
         for (uint32_t diskId = 0; diskId < diskList.num; ++diskId) {
             if (BdmGetDiskStatus(diskId) != BDM_DISK_STATE_NORMAL) {
                 LOG_WARN("Skip unavailable virtual BDM capacity update, diskId:" << diskId << ".");
@@ -477,7 +462,10 @@ BResult BioServer::BioBdmInit()
 
     DiskAllocator diskAllocator;
     diskAllocator.alloc = [](uint32_t bdmId, uint64_t flowId, uint64_t flowOffset, uint64_t len, uint64_t *chunkId) {
-        int ret = BdmAlloc(bdmId, flowId, flowOffset, len, chunkId);
+        bool metadata = CacheFlowIdManager::GetType(flowId) == WRITE_CACHE &&
+            CacheFlowIdManager::GetInnerType(flowId) == WCACHE_FLOW_DISK_META_PREFIX;
+        int ret = metadata ? BdmAllocZeroed(bdmId, flowId, flowOffset, len, chunkId) :
+            BdmAlloc(bdmId, flowId, flowOffset, len, chunkId);
         if (ret != BDM_CODE_OK) {
             return BIO_ERR;
         }
@@ -494,7 +482,14 @@ BResult BioServer::BioBdmInit()
     return BIO_OK;
 }
 
-BResult BioServer::BioBdmUpdate(std::string diskPath)
+BResult BioServer::BioAttachDisk(std::string diskPath)
+{
+    uint32_t diskId = DISK_ID_INVALID;
+    uint64_t diskCapacity = 0;
+    return BioAttachDisk(std::move(diskPath), diskId, diskCapacity);
+}
+
+BResult BioServer::BioAttachDisk(std::string diskPath, uint32_t &diskId, uint64_t &diskCapacity)
 {
     auto &daemonConfig = mConfig->GetDaemonConfig();
     if (!daemonConfig.hasDiskCache) {
@@ -502,12 +497,24 @@ BResult BioServer::BioBdmUpdate(std::string diskPath)
         return BIO_INVALID_PARAM;
     }
 
-    auto diskCap = static_cast<uint64_t>(FileUtil::GetDiskCapacity(diskPath));
+    int64_t physicalCapacity = FileUtil::GetDiskCapacity(diskPath);
+    if (physicalCapacity <= 0) {
+        LOG_ERROR("Get added disk capacity failed, diskPath:" << diskPath << ".");
+        return BIO_INVALID_PARAM;
+    }
 
-    auto ret = BdmUpdate(const_cast<char *>(diskPath.c_str()), daemonConfig.segment, diskCap);
+    uint64_t virtualRegionCapacity = 0;
+    auto ret = BdmAttachDisk(const_cast<char *>(diskPath.c_str()), daemonConfig.segment,
+        static_cast<uint64_t>(physicalCapacity), &diskId, &virtualRegionCapacity);
     if (UNLIKELY(ret != BDM_CODE_OK)) {
-        LOG_ERROR("Bdm Update fail, diskPath: " << diskPath << ".");
+        LOG_ERROR("Bdm attach failed, diskPath: " << diskPath << ".");
         return BIO_ERR;
+    }
+    uint64_t usedCapacity = 0;
+    ret = BdmGetCapacity(diskId, &diskCapacity, &usedCapacity);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        diskCapacity = virtualRegionCapacity;
+        LOG_WARN("Get added BDM capacity failed, use virtual region capacity, diskId:" << diskId << ".");
     }
     return BIO_OK;
 }
@@ -726,6 +733,381 @@ BResult BioServer::BioStandaloneViewInit()
     }
     LOG_INFO("Standalone view init success, localNid:" << mLocalNid.VNodeId() << ", ptNum:" << mPtView.size() <<
         ".");
+
+    const auto &daemonConfig = mConfig->GetDaemonConfig();
+    if (!daemonConfig.hasDiskCache) {
+        return BIO_OK;
+    }
+    ret = mStandaloneView.Start(static_cast<uint32_t>(daemonConfig.diskList.size()),
+        std::bind(&BioServer::HandleStandaloneDiskFault, this, std::placeholders::_1));
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Start standalone disk fault handler failed, ret:" << ret << ".");
+        return ret;
+    }
+    return BIO_OK;
+}
+
+void BioServer::BioStandaloneViewExit()
+{
+    mStandaloneView.Stop();
+}
+
+BResult BioServer::HandleStandaloneDiskFault(uint16_t diskId)
+{
+    std::lock_guard<std::mutex> updateLock(mStandaloneViewUpdateMutex);
+    // The fault worker collects pending disk ids before it reaches this lock, so
+    // the fault can already be obsolete: a rolled back add disk untracks the id,
+    // and a retry can re-add the same id as a healthy disk. Only a still pending
+    // fault may be failed over.
+    if (!mStandaloneView.IsDiskFaultPending(diskId)) {
+        LOG_INFO("Skip obsolete standalone disk fault, diskId:" << diskId << ".");
+        return BIO_OK;
+    }
+
+    std::unique_lock<std::mutex> nodeLock(mNodeViewMutex, std::defer_lock);
+    std::unique_lock<std::mutex> ptLock(mPtViewMutex, std::defer_lock);
+    std::lock(nodeLock, ptLock);
+
+    StandaloneView::NodeView nextNodeView = mNodeView;
+    StandaloneView::PtView nextPtView = mPtView;
+    std::vector<std::pair<uint16_t, uint64_t>> faultPtCleanups;
+    BResult ret = mStandaloneView.FailoverDisk(diskId, mConfig->GetDaemonConfig().diskCaps, mLocalNid,
+        nextNodeView, nextPtView, faultPtCleanups);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+
+    uint64_t viewTime = Monotonic::TimeUs();
+    uint64_t lastViewTime = std::max(mCurNodeTimes, mCurPtTimes);
+    if (viewTime <= lastViewTime) {
+        viewTime = lastViewTime + 1;
+    }
+    mNodeView.swap(nextNodeView);
+    mPtView.swap(nextPtView);
+    mCurNodeTimes = viewTime;
+    mCurPtTimes = viewTime;
+
+    nodeLock.unlock();
+    ptLock.unlock();
+    LOG_INFO("Publish standalone disk fault view, diskId:" << diskId << ", viewTime:" << viewTime <<
+        ", faultPtCount:" << faultPtCleanups.size() << ".");
+
+    if (!mCacheInited) {
+        // StandaloneView starts before Cache, so an early startup disk fault has
+        // no WCache flows or index entries to clean up.
+        return BIO_OK;
+    }
+
+    // This fault worker is the single owner of disk-level flow cleanup. Other
+    // request paths, such as DestroyFlow, must only acknowledge flows that
+    // have already been taken over here and must not start a cleanup again.
+    BResult cleanupRet = WCacheManager::Instance()->CleanupFaultedDiskFlows(diskId);
+    if (UNLIKELY(cleanupRet != BIO_OK)) {
+        LOG_ERROR("Standalone faulted disk flow cleanup failed, diskId:" << diskId << ", ret:" << cleanupRet << ".");
+    }
+    return cleanupRet;
+}
+
+BResult BioServer::AddStandaloneDisk(std::string &diskPath)
+{
+    std::lock_guard<std::mutex> updateLock(mStandaloneViewUpdateMutex);
+    const auto &daemonConfig = mConfig->GetDaemonConfig();
+
+    // Keep the startup-time physical capacity snapshot in sync so a later
+    // rejoin can detect a replaced disk with a different size.
+    int64_t physicalCapacity = FileUtil::GetDiskCapacity(diskPath);
+    if (UNLIKELY(physicalCapacity <= 0)) {
+        LOG_ERROR("Get added disk capacity failed, diskPath: " << diskPath << ".");
+        return BIO_INVALID_PARAM;
+    }
+
+    BResult ret = mConfig->LockDiskConfig();
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+    bool configChanged = true;
+    ret = mConfig->CreateDiskConfBak(diskPath);
+    if (ret == BIO_EXISTS) {
+        configChanged = false;
+        ret = BIO_OK;
+    }
+    if (UNLIKELY(ret != BIO_OK)) {
+        mConfig->UnlockDiskConfig();
+        return ret;
+    }
+
+    uint32_t diskId = DISK_ID_INVALID;
+    uint64_t diskCapacity = 0;
+    bool diskTracked = false;
+    // Replacing the config file is the commit point of add disk: every step
+    // before it has to be undone as one unit, and no step after it is allowed to
+    // fail. BDM has no detach primitive, so a rolled back attach stays attached
+    // until the process restarts. A still healthy leftover is reused by the next
+    // attach of the same path, but a leftover that BDM has already faulted is
+    // invisible to that lookup, so adding that disk again needs a restart.
+    auto rollbackPrepared = [this, &configChanged, &diskId, &diskTracked]() {
+        if (diskTracked) {
+            mStandaloneView.UntrackDisk(static_cast<uint16_t>(diskId));
+            diskTracked = false;
+        }
+        if (configChanged) {
+            mConfig->DiscardDiskConfBak();
+        }
+        mConfig->UnlockDiskConfig();
+    };
+
+    ret = BioAttachDisk(diskPath, diskId, diskCapacity);
+    if (UNLIKELY(ret != BIO_OK || diskCapacity > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))) {
+        rollbackPrepared();
+        return ret == BIO_OK ? BIO_ERR : ret;
+    }
+
+    // Track the new disk before any view work so a fault reported by BDM
+    // immediately after attach cannot be dropped for being out of range.
+    ret = mStandaloneView.TrackDisk(static_cast<uint16_t>(diskId));
+    if (UNLIKELY(ret != BIO_OK)) {
+        rollbackPrepared();
+        return ret;
+    }
+    diskTracked = true;
+    if (BdmGetDiskStatus(diskId) != BDM_DISK_STATE_NORMAL) {
+        LOG_ERROR("New standalone disk is not normal, diskId:" << diskId << ", diskPath:" << diskPath << ".");
+        rollbackPrepared();
+        return BIO_ERR;
+    }
+
+    StandaloneView::NodeView currentNodeView;
+    StandaloneView::PtView currentPtView;
+    {
+        std::unique_lock<std::mutex> nodeLock(mNodeViewMutex, std::defer_lock);
+        std::unique_lock<std::mutex> ptLock(mPtViewMutex, std::defer_lock);
+        std::lock(nodeLock, ptLock);
+        currentNodeView = mNodeView;
+        currentPtView = mPtView;
+    }
+    StandaloneView::NodeView nextNodeView = currentNodeView;
+    StandaloneView::PtView nextPtView = currentPtView;
+    std::vector<CmPtInfo> changedPts;
+    ret = mStandaloneView.AddDisk(static_cast<uint16_t>(diskId), static_cast<int64_t>(diskCapacity),
+        daemonConfig.diskCaps, mLocalNid, nextNodeView, nextPtView, changedPts);
+    if (UNLIKELY(ret != BIO_OK)) {
+        rollbackPrepared();
+        return ret;
+    }
+
+    // BDM reports faults asynchronously, and the fault worker serializes behind
+    // mStandaloneViewUpdateMutex, so a fault raised while the next view was
+    // being rebuilt only becomes visible here. Publishing such a disk as
+    // CM_DISK_NORMAL would advertise capacity that BDM already stopped serving.
+    if (UNLIKELY(BdmGetDiskStatus(diskId) != BDM_DISK_STATE_NORMAL ||
+        mStandaloneView.IsDiskFault(static_cast<uint16_t>(diskId)))) {
+        LOG_ERROR("New standalone disk faulted before view publish, diskId:" << diskId << ", diskPath:" <<
+            diskPath << ".");
+        rollbackPrepared();
+        return BIO_ERR;
+    }
+
+    if (configChanged) {
+        ret = mConfig->CommitDiskConfBak();
+        if (UNLIKELY(ret != BIO_OK)) {
+            // The commit point was not reached, so the disk must not stay
+            // tracked. Leaving it in mDiskStates keeps one more entry than the
+            // config disk list, and the next retry then fails forever on the
+            // contiguous id check in TrackDisk.
+            rollbackPrepared();
+            return ret;
+        }
+    }
+    mConfig->UnlockDiskConfig();
+    // The config file is committed, so no step below may fail or roll back. The
+    // in-memory disk capacity must be appended before the views are published,
+    // because a later fault of this disk indexes diskCaps by the published disk
+    // id when it rebuilds the pt distribution.
+    mConfig->AppendDaemonDisk(diskPath, static_cast<int64_t>(diskCapacity), physicalCapacity);
+
+    auto markReadOnly = [&changedPts]() {
+        uint32_t markedWCacheCount = 0;
+        for (const auto &pt : changedPts) {
+            markedWCacheCount += WCacheManager::Instance()->MarkPtFlowsReadOnly(pt.ptId, pt.version,
+                pt.masterDiskId);
+        }
+        return markedWCacheCount;
+    };
+    uint32_t markedWCacheCount = markReadOnly();
+    uint64_t viewTime = Monotonic::TimeUs();
+    {
+        std::unique_lock<std::mutex> nodeLock(mNodeViewMutex, std::defer_lock);
+        std::unique_lock<std::mutex> ptLock(mPtViewMutex, std::defer_lock);
+        std::lock(nodeLock, ptLock);
+        uint64_t lastViewTime = std::max(mCurNodeTimes, mCurPtTimes);
+        if (viewTime <= lastViewTime) {
+            viewTime = lastViewTime + 1;
+        }
+        mNodeView.swap(nextNodeView);
+        mPtView.swap(nextPtView);
+        mCurNodeTimes = viewTime;
+        mCurPtTimes = viewTime;
+    }
+    markedWCacheCount += markReadOnly();
+    LOG_INFO("Publish standalone add disk view, diskId:" << diskId << ", capacity:" << diskCapacity <<
+        ", markedWCacheCount:" << markedWCacheCount << ", viewTime:" << viewTime << ".");
+    return BIO_OK;
+}
+
+BResult BioServer::AddStandaloneOldDisk(const std::string &diskPath, uint16_t diskId)
+{
+    std::lock_guard<std::mutex> updateLock(mStandaloneViewUpdateMutex);
+    const auto &daemonConfig = mConfig->GetDaemonConfig();
+    if (diskId >= daemonConfig.diskList.size() || diskId >= daemonConfig.diskPhysicalCaps.size()) {
+        LOG_ERROR("Invalid standalone rejoin disk, diskId:" << diskId << ", diskNum:" << daemonConfig.diskList.size() <<
+            ", physicalCapNum:" << daemonConfig.diskPhysicalCaps.size() << ".");
+        return BIO_INVALID_PARAM;
+    }
+
+    // A disk whose fault worker is still pending must finish failover first;
+    // otherwise a stale fault task could re-fault the recovered disk.
+    BResult ret = mStandaloneView.CheckDiskRecoverable(diskId);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+
+    StandaloneView::NodeView currentNodeView;
+    StandaloneView::PtView currentPtView;
+    {
+        std::unique_lock<std::mutex> nodeLock(mNodeViewMutex, std::defer_lock);
+        std::unique_lock<std::mutex> ptLock(mPtViewMutex, std::defer_lock);
+        std::lock(nodeLock, ptLock);
+        currentNodeView = mNodeView;
+        currentPtView = mPtView;
+    }
+
+    bool viewDiskNormal = false;
+    auto nodeIter = currentNodeView.find(mLocalNid);
+    if (nodeIter != currentNodeView.end()) {
+        for (const auto &disk : nodeIter->second.disks) {
+            if (disk.diskId == diskId) {
+                viewDiskNormal = disk.diskStatus == CM_DISK_NORMAL;
+                break;
+            }
+        }
+    }
+    if (viewDiskNormal) {
+        // Keep the original no-op behavior for an already-normal disk. If BDM
+        // disagrees with the view the state is inconsistent, so do not report
+        // success.
+        return BdmGetDiskStatus(diskId) == BDM_DISK_STATE_NORMAL ? BIO_OK : BIO_ERR;
+    }
+
+    // Reject a replaced disk whose physical capacity differs from the startup
+    // snapshot. BDM's cached region is sized by the startup capacity, so a
+    // different size cannot be adopted online.
+    std::string capacityProbePath = diskPath;
+    int64_t physicalCapacity = FileUtil::GetDiskCapacity(capacityProbePath);
+    if (UNLIKELY(physicalCapacity <= 0)) {
+        LOG_ERROR("Get rejoin disk capacity failed, diskPath:" << diskPath << ".");
+        return BIO_INVALID_PARAM;
+    }
+    if (physicalCapacity != daemonConfig.diskPhysicalCaps[diskId]) {
+        LOG_ERROR("Standalone rejoin disk capacity mismatch, diskId:" << diskId << ", diskPath:" << diskPath <<
+            ", expectedCapacity:" << daemonConfig.diskPhysicalCaps[diskId] << ", actualCapacity:" <<
+            physicalCapacity << ". Replace it with a disk of the same capacity or restart to adopt a new layout.");
+        return BIO_ERR;
+    }
+
+    StandaloneView::NodeView nextNodeView = currentNodeView;
+    StandaloneView::PtView nextPtView = currentPtView;
+    std::vector<CmPtInfo> changedPts;
+    ret = mStandaloneView.RejoinDisk(diskId, daemonConfig.diskCaps, mLocalNid, nextNodeView, nextPtView, changedPts);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+
+    if (BdmGetDiskStatus(diskId) != BDM_DISK_STATE_NORMAL) {
+        ret = BioDiskReset(diskId);
+        if (ret == BDM_CODE_NOT_EXIST) {
+            uint64_t diskCapacity = 0;
+            int32_t bdmRet = BdmAttachDiskAt(const_cast<char *>(diskPath.c_str()), daemonConfig.segment,
+                static_cast<uint64_t>(physicalCapacity), diskId, &diskCapacity);
+            if (UNLIKELY(bdmRet != BDM_CODE_OK)) {
+                LOG_ERROR("Attach missing standalone BDM object failed, diskId:" << diskId << ", diskPath:" <<
+                    diskPath << ", ret:" << bdmRet << ".");
+                return BIO_ERR;
+            }
+            ret = BIO_OK;
+        }
+        if (UNLIKELY(ret != BIO_OK)) {
+            // BioDiskReset marks the slot used before rebuilding the
+            // allocator; restore the fault state so a failed reset does not
+            // look like a healthy empty disk on retry.
+            BdmSetDiskUsedStatus(diskId, false);
+            return ret;
+        }
+    }
+
+    if (daemonConfig.standaloneDeviceCount != 0) {
+        uint64_t totalCapacity = 0;
+        uint64_t usedCapacity = 0;
+        int32_t bdmRet = BdmGetCapacity(diskId, &totalCapacity, &usedCapacity);
+        if (UNLIKELY(bdmRet != BDM_CODE_OK ||
+            totalCapacity > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))) {
+            BdmSetDiskUsedStatus(diskId, false);
+            LOG_ERROR("Get rejoined standalone BDM capacity failed, diskId:" << diskId << ", ret:" << bdmRet << ".");
+            return BIO_ERR;
+        }
+
+        int64_t previousCapacity = daemonConfig.diskCaps[diskId];
+        ret = mConfig->UpdateStandaloneDiskCapacity(diskId, static_cast<int64_t>(totalCapacity));
+        if (UNLIKELY(ret != BIO_OK)) {
+            BdmSetDiskUsedStatus(diskId, false);
+            return ret;
+        }
+        if (previousCapacity != static_cast<int64_t>(totalCapacity)) {
+            // A startup-failed virtual disk still carries its physical
+            // capacity in the config snapshot. Rebuild from the published
+            // views so PT weights use the newly created BDM data capacity.
+            nextNodeView = currentNodeView;
+            nextPtView = currentPtView;
+            ret = mStandaloneView.RejoinDisk(diskId, daemonConfig.diskCaps, mLocalNid, nextNodeView, nextPtView,
+                changedPts);
+            if (UNLIKELY(ret != BIO_OK)) {
+                BdmSetDiskUsedStatus(diskId, false);
+                return ret;
+            }
+        }
+    }
+
+    ret = mStandaloneView.MarkDiskRecovered(diskId);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+
+    auto markReadOnly = [&changedPts]() {
+        uint32_t markedWCacheCount = 0;
+        for (const auto &pt : changedPts) {
+            markedWCacheCount += WCacheManager::Instance()->MarkPtFlowsReadOnly(pt.ptId, pt.version,
+                pt.masterDiskId);
+        }
+        return markedWCacheCount;
+    };
+    uint32_t markedWCacheCount = markReadOnly();
+    uint64_t viewTime = Monotonic::TimeUs();
+    {
+        std::unique_lock<std::mutex> nodeLock(mNodeViewMutex, std::defer_lock);
+        std::unique_lock<std::mutex> ptLock(mPtViewMutex, std::defer_lock);
+        std::lock(nodeLock, ptLock);
+        uint64_t lastViewTime = std::max(mCurNodeTimes, mCurPtTimes);
+        if (viewTime <= lastViewTime) {
+            viewTime = lastViewTime + 1;
+        }
+        mNodeView.swap(nextNodeView);
+        mPtView.swap(nextPtView);
+        mCurNodeTimes = viewTime;
+        mCurPtTimes = viewTime;
+    }
+    markedWCacheCount += markReadOnly();
+    LOG_INFO("Publish standalone rejoin disk view, diskId:" << diskId << ", capacity:" <<
+        daemonConfig.diskCaps[diskId] << ", markedWCacheCount:" << markedWCacheCount << ", viewTime:" << viewTime <<
+        ".");
     return BIO_OK;
 }
 
@@ -853,7 +1235,7 @@ BResult BioServer::BioCacheInit()
         };
         ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
         if (ret != BIO_OK) {
-            LOG_ERROR("Net engine regist channel broken handler failed,, ret " << ret);
+            LOG_ERROR("Net engine register channel broken handler failed, ret " << ret);
             return ret;
         }
     }
@@ -866,6 +1248,8 @@ BResult BioServer::BioCacheInit()
     }
 
     mCacheInited = true;
+    // Fault handling must own recovered flows before background eviction can issue disk I/O.
+    WCacheManager::Instance()->StartGlobalEviction();
     return BIO_OK;
 }
 
@@ -1201,16 +1585,6 @@ int32_t BioServerStandaloneInit()
     return bioServer->StartStandalone();
 }
 
-void SetStandaloneDeviceInfo(uint32_t deviceId)
-{
-    auto config = BioConfig::Instance();
-    if (UNLIKELY(config == nullptr)) {
-        LOG_ERROR("Make bio config instance failed.");
-        return;
-    }
-    config->SetStandaloneDeviceInfo(deviceId);
-}
-
 void BioServerExit(void)
 {
     BioServer::Instance()->Exit();
@@ -1257,13 +1631,14 @@ extern "C" int32_t UbsioRegisterMetaEventCallback(UbsioMetaEventCallbackC callba
     return BIO_OK;
 }
 
-extern "C" int32_t UbsioScanKey(const UbsioKvKeyInfo **items, uint64_t *count)
+extern "C" int32_t UbsioScanKey(const UbsioKvKeyInfo **items, uint64_t *count, bool *hasMore)
 {
-    if (items == nullptr || count == nullptr) {
+    if (items == nullptr || count == nullptr || hasMore == nullptr) {
         return BIO_INVALID_PARAM;
     }
     *items = nullptr;
     *count = 0;
+    *hasMore = false;
 
     std::unordered_map<std::string, uint64_t> diskItems;
     auto ret = Cache::Instance().ScanDiskKeys(diskItems);
@@ -1565,6 +1940,12 @@ int32_t BatchExist(BatchExistRequest *req, BatchExistResponse *rsp)
     return BioServer::Instance()->GetMirrorServer()->BatchExistConvergence(*req, *rsp);
 }
 
+int32_t BatchExistStandalone(const char **keys, ObjLocation *locations, uint32_t count, bool *results)
+{
+    return static_cast<int32_t>(
+        BioServer::Instance()->GetMirrorServer()->BatchExistStandalone(keys, locations, count, results));
+}
+
 int32_t Delete(DeleteRequest *req)
 {
     return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->Delete(*req));
@@ -1612,6 +1993,12 @@ int32_t Stat(StatRequest *req, StatResponse *rsp)
     rsp->size = objInfo.size;
     rsp->time = objInfo.time;
     return static_cast<int32_t>(ret);
+}
+
+int32_t BatchStat(const char **keys, ObjLocation *locations, uint32_t count, BatchObjStat *stats)
+{
+    return static_cast<int32_t>(
+        BioServer::Instance()->GetMirrorServer()->BatchStatConvergence(keys, locations, count, stats));
 }
 
 int32_t Load(LoadRequest *req)

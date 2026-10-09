@@ -45,7 +45,7 @@ BResult FlowManager::Init()
         LOG_ERROR("Failed to start flow task pool, probably out of memory");
         return BIO_ERR;
     }
-    ret = mTaskPool[FLOW_DISK]->Start(NO_64, NO_4096);
+    ret = mTaskPool[FLOW_DISK]->Start(NO_8, NO_4096);
     if (ret != BIO_OK) {
         return ret;
     }
@@ -131,6 +131,27 @@ BResult FlowManager::DestroyObject(FlowType type, uint64_t flowId)
     }
     BIO_TP_END;
     return ret;
+}
+
+BResult FlowManager::AbandonObject(uint64_t flowId)
+{
+    std::lock_guard<std::mutex> lock(mMutex);
+    ChkTrueNot(mInited == true, BIO_NOT_READY);
+    auto iter = mDiskObjManager.find(flowId);
+    if (iter == mDiskObjManager.end()) {
+        return BIO_NOT_EXISTS;
+    }
+
+    FlowCache cacheType = mGetCacheType(flowId);
+    uint32_t mediaId = iter->second->GetMediaId();
+    ChkTrue((cacheType != FLOW_CACHE && mediaId < DEVICE_SIZE), BIO_ERR,
+        "Check failed when abandoning Flow, cacheType:" << cacheType << ", mediaId:" << mediaId << ".");
+    uint64_t abandonedLen = iter->second->GetAllocatedLen();
+    auto &usedSize = mUsedSize[cacheType][FLOW_DISK][mediaId];
+    uint64_t current = usedSize.load();
+    while (!usedSize.compare_exchange_weak(current, current > abandonedLen ? current - abandonedLen : 0)) {}
+    mDiskObjManager.erase(iter);
+    return BIO_OK;
 }
 
 BResult FlowManager::GetAllObject(FlowType type, std::map<uint64_t, FlowPtr> &objManager)

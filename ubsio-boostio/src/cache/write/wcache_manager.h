@@ -14,6 +14,8 @@
 #define BOOSTIO_WCACHE_MANAGER_H
 
 #include <atomic>
+#include <deque>
+#include <map>
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
@@ -69,9 +71,12 @@ public:
 
     BResult DestroyWCache(uint64_t procId, uint64_t flowId, uint16_t ptId, uint64_t ptv);
 
+    uint32_t MarkPtFlowsReadOnly(uint16_t ptId, uint64_t ptv, uint16_t diskId);
+
     BResult DeleteWCache(uint64_t flowId);
 
     BResult RecoverCache(FlowPtr metaFlow);
+    void StartGlobalEviction();
 
     BResult ServiceUngradeFlush();
 
@@ -118,13 +123,17 @@ public:
 
     void AppendMetaEvents(std::vector<UbsIoMetaEvent> &&events);
 
-    void FlushMetaEventBatch(const UbsIoMetaEventBatchPtr &batch);
+    void SubmitMetaEventBatch(const UbsIoMetaEventBatchPtr &batch);
 
     BResult GetEvictOffset(uint64_t flowId, uint64_t &flowOffset);
 
     BResult Flush(uint16_t ptId, uint64_t ptv);
 
     BResult ExpiredClear(uint16_t ptId, uint64_t ptv);
+
+    BResult CleanupFaultedDiskFlows(uint16_t failedDiskId);
+
+    BResult UnregisterFaultedFlows(uint16_t ptId, const std::list<WCachePtr> &faultedFlows);
 
     BResult HandleProcBroken(uint64_t procId);
 
@@ -137,6 +146,8 @@ public:
     BResult ProcBrokenSyncOldFlow(uint64_t flowId, uint64_t index, uint64_t offset, bool &needDestroy);
 
     WCachePtr GetWCache(uint64_t flowId);
+
+    WCachePtr GetWCacheForCleanup(uint64_t flowId);
 
     void HandleProcBrokenDestroyFlow(WCachePtr flow, uint32_t localNid, bool *slaveResult);
 
@@ -154,8 +165,15 @@ private:
     BResult ExpiredClearImpl(uint16_t ptId, uint64_t ptv);
     BResult HandleCacheBrokenHdl(uint64_t procId, uint64_t flowId);
     BResult HandleCacheBrokenImpl(WCachePtr wcache);
+    WCachePtr AcquireWCacheForPut(uint64_t flowId);
     BResult MasterProcBrokenSyncFlow(WCachePtr flow, CmPtInfo ptEntry, uint32_t localNid);
     void InitCallbackCtx(ProcBrokenCallbackCtx &cbCtx, uint32_t quota);
+
+    void CollectFaultedFlows(uint16_t failedDiskId,
+        std::unordered_map<uint16_t, std::list<WCachePtr>> &faultedFlowsByPt,
+        std::unordered_map<uint16_t, std::unordered_set<uint64_t>> &flowIdsByPt);
+    BResult WaitFaultedFlowsIdle(uint16_t failedDiskId, const std::list<WCachePtr> &faultedFlows);
+    void ReportRemovedKeys(std::vector<std::string> &&removedKeys);
 
     void ScanUpgradeCache(std::list<WCachePtr> &list);
     BResult ClearUpgradeCache();
@@ -166,9 +184,26 @@ private:
     BResult ClearProcCache(uint32_t procId);
 
     void RetryEvictThread();
+    using EvictDomain = std::pair<WCacheTierType, uint16_t>;
+    struct GlobalEvictQueue {
+        std::deque<uint64_t> inactiveFlows;
+        uint64_t cursor = 0;
+        bool scheduled = false;
+        bool pending = false;
+    };
+    void ScheduleGlobalEvict(WCacheTierType type);
+    void ScheduleEvictLocked(const EvictDomain &domain);
+    void RunGlobalEvict(const EvictDomain &domain);
+    bool IsCurrentFlow(const WCachePtr &flow, const std::map<uint16_t, CmPtInfo> &ptView) const;
+    void EnqueueInactiveLocked(const WCachePtr &flow);
+    void RemoveEvictFlowLocked(uint16_t diskId, uint64_t flowId);
+    bool RetireInactiveFlows(const EvictDomain &domain);
+    WCachePtr SelectEvictFlowLocked(const EvictDomain &domain, const std::map<uint16_t, CmPtInfo> &ptView);
+    void RetryGlobalEviction();
     void DestroyEvictThread();
     void ScheduleFlushMetaEvents();
     void FlushMetaEvents();
+    void ReportMetaEventsSync(std::vector<UbsIoMetaEvent> &&events);
 
 private:
     ReadWriteLock mWCacheManagerLock;
@@ -177,9 +212,13 @@ private:
     std::unordered_map<uint64_t, uint64_t> mDestroyManager;
     RCacheManagerPtr mRCacheManager;
 
-    bool mRunning = true;
+    std::atomic<bool> mRunning{ true };
     bool mEnableCrc = false;
     bool mHasDiskCache = true;
+    bool mStandaloneMode = false;
+    std::atomic<bool> mGlobalEvictReady{ false };
+    // Only IDs are queued: worker and SetSlice references, not the scheduling queue, own a WCache lifetime.
+    std::map<EvictDomain, GlobalEvictQueue> mGlobalEvictQueues;
 
     ExecutorServicePtr mEvictService[MAX_WCACHE_TIER]{ nullptr, nullptr };
     ExecutorServicePtr mGcEvictService{ nullptr };
@@ -190,6 +229,7 @@ private:
     ExecutorServicePtr mMemoryEvictConsultService{ nullptr };
 
     std::mutex mMetaReportLock;
+    std::mutex mMetaCallbackLock;
     std::vector<UbsIoMetaEvent> mPendingMetaEvents;
     std::atomic<bool> mMetaReportScheduled{ false };
     UbsIoMetaEventCallback mMetaEventCallback{ nullptr };

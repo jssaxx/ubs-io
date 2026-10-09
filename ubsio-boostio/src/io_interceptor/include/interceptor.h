@@ -122,7 +122,7 @@ struct InterceptorProxyOperations {
 
     size_t (*fread)(void *ptr, size_t size, size_t count, FILE *fp);
 
-    size_t (*fwrite)(const void *ptr, size_t size, size_t nitmes, FILE *fp);
+    size_t (*fwrite)(const void *ptr, size_t size, size_t nitems, FILE *fp);
 
     int (*fgetc)(FILE *fp);
 
@@ -236,7 +236,7 @@ struct InterceptorNativeOperations {
 
     size_t (*fread)(void *ptr, size_t size, size_t count, FILE *fp);
 
-    size_t (*fwrite)(const void *ptr, size_t size, size_t nitmes, FILE *fp);
+    size_t (*fwrite)(const void *ptr, size_t size, size_t nitems, FILE *fp);
 
     int (*fgetc)(FILE *fp);
 

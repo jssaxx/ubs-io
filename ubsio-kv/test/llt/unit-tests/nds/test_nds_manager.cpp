@@ -51,12 +51,17 @@ TEST_F(KvTest, NdsInitializationValidatesConfigurationAndDependencies)
     ConfigureNdsEnvironment();
     FakeNdsSetResult("nds_open", -1);
     EXPECT_EQ(NdsManager::Instance().Initialize(0), UBSIO_KVC_ERR);
+    EXPECT_EQ(FakeNdsGetCallCount("nds_uninit"), 1);
+    FakeNdsSetResult("nds_open", 0);
+    EXPECT_EQ(NdsManager::Instance().Initialize(0), UBSIO_KVC_OK);
     NdsManager::Instance().UnInitialize();
+    EXPECT_EQ(FakeNdsGetCallCount("nds_uninit"), 2);
     FakeNdsReset();
 
     ConfigureNdsEnvironment();
     ASSERT_EQ(setenv("UBSIO_NDS_READ_THREAD", "bad", 1), 0);
     EXPECT_EQ(NdsManager::Instance().Initialize(0), UBSIO_KVC_ERR);
+    EXPECT_EQ(FakeNdsGetCallCount("nds_uninit"), 1);
     NdsManager::Instance().UnInitialize();
 
     FakeNdsReset();
@@ -158,6 +163,8 @@ TEST_F(KvTest, NdsBatchReadCoversThreadPoolAndKvcFastPath)
     EXPECT_EQ(NdsManager::Instance().BatchDirectRead({}, {}, {}), UBSIO_KVC_ERR);
     std::vector<std::string> tooManyKeys(513, "key");
     EXPECT_EQ(NdsManager::Instance().BatchDirectRead(tooManyKeys, {}, {}), UBSIO_KVC_ERR);
+    EXPECT_EQ(NdsManager::Instance().BatchDirectRead(keys, {buffers[0]}, sizes), UBSIO_KVC_ERR);
+    EXPECT_EQ(NdsManager::Instance().BatchDirectRead(keys, buffers, {sizes[0]}), UBSIO_KVC_ERR);
 
     FakeBioSetResult("BioCalcLocation", RET_CACHE_ERROR);
     EXPECT_EQ(NdsManager::Instance().BatchDirectRead(keys, buffers, sizes), UBSIO_KVC_ERR);

@@ -365,11 +365,19 @@ public:
      */
     inline int Initialize()
     {
+        if (mInitialized) {
+            return 0;
+        }
         if (sem_init(&mSem, 0, 0) != 0) {
             return -1;
         }
 
-        return mRingBuffer.Initialize();
+        if (mRingBuffer.Initialize() != 0) {
+            sem_destroy(&mSem);
+            return -1;
+        }
+        mInitialized = true;
+        return 0;
     }
 
     /*
@@ -377,8 +385,12 @@ public:
      */
     inline void UnInitialize()
     {
+        if (!mInitialized) {
+            return;
+        }
         mRingBuffer.UnInitialize();
         sem_destroy(&mSem);
+        mInitialized = false;
     }
 
     /*
@@ -467,6 +479,7 @@ public:
 private:
     RingBuffer<T> mRingBuffer; /* ring buffer to data store */
     sem_t mSem{};              /* semaphore to wait and notify */
+    bool mInitialized = false;
 };
 
 }
