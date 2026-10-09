@@ -329,8 +329,12 @@ BResult LocalSystem::CreateTemporaryFile(std::string &temporaryPath, int32_t &fd
 
 BResult LocalSystem::EnsureLeafDirectory(const std::string &hashHex, std::string &leafPath) const
 {
+    BResult ret = EnsureDirectory(mRootPath);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
     std::string levelOnePath = mRootPath + "/" + hashHex.substr(0, LEVEL_ONE_HEX_SIZE);
-    BResult ret = EnsureDirectory(levelOnePath);
+    ret = EnsureDirectory(levelOnePath);
     if (UNLIKELY(ret != BIO_OK)) {
         return ret;
     }
