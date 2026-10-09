@@ -59,7 +59,7 @@ const auto SEGMENT_SIZE_MB = std::make_pair("ubsio.segment.size_in_mb", 4);
 
 const auto MEM_CAPACITY_SIZE_GB = std::make_pair("ubsio.mem.size_in_gb", 50);
 
-const auto DISK_CONF_PATH = std::make_pair("ubsio.disk.path", "xxx:xxx:xxx");
+const auto DISK_CONF_PATH = std::make_pair("ubsio.disk.path", "");
 const auto BDM_IO_ENGINE = std::make_pair("ubsio.bdm.io_engine", "sync");
 const auto BDM_IO_URING_SQPOLL_MODE = std::make_pair("ubsio.bdm.io_uring.sqpoll_mode", "auto");
 const auto BDM_SYNC_WORKER_NUM = std::make_pair("ubsio.bdm.sync.worker_num", 16);
