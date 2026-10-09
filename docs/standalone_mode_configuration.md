@@ -55,7 +55,7 @@ ubsio.cache.qos.enable = false
 | 配置项 | 值类型 | 是否必填 | 默认值 | 有效范围 | 说明 |
 | --- | --- | --- | --- | --- | --- |
 | `ubsio.disk.path` | 字符串 | 可选 | 空 | `device_count = 0` 时最多 `64` 个路径；`device_count > 0` 时最多 `16` 个块设备路径，以英文冒号分隔 | UBS IO 独占的整盘、分区或 loop 块设备；留空表示仅使用内存缓存。设备不能存在挂载点或需要保留的数据。 |
-| `ubsio.log.level` | 字符串 | 可选 | `info` | `error`、`warn`、`info`、`debug`、`trace` | 配置初始化后设置 BoostIO server 日志级别。配置值使用小写，日志输出中的级别标签使用大写 `TRACE`、`DEBUG`、`INFO`、`WARN`、`ERROR`、`CRITICAL`。 |
+| `ubsio.log.level` | 字符串 | 可选 | `info` | `error`、`warn`、`info`、`debug`、`trace` | 配置初始化后设置 BoostIO server 日志级别。 |
 | `ubsio.standalone.device_count` | 整数 | 可选 | `0` | `0` 到 `16` | 当前 vLLM 服务中的 memcache `local_server` 进程数量。配置为 `0` 时，每个 `deviceId` 按路径下标选择一个设备；配置为 `1` 到 `16` 时，全部进程共享所配置块设备的虚拟区域。 |
 | `ubsio.standalone.device_id_gather_timeout_sec` | 整数 | 可选 | `180` | `1` 到 `2147483647` | `device_count > 0` 时，等待全部 standalone 逻辑 device ID 完成汇聚的超时时间，单位为秒。 |
 | `ubsio.standalone.force_new_disk` | 布尔值 | 可选 | `false` | `true`、`false` | 是否在启动时将目标设备初始化为新缓存盘。设置为 `true` 后，设备中的原缓存数据失效。 |
