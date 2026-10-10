@@ -140,7 +140,8 @@ private:
         if (UNLIKELY(level < DEBUG_LEVEL || level >= BUTT_LEVEL)) {
             return "invalid";
         }
-        return logLevelDesc_[level];
+        static const char *const logLevelNames[] = {"DEBUG", "INFO", "WARN", "ERROR"};
+        return logLevelNames[level];
     }
 
 private:

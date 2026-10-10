@@ -23,6 +23,6 @@ TEST(TestBioLog, stderr_error_has_standard_context)
     const std::string output = testing::internal::GetCapturedStderr();
 
     const std::regex expected(
-        R"(^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6} [0-9]+ error \[test_log\.cpp:[0-9]+\]\[TestBody\] bootstrap failure\n$)");
+        R"(^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6} [0-9]+ ERROR \[test_log\.cpp:[0-9]+\]\[TestBody\] bootstrap failure\n$)");
     EXPECT_TRUE(std::regex_match(output, expected)) << output;
 }
