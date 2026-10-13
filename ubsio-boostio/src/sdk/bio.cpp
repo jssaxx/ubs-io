@@ -761,6 +761,26 @@ CResult BioGetLogLevel(BioLogLevel *level)
     return RET_CACHE_OK;
 }
 
+CResult BioGetUnderFsType(BioUnderFsType *type)
+{
+    if (type == nullptr) {
+        return RET_CACHE_EPERM;
+    }
+    if (gClient == nullptr || !gClient->Ready()) {
+        return RET_CACHE_NOT_READY;
+    }
+    BioUnderFsType value = BIO_UNDERFS_BUTT;
+    BResult ret = agent::BioClientAgent::Instance()->GetUnderFsType(&value);
+    if (ret != BIO_OK) {
+        return ToCResult(ret);
+    }
+    if (static_cast<uint32_t>(value) >= BIO_UNDERFS_BUTT) {
+        return RET_CACHE_ERROR;
+    }
+    *type = value;
+    return RET_CACHE_OK;
+}
+
 CResult BioRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)
 {
     auto agentPtr = ock::bio::agent::BioClientAgent::Instance();

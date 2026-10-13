@@ -82,6 +82,7 @@ BioDeleteFunc DlBioSdkApi::pBioDelete = nullptr;
 BioBatchGetKeyDiskAddrFunc DlBioSdkApi::pBioBatchGetKeyDiskAddr = nullptr;
 BioRegisterMetaEventCallbackFunc DlBioSdkApi::pBioRegisterMetaEventCallback = nullptr;
 BioShowLocalCacheResourceFunc DlBioSdkApi::pBioShowLocalCacheResource = nullptr;
+BioGetUnderFsTypeFunc DlBioSdkApi::pBioGetUnderFsType = nullptr;
 BioScanKeyFunc DlBioSdkApi::pBioScanKey = nullptr;
 BioFreeScanKeyResultFunc DlBioSdkApi::pBioFreeScanKeyResult = nullptr;
 
@@ -103,6 +104,7 @@ int32_t DlBioSdkApi::LoadLibrary()
     DL_LOAD_SYM(pBioExit, BioExitFunc, bioSdkHandle, "BioExit");
     DL_LOAD_SYM(pBioInitialize, BioInitFunc, bioSdkHandle, "BioInitialize");
     pBioGetLogLevel = reinterpret_cast<BioGetLogLevelFunc>(dlsym(bioSdkHandle, "BioGetLogLevel"));
+    DL_LOAD_SYM(pBioGetUnderFsType, BioGetUnderFsTypeFunc, bioSdkHandle, "BioGetUnderFsType");
     DL_LOAD_SYM(pBioGet, BioGetFunc, bioSdkHandle, "BioGet");
     DL_LOAD_SYM(pBioPut, BioPutFunc, bioSdkHandle, "BioPut");
     DL_LOAD_SYM(pBioStat, BioStatFunc, bioSdkHandle, "BioStat");
@@ -135,6 +137,7 @@ void DlBioSdkApi::CleanupLibrary()
     pBioExit = nullptr;
     pBioInitialize = nullptr;
     pBioGetLogLevel = nullptr;
+    pBioGetUnderFsType = nullptr;
     pBioGet = nullptr;
     pBioPut = nullptr;
     pBioStat = nullptr;

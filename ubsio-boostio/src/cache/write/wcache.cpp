@@ -60,7 +60,7 @@ BResult WCache::Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], con
 {
     BResult ret = BIO_INNER_ERR;
     mHasDiskCache = BioConfig::Instance()->GetDaemonConfig().hasDiskCache;
-    mUfsEnable = BioConfig::Instance()->GetUnderFsConfig().underFsType != "none";
+    mUfsEnable = BioConfig::Instance()->GetUnderFsConfig().underFsType != BIO_UNDERFS_NONE;
     mDirectUnderFs = BioServer::Instance()->IsStandaloneMode() && !mHasDiskCache && mUfsEnable;
     uint32_t tierCount = mHasDiskCache ? MAX_WCACHE_TIER : WCACHE_DISK;
     for (uint32_t i = 0; i < tierCount; ++i) {

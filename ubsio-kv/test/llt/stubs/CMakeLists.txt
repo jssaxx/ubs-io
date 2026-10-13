@@ -33,7 +33,9 @@ set_target_properties(kv_nds_stub PROPERTIES
 set(KV_INCOMPLETE_STUB_DIR "${CMAKE_BINARY_DIR}/incomplete" CACHE INTERNAL "")
 set(KV_INCOMPLETE_ASCEND_DIR "${CMAKE_BINARY_DIR}/incomplete_ascend" CACHE INTERNAL "")
 
-add_library(kv_bio_incomplete_stub SHARED kvc/incomplete_bio.cpp)
+add_library(kv_bio_incomplete_stub SHARED kvc/fake_bio_sdk.cpp)
+target_include_directories(kv_bio_incomplete_stub PRIVATE ${KV_STUB_INCLUDE_DIRS})
+target_compile_definitions(kv_bio_incomplete_stub PRIVATE UBSIO_KV_UT_OMIT_UNDERFS_TYPE)
 set_target_properties(kv_bio_incomplete_stub PROPERTIES
     OUTPUT_NAME bio_sdk
     LIBRARY_OUTPUT_DIRECTORY "${KV_INCOMPLETE_STUB_DIR}"
@@ -51,7 +53,7 @@ set_target_properties(kv_nds_incomplete_stub PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${KV_INCOMPLETE_STUB_DIR}"
 )
 
-foreach(stub_target kv_bio_stub kv_acl_stub kv_nds_stub)
+foreach(stub_target kv_bio_stub kv_bio_incomplete_stub kv_acl_stub kv_nds_stub)
     target_compile_options(${stub_target} PRIVATE -Wno-unused-parameter)
 endforeach()
 

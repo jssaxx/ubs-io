@@ -49,7 +49,7 @@ BResult Cache::Init()
 
     ret = CacheOverloadCtrl::Instance().Initialize();
     ChkTrue(ret == BIO_OK, ret, "Initialize overload ctrl failed, ret:" << ret << ".");
-    mUfsEnable = BioConfig::Instance()->GetUnderFsConfig().underFsType != "none";
+    mUfsEnable = BioConfig::Instance()->GetUnderFsConfig().underFsType != BIO_UNDERFS_NONE;
     return BIO_OK;
 }
 

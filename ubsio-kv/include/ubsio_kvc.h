@@ -14,10 +14,23 @@
 #define UBSIO_KVC_H
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+#ifndef UBSIO_UNDERFS_TYPE_DEFINED
+#define UBSIO_UNDERFS_TYPE_DEFINED
+typedef enum {
+    UBSIO_UNDERFS_NONE = 0,
+    UBSIO_UNDERFS_CEPH = 1,
+    UBSIO_UNDERFS_HDFS = 2,
+    UBSIO_UNDERFS_LOCAL = 3,
+    UBSIO_UNDERFS_SHARED = 4,
+    UBSIO_UNDERFS_BUTT
+} UbsioUnderFsType;
 #endif
 
 #define UBSIO_RESOURCE_DISK_PATH_MAX_SIZE (256)
@@ -88,6 +101,13 @@ typedef void (*UbsioMetaEventCallbackC)(void *context, const UbsioMetaEventC *ev
 int32_t UbsioKvCacheInit(int32_t devId);
 
 /**
+ * @brief Query the initialized UnderFS type.
+ * @param type [out] Initialized UbsioUnderFsType value; unchanged on failure.
+ * @return Zero on success; nonzero if the runtime or query interface is unavailable, or the pointer is invalid.
+ */
+int32_t UbsioGetUnderFsType(UbsioUnderFsType *type);
+
+/**
  * @brief Get write cache and disk resource information managed by the local process.
  *
  * Configured block-device bandwidth is sampled for 200 ms from Linux block statistics and is reported in bytes
@@ -103,6 +123,7 @@ int32_t UbsioGetResourceInfo(UbsioResourceInfo *info);
 /**
  * @brief Register metadata events for MemCache Master metadata synchronization.
  *
+ * DELETE events are reported only when UnderFS is disabled; RECOVER events are reported in either mode.
  * The events buffer and key pointers are only valid during the callback; the callee must copy keys if needed.
  * Passing nullptr unregisters the callback.
  */

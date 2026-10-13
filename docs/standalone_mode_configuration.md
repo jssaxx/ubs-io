@@ -1,7 +1,7 @@
 # UBS IO 单机模式配置参考
 
-本文面向单机推理三级池化场景。UBS IO 可以使用本地 SSD 作为 KV Cache 缓存层，也可以在 standalone
-模式下将本地文件系统目录作为 UnderFS 后端，使 wcache 数据直接淘汰到本地文件系统，不经过本地 SSD。
+本文面向 standalone 推理三级池化场景。UBS IO 可以使用本地 SSD 作为 KV Cache 缓存层，也可以将本地
+或共享文件系统目录作为 UnderFS 后端，使 wcache 数据直接淘汰到文件系统。
 
 本文只说明推荐配置方式，不修改仓库中的现有配置文件。默认配置文件为 `ubsio-boostio/configs/ubsio.conf`；如需指定运行时配置，建议通过环境变量加载：
 
@@ -11,7 +11,7 @@ export UBSIO_CONFIG_PATH=/path/to/ubsio.conf
 
 ## 适用范围
 
-- 单机模式推理服务，覆盖本地 SSD 和本地文件系统后端两种 KV Cache 扩容场景。
+- standalone 模式推理服务，覆盖本地 SSD、本地文件系统和共享文件系统后端三种 KV Cache 扩容场景。
 - UBSIO-KV 通过 BoostIO 后端提供标准 KV 接口，并可与 memcache、Mooncake 组合使用。
 - 不要求 UBS IO 自身绑定特定硬件；与 memcache、Mooncake 或上层推理框架组合使用时，以对应项目官方文档为准。
 
@@ -42,7 +42,7 @@ ubsio.log.path = /var/log/ubsio
 ubsio.cache.mem_read_write_ratio = 0:10
 # 将全部磁盘缓存容量用于写缓存。
 ubsio.cache.disk_read_write_ratio = 0:10
-# 不使用 UnderFS 时设置为 none。需要后端访问时使用 ceph 或 hdfs 或 local。
+# 不使用 UnderFS 时设置为 none；后端类型可选 ceph、hdfs、local 或 shared。
 ubsio.underfs.file_system_type = none
 # 本地单机运行时禁用 TLS 配置路径校验。
 ubsio.net.tls.enable.switch = false
@@ -58,14 +58,34 @@ ubsio.batch_read.pipeline_depth = 4
 ubsio.batch_read.copy_workers = 4
 ```
 
-使用本地文件系统后端时，将磁盘路径留空，并增加以下配置：
+### 本地文件系统后端
+
+在上述最小配置的基础上，使用以下配置覆盖对应项。`/path/to/local/kv` 为本节点已存在且可读写的目录，
+与 Memcache 集成时，Memcache 使用聚合模式。
 
 ```ini
 ubsio.disk.path =
 ubsio.wcache.evict_water_level = 0
 ubsio.wcache.disk_evict_water_level = 0
 ubsio.underfs.file_system_type = local
-ubsio.underfs.local.root_path = /mnt/underfs/kv
+ubsio.underfs.local.root_path = /path/to/local/kv
+ubsio.underfs.batch_read.worker_num = 8
+ubsio.batch_read.standalone.use_scratch_pool = true
+ubsio.batch_read.pipeline_depth = 4
+ubsio.batch_read.copy_workers = 4
+```
+
+### 共享文件系统后端
+
+在上述最小配置的基础上，使用以下配置覆盖对应项。`/path/to/shared/kv` 为所有相关存储 rank 均可访问的
+同一共享存储目录，启动前应完成挂载并确保运行用户具有读写权限；与 Memcache 集成时，Memcache 使用分离模式。
+
+```ini
+ubsio.disk.path =
+ubsio.wcache.evict_water_level = 0
+ubsio.wcache.disk_evict_water_level = 0
+ubsio.underfs.file_system_type = shared
+ubsio.underfs.local.root_path = /path/to/shared/kv
 ubsio.underfs.batch_read.worker_num = 8
 ubsio.batch_read.standalone.use_scratch_pool = true
 ubsio.batch_read.pipeline_depth = 4
@@ -76,7 +96,7 @@ ubsio.batch_read.copy_workers = 4
 
 | 配置项 | 值类型 | 是否必填 | 默认值 | 有效范围 | 说明 |
 | --- | --- | --- | --- | --- | --- |
-| `ubsio.disk.path` | 字符串 | 可选 | 空 | standalone 模式最多 `16` 个有效块设备路径，以英文冒号分隔 | UBS IO 独占的整盘、分区或 loop 块设备。留空表示不使用本地磁盘；启用 `local` UnderFS 时，wcache 数据直接淘汰到本地文件系统，否则仅使用内存缓存。设备不能存在挂载点或需要保留的数据。 |
+| `ubsio.disk.path` | 字符串 | 可选 | 空 | standalone 模式最多 `16` 个有效块设备路径，以英文冒号分隔 | UBS IO 独占的整盘、分区或 loop 块设备。留空表示不使用本地磁盘；启用 `local` 或 `shared` UnderFS 时，wcache 数据直接淘汰到对应文件系统；未启用 UnderFS 时仅使用内存缓存。设备不能存在挂载点或需要保留的数据。 |
 | `ubsio.log.level` | 字符串 | 可选 | `info` | `error`、`warn`、`info`、`debug`、`trace` | 配置初始化后设置 BoostIO server 日志级别。 |
 | `ubsio.log.path` | 字符串 | 可选 | `/var/log/ubsio` | 非空且可创建或已存在的目录路径 | BoostIO server 普通日志目录；统计日志写入其 `trace` 子目录。 |
 | `ubsio.standalone.device_count` | 整数 | 可选 | `0` | 无盘模式为 `0`；配置缓存盘时为 `1` 到 `16` | 配置缓存盘时，应与 `ock.mmc.local_service.dram.size > 0` 的 `local_service` 进程数一致。 |
@@ -106,8 +126,8 @@ ubsio.batch_read.copy_workers = 4
 | `ubsio.batch_read.pipeline_depth` | 整数 | 可选 | `4` | `1` 到 `64` | BatchGet 同时在途的 BDM 批读窗口数量；同时与 `copy_workers` 共同决定 UnderFS BatchGet 最大在途请求数。 |
 | `ubsio.batch_read.copy_workers` | 整数 | 可选 | `4` | `1` 到 `64` | standalone BatchGet 从 SSD 或 UnderFS scratch buffer 拷贝到请求目标 buffer 的并发 worker 数，同时决定 standalone BatchGet executor 的线程数。 |
 | `ubsio.cli_tools.enable` | 布尔值 | 可选 | `false` | `true` 或 `false` | 启用 CLI agent 诊断能力。使用 `cli_client --attach` 连接 `bio_console` 时应设为 `true`。 |
-| `ubsio.underfs.file_system_type` | 字符串 | 可选 | `none` | `ceph`、`hdfs`、`local` 或 `none` | UnderFS 后端类型。使用挂载到本机的文件系统目录时设置为 `local`；不使用 UnderFS 时设置为 `none`。 |
-| `ubsio.underfs.local.root_path` | 字符串 | 可选 | `/mnt/underfs/kv` | 使用 `local` 时必须是已存在且可读写的目录 | 本地文件系统的挂载目录或其下的 KV 根目录。UBS IO 会在该目录下创建 `v1` 数据布局。 |
+| `ubsio.underfs.file_system_type` | 字符串 | 可选 | `none` | `ceph`、`hdfs`、`local`、`shared` 或 `none` | UnderFS 后端类型。`local` 使用节点本地目录，`shared` 使用所有相关存储 rank 可访问的共享存储挂载目录；不使用 UnderFS 时设置为 `none`。 |
+| `ubsio.underfs.local.root_path` | 字符串 | 可选 | `/mnt/a800/kv`（内置默认） | 使用 `local` 或 `shared` 时必须是已存在且可读写的目录 | 文件系统 KV 根目录。`shared` 使用所有相关存储 rank 可见的共享目录；UBS IO 会在该目录下创建 `v1` 数据布局。 |
 | `ubsio.underfs.batch_read.worker_num` | 整数 | 可选 | `8` | `1` 到 `64` | standalone BatchGet、BatchStat 和 BatchExist 并发访问 UnderFS 的 worker 数。 |
 | `ubsio.underfs.ceph.cfg.path` | 字符串 | 可选 | `/etc/ceph/ceph.conf` | 当 `ubsio.underfs.file_system_type = ceph` 时必须是已存在路径 | Ceph 配置文件路径。当 UnderFS 类型为 `ceph` 且该路径无效时，配置初始化失败。 |
 | `ubsio.underfs.ceph.cluster` | 字符串 | 可选 | `ceph` | 非空字符串 | 后端为 Ceph 时，UnderFS 插件使用的 Ceph 集群名。 |
@@ -120,7 +140,7 @@ ubsio.batch_read.copy_workers = 4
 
 `ubsio.disk.path` 用于指定 UBS IO 的本地 SSD 缓存设备。支持整盘块设备、已有分区和 loop 设备；多个路径使用英文冒号（`:`）分隔，standalone 模式最多配置 `16` 条路径。
 
-配置的设备必须由 UBS IO 独占，不能存在挂载点或需要保留的数据。使用 loop 设备时，应先在宿主机创建，再映射到容器中。留空表示无盘模式，此时仅使用 `ubsio.mem.size_in_gb` 配置的内存池，进程退出后缓存数据不会保留。
+配置的设备必须由 UBS IO 独占，不能存在挂载点或需要保留的数据。使用 loop 设备时，应先在宿主机创建，再映射到容器中。留空表示无盘模式，此时使用 `ubsio.mem.size_in_gb` 配置的内存池。启用 `local` 或 `shared` UnderFS 时，wcache 数据可以淘汰到对应文件系统；未启用 UnderFS 时，进程退出后内存缓存数据不会保留。
 
 ```ini
 # 同时配置整盘、分区和 loop 设备
@@ -195,9 +215,45 @@ ubsio.disk.path = /dev/nvme0n1:/dev/nvme1n1
 ubsio.wcache.evict_water_level = 85
 ```
 
+### `ubsio.underfs.file_system_type`
+
+<a name="ubsio-underfs-file-system-type"></a>
+
+`ubsio.underfs.file_system_type` 指定 UnderFS 后端类型。初始化后的类型可通过 `UbsioGetUnderFsType` 查询，返回 `UbsioUnderFsType` 枚举，
+Memcache 根据该类型确定元数据管理模式。
+
+| 配置值 | 后端用途 | Memcache 元数据管理模式 |
+| --- | --- | --- |
+| `none` | 不使用 UnderFS。 | 聚合模式。 |
+| `local` | 使用节点本地文件系统目录。 | 聚合模式。 |
+| `shared` | 通过挂载目录访问所有相关存储 rank 可见的同一共享存储命名空间。 | 分离模式。 |
+| `ceph` | 使用 Ceph 后端。 | 聚合模式。 |
+| `hdfs` | 使用 HDFS 后端。 | 聚合模式。 |
+
+`local` 和 `shared` 复用同一文件后端，通过文件系统接口访问 `ubsio.underfs.local.root_path` 指定的目录。
+`shared` 需要部署方确保所有参与存储查询和回温的 rank 访问同一共享存储命名空间；类型配置不会自动创建或检查共享挂载。
+
+与 Memcache 集成时，LocalService 在 UBS IO 初始化成功后调用
+[`UbsioGetUnderFsType`](ubsio-kv/api_reference.md#ubsiogetunderfstype) 获取文件系统类型枚举，将 `UBSIO_UNDERFS_SHARED` 判为分离，
+其余有效类型默认聚合，并在注册和重连时向 MetaService 上报分离标志。
+MetaService 由首次成功的存储注册确定模式，在当前 MetaManager 生命周期内保持固定；未启用存储的客户端
+不参与模式确定，模式不一致的存储 rank 返回 `MMC_INVALID_PARAM` 并拒绝注册。
+
+启用存储时，LocalService 使用提供 `UbsioGetUnderFsType` 的 UBSIO-KV，以及配套的 BoostIO SDK 和 server；各组件使用枚举指针形式的查询接口。
+文件系统类型查询失败或接口不可用时，LocalService 使用默认的 `UBSIO_UNDERFS_NONE` 继续初始化。
+仅 `UBSIO_UNDERFS_SHARED` 启用分离模式，其余返回值均使用聚合模式。MetaService 和 LocalService 使用同版本的注册协议。
+
+### `ubsio.underfs.local.root_path`
+
+`ubsio.underfs.local.root_path` 指定 `local` 或 `shared` 文件后端的 KV 根目录。目录必须在 UBS IO 启动前创建，
+运行用户需要具备读写权限；UBS IO 在该目录下使用 `v1` 文件布局。
+
+该项内置默认值为 `/mnt/a800/kv`，随附的 `ubsio-boostio/configs/ubsio.conf` 将其设置为空。启用 `local` 或 `shared` 时，
+应在运行时配置中显式指定有效目录。使用 `shared` 时，该目录需指向所有相关存储 rank 共同访问的共享存储命名空间。
+
 ### `ubsio.batch_read.standalone.use_scratch_pool`
 
-`ubsio.batch_read.standalone.use_scratch_pool` 控制 standalone BatchGet 经 SSD 或本地文件系统读取时，是否先将
+`ubsio.batch_read.standalone.use_scratch_pool` 控制 standalone BatchGet 经 SSD、本地或共享文件系统读取时，是否先将
 数据读入 scratch pool，再复制到上层 buffer。
 
 - `true`：先读入 scratch pool，再复制到上层 buffer。A3 场景以及上层 buffer 不能直接用于存储 I/O 的场景
@@ -218,11 +274,12 @@ ubsio.batch_read.standalone.use_scratch_pool = false
 - `ubsio.mem.size_in_gb` 的单进程上限为
   `min(3072, floor(节点可供 UBS IO 使用的剩余内存 / 已启用 DRAM 的 local_service 进程数))`。
 - 未配置 SSD 和 UnderFS 时，`ubsio.wcache.evict_water_level` 建议设置为较高水位，例如 `85`；仅使用 SSD
-  或本地文件系统作为后端时设置为 `0`；同时使用 L2.5 和 SSD 时设置为大于 `0`。
+  或文件系统作为后端时设置为 `0`；同时使用 L2.5 和 SSD 时设置为大于 `0`。
 - `ubsio.standalone.force_new_disk = true` 会使原缓存失效，只能用于无须保留数据的缓存设备。
-- 使用本地 SSD 时设置 `ubsio.underfs.file_system_type = none`；使用本地文件系统作为 UnderFS 时不配置
-  `ubsio.disk.path`，并将 UnderFS 类型设置为 `local`。
-- 本地文件系统目录必须在 UBS IO 启动前创建并挂载成功，不同节点或容器中的 UBS IO 实例应配置相同 UID。
+- 使用本地 SSD 时设置 `ubsio.underfs.file_system_type = none`；按文件系统后端示例部署时，`ubsio.disk.path`
+  留空，节点本地目录选择 `local`，共享存储目录选择 `shared`。
+- 文件系统目录必须在 UBS IO 启动前创建并可读写。使用 `shared` 时，所有相关存储 rank 应完成共享目录挂载，
+  并使用一致的文件访问权限和 UID 配置。
 - A3 场景以及上层 buffer 不能直接用于文件系统或磁盘 I/O 的场景，必须保持
   `ubsio.batch_read.standalone.use_scratch_pool = true`。
 - 如需使用 `bio_console` 和 CLI 诊断命令，设置 `ubsio.cli_tools.enable = true`。

@@ -38,14 +38,14 @@ public:
     }
 
 private:
-    static std::string GetUnderFsType()
+    static BioUnderFsType GetUnderFsType()
     {
 #ifdef DEBUG_UT
-        return LOCAL_SYSTEM;
+        return BIO_UNDERFS_LOCAL;
 #else
         auto instance = UnderFsConfig::Instance();
         if (instance == nullptr) {
-            return "";
+            return BIO_UNDERFS_NONE;
         }
         return instance->GetUnderFsConfig().underFsType;
 #endif

@@ -96,6 +96,14 @@ BResult BioClientAgent::ScanKey(const UbsioKvKeyInfo **items, uint64_t *count, b
     return static_cast<BResult>(scanKeyOp(items, count, hasMore));
 }
 
+BResult BioClientAgent::GetUnderFsType(BioUnderFsType *type)
+{
+    if (!IsDirectMode() || getUnderFsTypeOp == nullptr) {
+        return BIO_NOT_READY;
+    }
+    return static_cast<BResult>(getUnderFsTypeOp(type));
+}
+
 void BioClientAgent::Exit()
 {
     if (IsDirectMode() && exitOp != nullptr) {
@@ -119,6 +127,7 @@ void BioClientAgent::ResetLoadedOperations()
     standaloneStartOp = nullptr;
     exitOp = nullptr;
     getRuntimeConfigOp = nullptr;
+    getUnderFsTypeOp = nullptr;
     getCrcFlag = nullptr;
     getCliFlag = nullptr;
     getPrometheusToggle = nullptr;
@@ -180,6 +189,9 @@ BResult BioClientAgent::InitOperation()
         return BIO_INNER_ERR;
     }
     if ((getRuntimeConfigOp = reinterpret_cast<GetRuntimeConfigFuncPtr>(LoadFunction("GetRuntimeConfig"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
+    if ((getUnderFsTypeOp = reinterpret_cast<GetUnderFsTypeFuncPtr>(LoadFunction("GetUnderFsType"))) == nullptr) {
         return BIO_INNER_ERR;
     }
     if ((getCrcFlag = reinterpret_cast<GetBioServerCrcFlagFuncPtr>(LoadFunction("GetCrcFlag"))) == nullptr) {

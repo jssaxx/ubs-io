@@ -1084,6 +1084,56 @@ TEST_F(TestWCacheGlobalEvict, no_disk_history_uses_memory_watermark_without_forc
     EXPECT_EQ(FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_MEMORY, 0), 3 * TEST_SEGMENT);
 }
 
+TEST_F(TestWCacheGlobalEvict, underfs_suppresses_delete_events_and_preserves_recovery)
+{
+    auto &underFsType =
+        const_cast<BioConfig::UnderFsConfig &>(BioConfig::Instance()->GetUnderFsConfig()).underFsType;
+    const auto originalUnderFsType = underFsType;
+    bool callbackInvoked = false;
+    std::vector<UbsIoMetaEventType> reportedTypes;
+    manager.RegUbsIoMetaEventCallback([&](const std::vector<UbsIoMetaEvent> &events) {
+        callbackInvoked = true;
+        for (const auto &event : events) {
+            reportedTypes.push_back(event.type);
+        }
+    });
+
+    for (auto type :
+        { BIO_UNDERFS_NONE, BIO_UNDERFS_CEPH, BIO_UNDERFS_HDFS, BIO_UNDERFS_LOCAL, BIO_UNDERFS_SHARED }) {
+        underFsType = type;
+        const bool deleteEnabled = type == BIO_UNDERFS_NONE;
+        const std::vector<UbsIoMetaEventType> deleteTypes = deleteEnabled ?
+            std::vector<UbsIoMetaEventType>{ UBSIO_META_DELETE } : std::vector<UbsIoMetaEventType>{};
+        callbackInvoked = false;
+        reportedTypes.clear();
+        manager.ReportRemovedKeys({ "test_meta_event_removed" });
+        EXPECT_EQ(callbackInvoked, deleteEnabled);
+        EXPECT_EQ(reportedTypes, deleteTypes);
+
+        callbackInvoked = false;
+        reportedTypes.clear();
+        auto batch = std::make_shared<UbsIoMetaEventBatch>();
+        manager.AppendMetaEvent(UBSIO_META_DELETE, "test_meta_event_delete", batch);
+        manager.AppendMetaEvent(UBSIO_META_RECOVER, "test_meta_event_recover", batch);
+        manager.SubmitMetaEventBatch(batch);
+        manager.FlushMetaEvents();
+        auto expectedTypes = deleteTypes;
+        expectedTypes.push_back(UBSIO_META_RECOVER);
+        EXPECT_TRUE(callbackInvoked);
+        EXPECT_EQ(reportedTypes, expectedTypes);
+
+        callbackInvoked = false;
+        reportedTypes.clear();
+        manager.AppendMetaEvent(UBSIO_META_DELETE, "test_meta_event_after_close", batch);
+        manager.FlushMetaEvents();
+        EXPECT_EQ(callbackInvoked, deleteEnabled);
+        EXPECT_EQ(reportedTypes, deleteTypes);
+    }
+
+    manager.RegUbsIoMetaEventCallback(nullptr);
+    underFsType = originalUnderFsType;
+}
+
 TEST_F(TestWCacheGlobalEvict, direct_underfs_pending_slice_waits_for_index_publication)
 {
     manager.mHasDiskCache = false;

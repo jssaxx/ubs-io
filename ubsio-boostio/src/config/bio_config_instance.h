@@ -15,6 +15,7 @@
 
 #include "bio_config.h"
 #include "bio_err.h"
+#include "bio_underfs_type.h"
 
 namespace ock {
 namespace bio {
@@ -226,7 +227,7 @@ public:
     };
 
     struct UnderFsConfig {
-        std::string underFsType;
+        BioUnderFsType underFsType = BIO_UNDERFS_NONE;
         CephConfig cephConfig;
         HdfsConfig hdfsConfig;
         LocalConfig localConfig;

@@ -13,8 +13,8 @@
 #ifndef BOOSTIO_FILESYSTEMFACTORY_H
 #define BOOSTIO_FILESYSTEMFACTORY_H
 
-#include <functional>
 #include <memory>
+#include "bio_underfs_type.h"
 #include "file_system.h"
 #include "dl_ceph_system.h"
 #include "hdfs_system.h"
@@ -23,33 +23,20 @@
 
 namespace ock {
 namespace bio {
-using FileSystemCreator = std::function<std::shared_ptr<FileSystem>()>;
-const std::string CEPH_SYSTEM = "ceph";
-const std::string HDFS_SYSTEM = "hdfs";
-const std::string LOCAL_SYSTEM = "local";
-
 class FileSystemFactory {
 public:
-    static std::shared_ptr<FileSystem> CreateFileSystem(const std::string &type)
+    static std::shared_ptr<FileSystem> CreateFileSystem(BioUnderFsType type)
     {
-        const auto &fileSystemMap = GetFileSystemMap();
-        auto it = fileSystemMap.find(type);
-        if (it != fileSystemMap.end()) {
-            return it->second();
-        } else {
-            return std::make_shared<LocalSystem>(); // use local file system by default
+        switch (type) {
+            case BIO_UNDERFS_CEPH:
+                return std::make_shared<DlCephSystem>();
+            case BIO_UNDERFS_HDFS:
+                return std::make_shared<HdfsSystem>();
+            case BIO_UNDERFS_LOCAL:
+            case BIO_UNDERFS_SHARED:
+            default:
+                return std::make_shared<LocalSystem>();
         }
-    }
-
-private:
-    static const std::unordered_map<std::string, FileSystemCreator> &GetFileSystemMap()
-    {
-        static const std::unordered_map<std::string, FileSystemCreator> fileSystemMap = {
-            {CEPH_SYSTEM, []() { return std::make_shared<DlCephSystem>(); }},
-            {HDFS_SYSTEM, []() { return std::make_shared<HdfsSystem>(); }},
-            {LOCAL_SYSTEM, []() { return std::make_shared<LocalSystem>(); }}
-        };
-        return fileSystemMap;
     }
 };
 }

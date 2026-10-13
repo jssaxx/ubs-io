@@ -27,6 +27,39 @@ int32_t UbsioKvCacheInit(int32_t devId);
 
 返回值：`0` 表示初始化成功，非 `0` 表示失败。
 
+## `UbsioGetUnderFsType`
+
+作用：查询初始化后的 UnderFS 文件系统类型枚举。调用前应先成功完成 `UbsioKvCacheInit`。
+
+初始化要求 BoostIO SDK 提供 `BioGetUnderFsType`，并由 server 提供 `GetUnderFsType`；任意符号缺失都会
+导致初始化失败。应用、UBSIO-KV、BoostIO SDK 和 server 使用配套的枚举查询接口。
+
+```c
+typedef enum {
+    UBSIO_UNDERFS_NONE = 0,
+    UBSIO_UNDERFS_CEPH = 1,
+    UBSIO_UNDERFS_HDFS = 2,
+    UBSIO_UNDERFS_LOCAL = 3,
+    UBSIO_UNDERFS_SHARED = 4,
+    UBSIO_UNDERFS_BUTT
+} UbsioUnderFsType;
+
+int32_t UbsioGetUnderFsType(UbsioUnderFsType *type);
+```
+
+| 参数 | 类型/取值范围 | 参数说明 |
+| --- | --- | --- |
+| `type` | `UbsioUnderFsType *`；非 `NULL` | 出参。接收生效的文件系统类型枚举；查询失败时保持原值。`UBSIO_UNDERFS_BUTT` 为范围占位符，不是有效后端类型。 |
+
+配置项 `ubsio.underfs.file_system_type` 使用 `none`、`ceph`、`hdfs`、`local` 或 `shared` 字符串，
+分别对应上述五个有效枚举值。`UBSIO_UNDERFS_NONE` 表示默认的不使用 UnderFS；`UBSIO_UNDERFS_LOCAL` 表示节点本地文件系统，
+`UBSIO_UNDERFS_SHARED` 表示所有相关存储 rank 均可访问的共享文件系统。`local` 与 `shared` 共用文件后端实现，类型查询保留各自的枚举值。
+文件系统后端的配置与部署条件见
+[单机模式配置参考](../standalone_mode_configuration.md#ubsio-underfs-file-system-type)。
+
+返回值：`0`（`UBSIO_KVC_OK`）表示查询成功；指针为空时返回 `3`（`UBSIO_KVC_INVALID_PARAM`）；
+运行库未就绪、查询接口不可用、查询失败或返回的枚举值无效时返回 `1`（`UBSIO_KVC_ERR`）。
+
 ## `UbsioGetResourceInfo`
 
 作用：查询当前进程管理的写缓存和磁盘资源。集群模式不查询其他节点；standalone 模式只返回本进程选择并管理的盘和缓存资源。

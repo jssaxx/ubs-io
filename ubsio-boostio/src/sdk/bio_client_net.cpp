@@ -467,7 +467,11 @@ void BioClientNet::RecoverRpc(uint32_t peerId)
 
 bool BioClientNet::CheckGetUnderFsConfigResp(GetUnderFsConfigResponse &rsp)
 {
-    size_t underFsTypeLen = strnlen(rsp.underFsType, KEY_MAX_SIZE);
+    const size_t underFsTypeLen = strnlen(rsp.underFsType, KEY_MAX_SIZE);
+    if (underFsTypeLen == 0 || underFsTypeLen == KEY_MAX_SIZE) {
+        return false;
+    }
+    const auto type = ParseUnderFsType(rsp.underFsType);
     size_t nameNodeLen = strnlen(rsp.hdfsConfig.nameNode, KEY_MAX_SIZE);
     size_t workingPathLen = strnlen(rsp.hdfsConfig.workingPath, KEY_MAX_SIZE);
     size_t userLen = strnlen(rsp.cephConfig.user, KEY_MAX_SIZE);
@@ -476,16 +480,15 @@ bool BioClientNet::CheckGetUnderFsConfigResp(GetUnderFsConfigResponse &rsp)
     size_t poolLen = strnlen(rsp.cephConfig.pool, KEY_MAX_SIZE);
     size_t rootPathLen = strnlen(rsp.localConfig.rootPath, KEY_MAX_SIZE);
 
-    if (strcmp(rsp.underFsType, "local") == 0) {
-        return underFsTypeLen != 0 && underFsTypeLen < KEY_MAX_SIZE && rootPathLen != 0 &&
-            rootPathLen < KEY_MAX_SIZE;
+    if (type == BIO_UNDERFS_LOCAL || type == BIO_UNDERFS_SHARED) {
+        return rootPathLen != 0 && rootPathLen < KEY_MAX_SIZE;
     }
 
-    return ((underFsTypeLen != 0 && underFsTypeLen < KEY_MAX_SIZE) && (nameNodeLen != 0 && nameNodeLen < KEY_MAX_SIZE)
+    return ((nameNodeLen != 0 && nameNodeLen < KEY_MAX_SIZE)
             && (workingPathLen != 0 && workingPathLen < KEY_MAX_SIZE) && (userLen != 0 && userLen < KEY_MAX_SIZE) &&
             (clusterLen != 0 && clusterLen < KEY_MAX_SIZE) && (cfgPathLen != 0 && cfgPathLen < KEY_MAX_SIZE) &&
             (poolLen != 0 && poolLen < KEY_MAX_SIZE) &&
-            ((strcmp(rsp.underFsType, "hdfs") == 0) || (strcmp(rsp.underFsType, "ceph") == 0)));
+            ((type == BIO_UNDERFS_HDFS) || (type == BIO_UNDERFS_CEPH)));
 }
 
 BResult BioClientNet::GetUnderFsConfig(BioConfig::UnderFsConfig &config)
@@ -507,7 +510,7 @@ BResult BioClientNet::GetUnderFsConfig(BioConfig::UnderFsConfig &config)
         return BIO_INNER_ERR;
     }
 
-    config.underFsType = rsp.underFsType;
+    config.underFsType = ParseUnderFsType(rsp.underFsType);
     config.hdfsConfig.nameNode = rsp.hdfsConfig.nameNode;
     config.hdfsConfig.workingPath = rsp.hdfsConfig.workingPath;
     config.cephConfig.user = rsp.cephConfig.user;

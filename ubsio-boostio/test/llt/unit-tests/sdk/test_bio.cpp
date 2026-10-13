@@ -1720,6 +1720,23 @@ TEST_F(TestBio, test_check_get_underfs_config_resp)
     EXPECT_EQ(ret, true);
 }
 
+TEST_F(TestBio, test_underfs_config_response_validates_type_at_boundary)
+{
+    GetUnderFsConfigResponse rsp{};
+    for (const char *type : {"local", "shared"}) {
+        std::strcpy(rsp.underFsType, type);
+        std::strcpy(rsp.localConfig.rootPath, "/tmp");
+        EXPECT_TRUE(ock::bio::net::BioClientNet::Instance()->CheckGetUnderFsConfigResp(rsp));
+        rsp.localConfig.rootPath[0] = '\0';
+        EXPECT_FALSE(ock::bio::net::BioClientNet::Instance()->CheckGetUnderFsConfigResp(rsp));
+    }
+    std::strcpy(rsp.localConfig.rootPath, "/tmp");
+    std::strcpy(rsp.underFsType, "unknown");
+    EXPECT_FALSE(ock::bio::net::BioClientNet::Instance()->CheckGetUnderFsConfigResp(rsp));
+    std::memset(rsp.underFsType, 'x', sizeof(rsp.underFsType));
+    EXPECT_FALSE(ock::bio::net::BioClientNet::Instance()->CheckGetUnderFsConfigResp(rsp));
+}
+
 TEST_F(TestBio, test_get_underfs_config)
 {
     LOG_INFO("test_get_underfs_config");

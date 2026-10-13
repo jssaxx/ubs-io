@@ -42,8 +42,8 @@ void TestUnderFs::TearDown()
     return;
 }
 
-std::shared_ptr<FileSystem> g_hdfsInstancePtr = FileSystemFactory::CreateFileSystem(HDFS_SYSTEM);
-std::shared_ptr<FileSystem> g_cephInstancePtr = FileSystemFactory::CreateFileSystem(CEPH_SYSTEM);
+std::shared_ptr<FileSystem> g_hdfsInstancePtr = FileSystemFactory::CreateFileSystem(BIO_UNDERFS_HDFS);
+std::shared_ptr<FileSystem> g_cephInstancePtr = FileSystemFactory::CreateFileSystem(BIO_UNDERFS_CEPH);
 
 static int g_ptrStub;
 static int RadosCreateStub(rados_t *pcluster, const char * const clusterName, const char * const name, uint64_t flags)

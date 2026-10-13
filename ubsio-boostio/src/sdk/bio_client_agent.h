@@ -48,6 +48,7 @@ public:
     using BioServerStartFuncPtr = int32_t (*)();
     using BioServerExitFuncPtr = void (*)();
     using GetRuntimeConfigFuncPtr = int32_t (*)(StandaloneRuntimeConfigResponse *);
+    using GetUnderFsTypeFuncPtr = int32_t (*)(BioUnderFsType *);
     using GetBioServerCrcFlagFuncPtr = bool (*)();
     using GetBioServerCliFlagFuncPtr = bool (*)();
     using GetBioServerPromethuesToggleFuncPtr = bool (*)();
@@ -85,6 +86,7 @@ public:
     using ScanKeyFuncPtr = int32_t (*)(const UbsioKvKeyInfo **, uint64_t *, bool *);
 
     BioClientAgent() : mLocalNid(CmNodeId(0, UINT16_MAX)), localPid(static_cast<uint32_t>(getpid())) {}
+
     ~BioClientAgent() = default;
 
     static BioClientAgentPtr &Instance()
@@ -94,6 +96,7 @@ public:
     }
 
     BResult Initialize(WorkerMode mode);
+
     void Exit();
 
     BResult RegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context);
@@ -126,6 +129,8 @@ public:
     // Used by STANDALONE so BioClientNet can expose config getters while no
     // NetEngine, shm fd, or RPC channel exists.
     BResult GetRuntimeConfig(StandaloneRuntimeConfigResponse &rsp);
+
+    BResult GetUnderFsType(BioUnderFsType *type);
 
     BResult GetLocalQuotaInfo(bool &enable, uint64_t &preloadSize);
 
@@ -206,10 +211,15 @@ public:
 
 private:
     BResult InitUpgradeOperation();
+
     BResult InitOperation();
+
     void *LoadFunction(const char *name);
+
     void UnloadServerLibrary();
+
     void ResetLoadedOperations();
+
     // Direct mode means client and server share one process address space.
     // CONVERGENCE still has NetEngine, STANDALONE does not.
     bool IsDirectMode() const;
@@ -235,6 +245,7 @@ private:
     BResult SendAddDiskRequest(AddDiskRequest &req, AddDiskResponse &rsp);
 
     BResult CallServerListIntf(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
+
     BResult SendListRequestLocal(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
 
     BResult SendStatRequestLocal(StatRequest &req, ObjStat &objInfo);
@@ -260,6 +271,7 @@ private:
     BioServerStartFuncPtr standaloneStartOp = nullptr;
     BioServerExitFuncPtr exitOp = nullptr;
     GetRuntimeConfigFuncPtr getRuntimeConfigOp = nullptr;
+    GetUnderFsTypeFuncPtr getUnderFsTypeOp = nullptr;
     GetBioServerCrcFlagFuncPtr getCrcFlag = nullptr;
     GetBioServerCliFlagFuncPtr getCliFlag = nullptr;
     GetBioServerPromethuesToggleFuncPtr getPrometheusToggle = nullptr;

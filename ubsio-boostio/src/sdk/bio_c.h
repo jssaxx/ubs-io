@@ -14,12 +14,14 @@
 #define BIO_C_H
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <time.h>
 #include <limits.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
 typedef enum {
     RET_CACHE_OK = 0,            // successful
     RET_CACHE_PROTECTED = 1,     // cache write protected
@@ -74,6 +76,15 @@ typedef enum {
     BIO_LOG_LEVEL_ERROR = 4,
     BIO_LOG_LEVEL_BUTT
 } BioLogLevel;
+
+typedef enum {
+    BIO_UNDERFS_NONE = 0,
+    BIO_UNDERFS_CEPH = 1,
+    BIO_UNDERFS_HDFS = 2,
+    BIO_UNDERFS_LOCAL = 3,
+    BIO_UNDERFS_SHARED = 4,
+    BIO_UNDERFS_BUTT
+} BioUnderFsType;
 
 #define MAX_KEY_SIZE (256)
 #define LOCATION_SIZE (2)
@@ -227,6 +238,10 @@ typedef struct {
     char opensslLibDir[PATH_MAX];      // openssl lib dir path
 } ClientOptionsConfig;
 
+typedef int (*ReadHook)(uint64_t, char *, uint64_t, uint64_t, int *);
+typedef int (*WriteHook)(uint64_t, char *, uint64_t, uint64_t, uint64_t);
+typedef int (*WriteCopyFreeHook)(uint64_t, uint64_t, uint64_t, CacheSpaceDesc *);
+
 /**
  * @brief: Initialize boostio service
  *
@@ -243,6 +258,13 @@ CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf);
  * @return RET_CACHE_OK on success; otherwise, an error code.
  */
 CResult BioGetLogLevel(BioLogLevel *level);
+
+/**
+ * @brief Query the initialized UnderFS type.
+ * @param type [out] Initialized BioUnderFsType value; unchanged on failure.
+ * @return Zero on success; nonzero if the runtime or query interface is unavailable, or the pointer is invalid.
+ */
+CResult BioGetUnderFsType(BioUnderFsType *type);
 
 /**
  * @brief Register a same-process UBS IO metadata event callback.
@@ -575,10 +597,6 @@ CResult BioAllocCacheSpace(uint64_t tenantId, uint64_t objectId, uint64_t length
  * @note: The standalone KVC path does not call this copy-free API.
  */
 CResult BioPutWithCopyFree(uint64_t tenantId, const char *key, CacheSpaceDesc *space);
-
-typedef int (*ReadHook)(uint64_t, char *, uint64_t, uint64_t, int *);
-typedef int (*WriteHook)(uint64_t, char *, uint64_t, uint64_t, uint64_t);
-typedef int (*WriteCopyFreeHook)(uint64_t, uint64_t, uint64_t, CacheSpaceDesc *);
 
 /**
  * @brief: Interceptor read hook

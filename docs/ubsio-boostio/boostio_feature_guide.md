@@ -926,7 +926,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     </td>
     <td class="cellrowborder" valign="top" width="15%" headers="mcps1.2.7.1.4 "><p id="p387231913214"><a name="p387231913214"></a><a name="p387231913214"></a>none</p>
     </td>
-    <td class="cellrowborder" valign="top" width="15%" headers="mcps1.2.7.1.5 "><a name="ul4723104711017"></a><a name="ul4723104711017"></a><ul id="ul4723104711017"><li>ceph</li><li>hdfs</li><li>none</li></ul>
+    <td class="cellrowborder" valign="top" width="15%" headers="mcps1.2.7.1.5 "><a name="ul4723104711017"></a><a name="ul4723104711017"></a><ul id="ul4723104711017"><li>ceph</li><li>hdfs</li><li>local</li><li>shared</li><li>none</li></ul>
     </td>
     <td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.7.1.6 "><p id="p108729191216"><a name="p108729191216"></a><a name="p108729191216"></a>-</p>
     </td>
