@@ -151,7 +151,7 @@ public:
     inline bool OpLock()
     {
         bool expectval = false;
-        if (mOpLock.compare_exchange_weak(expectval, true)) {
+        if (mOpLock.compare_exchange_strong(expectval, true)) {
             return true;
         }
         return false;
