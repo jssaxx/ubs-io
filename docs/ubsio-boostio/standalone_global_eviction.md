@@ -49,7 +49,7 @@ FIFO 的顺序是运行时进入历史队列的顺序。恢复时沿已有扫描
 
 恢复 truncate 游标从 Meta Flow 已释放位置后的完整记录开始。magic 不匹配或 data 范围无效的记录登记为已处理空洞，以便连续截断跨过这些索引。截断仍按每 Flow 独立推进，空间释放仍按完整 segment 执行。
 
-`ubsio.standalone.force_new_disk=true` 重建 allocator 并使原缓存失效，`false` 尝试恢复兼容的旧缓存盘。新分配的 WCache metadata chunk 在持久化 BDM 分配归属前清零，避免相同 flow ID 匹配到旧轮次记录。清零覆盖整个新 chunk（包括预分配范围），在 allocator 写锁内完成；失败不发布新归属。普通 data chunk 和恢复已有 chunk 不清零。
+`ubsio.standalone.force_new_disk=true` 重建 allocator 并使原缓存失效，`false` 尝试恢复兼容的旧缓存盘。新分配的 WCache metadata chunk 在持久化 BDM 分配归属前清零，避免相同 flow ID 匹配到旧轮次记录。清零使用 512B 对齐缓冲区和 Direct I/O，覆盖整个新 chunk（包括预分配范围），完成后调用 `fdatasync` 保持原同步落盘保证；整个过程在 allocator 写锁内完成，写入或同步失败不发布新归属。普通 data chunk 和恢复已有 chunk 不清零。
 
 恢复和已有 metadata 查询只解析已分配地址，不推进写入位置或触发预分配。BDM 未保存精确写入高水位，Flow 重建时用已分配末尾初始化 `mWrittenOffset`，作为可截断上界；该初始化不调度分配，也不表示范围内所有记录有效。新 Put 仍保留原有预分配行为。
 

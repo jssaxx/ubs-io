@@ -997,6 +997,38 @@ int32_t BdmDiskReadMeta(uintptr_t itemPtr, uint64_t offset, void *buf, uint64_t 
     return BDM_CODE_OK;
 }
 
+static char *BdmDiskCreateZeroBuffer(uint64_t bufferSize)
+{
+    void *buffer = NULL;
+    int32_t ret = posix_memalign(&buffer, BDM_DIRECT_IO_ALIGN_SIZE, bufferSize);
+    if (UNLIKELY(ret != 0)) {
+        BDM_LOGERROR(0, "Allocate aligned chunk zero buffer failed, size(%llu), ret(%d).", bufferSize, ret);
+        return NULL;
+    }
+    ret = memset_s(buffer, bufferSize, 0, bufferSize);
+    if (UNLIKELY(ret != EOK)) {
+        BDM_LOGERROR(0, "Initialize chunk zero buffer failed, size(%llu), ret(%d).", bufferSize, ret);
+        free(buffer);
+        return NULL;
+    }
+    return (char *)buffer;
+}
+
+static int32_t BdmDiskSyncZeroChunk(BdmDiskItem *item, uint64_t offset, uint64_t len)
+{
+    int32_t ret;
+    do {
+        ret = fdatasync(item->asyncfd[0]);
+    } while (ret != 0 && errno == EINTR);
+    if (UNLIKELY(ret != 0)) {
+        BDM_LOGERROR(0, "Sync zeroed chunk failed, bdmId(%u), offset(%llu), len(%llu), errno(%s).",
+            item->bdmId, offset, len, strerror(errno));
+        BdmDiskReportIoFault(item, offset, len);
+        return BDM_CODE_ERR_IO;
+    }
+    return BDM_CODE_OK;
+}
+
 static int32_t BdmDiskZeroChunk(uintptr_t context, uint64_t chunkId, uint64_t len)
 {
     BdmDiskItem *item = (BdmDiskItem *)context;
@@ -1017,20 +1049,24 @@ static int32_t BdmDiskZeroChunk(uintptr_t context, uint64_t chunkId, uint64_t le
         return rangeRet;
     }
     uint64_t bufferSize = MIN(len, BDM_RESTORE_META_SIZE);
-    char *zeros = (char *)calloc(1, bufferSize);
-    if (zeros == NULL) {
+    char *zeros = BdmDiskCreateZeroBuffer(bufferSize);
+    if (UNLIKELY(zeros == NULL)) {
         return BDM_CODE_ERR;
     }
     int32_t ret = BDM_CODE_OK;
     for (uint64_t done = 0; done < len; done += bufferSize) {
         uint64_t size = MIN(bufferSize, len - done);
-        ret = BdmDiskInnerReadWrite(item, zeros, size, offset + done, FALSE);
+        ret = BdmDiskInnerReadWriteDirect(item, zeros, size, offset + done, FALSE);
         if (ret != BDM_CODE_OK) {
             break;
         }
     }
     free(zeros);
-    return ret;
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        return ret;
+    }
+    // Preserve O_SYNC durability before the allocator publishes chunk ownership.
+    return BdmDiskSyncZeroChunk(item, offset, len);
 }
 
 static int32_t BdmDiskAllocImpl(uintptr_t objPtr, uint64_t bucketId, uint64_t bucketOffset, uint64_t len,
