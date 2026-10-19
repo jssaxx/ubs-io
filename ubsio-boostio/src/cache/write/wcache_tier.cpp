@@ -122,6 +122,10 @@ BResult WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice, const Sli
 void WCacheTier::AddEvictQueue(WCacheSliceRefPtr sliceRef)
 {
     mEvictSliceQueueLock.Lock();
+    auto slice = sliceRef->GetSlice();
+    if (slice != nullptr) {
+        slice->SetEvictSequence(FlowManager::NextEvictSequence());
+    }
     mEvictSliceQueue.emplace_back(sliceRef);
     mEvictSliceQueueLock.UnLock();
 }
@@ -149,7 +153,19 @@ bool WCacheTier::IsEmptyEvictSliceQueue()
     return isEmpty;
 }
 
-WCacheSliceRefPtr WCacheTier::GetEvictSlice()
+bool WCacheTier::GetOldestEvictSequence(uint64_t &sequence)
+{
+    mEvictSliceQueueLock.Lock();
+    bool found = !mEvictSliceQueue.empty();
+    if (found) {
+        auto slice = mEvictSliceQueue.front()->GetSlice();
+        sequence = slice == nullptr ? 0 : slice->GetEvictSequence();
+    }
+    mEvictSliceQueueLock.UnLock();
+    return found;
+}
+
+WCacheSliceRefPtr WCacheTier::GetEvictSlice(uint64_t maxSequence)
 {
     WCacheSliceRefPtr sliceRef = nullptr;
     mEvictSliceQueueLock.Lock();
@@ -158,6 +174,12 @@ WCacheSliceRefPtr WCacheTier::GetEvictSlice()
         return nullptr;
     }
     sliceRef = mEvictSliceQueue.front();
+    auto slice = sliceRef->GetSlice();
+    if (slice != nullptr && slice->GetEvictSequence() > maxSequence) {
+        // A foreground operation advanced the head after the manager selected it.
+        mEvictSliceQueueLock.UnLock();
+        return nullptr;
+    }
     mEvictSliceQueue.pop_front();
     mEvictSliceQueueLock.UnLock();
     return sliceRef;

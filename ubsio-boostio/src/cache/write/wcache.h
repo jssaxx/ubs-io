@@ -128,8 +128,10 @@ public:
 
     // The manager admits the batch under its map lock, before fault cleanup can fence this flow.
     bool BeginEvictBatch(WCacheTierType type);
-    BResult EvictBatch(WCacheTierType type, uint32_t maxCount, uint32_t &evictedCount);
+    BResult EvictBatch(WCacheTierType type, uint32_t maxCount, uint32_t &evictedCount,
+        uint64_t maxSequence = NO_MAX_VALUE64);
     bool NeedEvict(WCacheTierType type);
+    bool GetOldestEvictSequence(WCacheTierType type, uint64_t &sequence);
 
     uint64_t GetCapacity(WCacheTierType type);
 
@@ -240,9 +242,12 @@ private:
         }
     };
 
-    BResult EvictAllMemSliceToDisk(uint32_t maxCount = NO_MAX_VALUE32, uint32_t *evictedCount = nullptr);
-    BResult EvictAllMemSliceWithoutDisk(uint32_t maxCount = NO_MAX_VALUE32, uint32_t *evictedCount = nullptr);
-    BResult EvictAllDiskSliceToUnderFs(uint32_t maxCount = NO_MAX_VALUE32, uint32_t *evictedCount = nullptr);
+    BResult EvictAllMemSliceToDisk(uint32_t maxCount = NO_MAX_VALUE32, uint32_t *evictedCount = nullptr,
+        uint64_t maxSequence = NO_MAX_VALUE64);
+    BResult EvictAllMemSliceWithoutDisk(uint32_t maxCount = NO_MAX_VALUE32, uint32_t *evictedCount = nullptr,
+        uint64_t maxSequence = NO_MAX_VALUE64);
+    BResult EvictAllDiskSliceToUnderFs(uint32_t maxCount = NO_MAX_VALUE32, uint32_t *evictedCount = nullptr,
+        uint64_t maxSequence = NO_MAX_VALUE64);
 
     BResult EvictFromMemToDisk(WCacheSliceRefPtr sliceRef, bool isFront = false,
         const UbsIoMetaEventBatchPtr &batch = nullptr);
