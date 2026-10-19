@@ -23,6 +23,7 @@ MemAllocator FlowManager::mMemAllocator;
 DiskAllocator FlowManager::mDiskAllocator;
 GetCacheType FlowManager::mGetCacheType;
 std::atomic<uint64_t> FlowManager::mUsedSize[FLOW_CACHE][FLOW_BUTT][DEVICE_SIZE];
+std::atomic<uint64_t> FlowManager::mEvictSequence{ 0 };
 
 BResult FlowManager::Init()
 {

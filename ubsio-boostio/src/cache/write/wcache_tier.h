@@ -121,7 +121,9 @@ public:
 
     bool IsEmptyEvictSliceQueue();
 
-    WCacheSliceRefPtr GetEvictSlice();
+    bool GetOldestEvictSequence(uint64_t &sequence);
+
+    WCacheSliceRefPtr GetEvictSlice(uint64_t maxSequence = NO_MAX_VALUE64);
 
     bool IsEmptyCursorEvictSlices();
 

@@ -1,6 +1,6 @@
 # Standalone WCache 全局淘汰
 
-WCacheManager 统一管理 standalone 普通后台淘汰。Manager 选择 Flow，WCache 执行有限批次，WCacheTier 保留原有 Slice 队列和每 Flow 的 truncate 游标。公共 C/Python API、配置项和磁盘元数据布局不变。cluster 模式及已有强制 Flush/ExpiredClear 使用原有入口。
+WCacheManager 统一管理 standalone 普通后台淘汰。FlowManager 提供进程内单调递增的入队序号，WCacheManager 比较可处理 Flow 的队首序号并定向淘汰最老 Slice，WCacheTier 保留每 Flow 的队列和 truncate 游标。公共 C/Python API、配置项和磁盘元数据布局不变。cluster 模式及已有强制 Flush/ExpiredClear 使用原有入口。
 
 ## 调度规则
 
@@ -8,13 +8,23 @@ WCacheManager 统一管理 standalone 普通后台淘汰。Manager 选择 Flow�
 
 1. 恢复 Flow、加盘/rejoin 后标为只读的 Flow，按进入历史队列的顺序处理。
 2. 存在历史 Flow 时只选择历史队头。队头失败、忙碌、等待 reader 或延迟回调时不越过它。
-3. 每批至多处理 32 条 Slice；正常对象和 tombstone 均计入预算。
+3. 每个 Manager 批次至多处理 32 条 Slice；正常对象和 tombstone 均计入预算。每条 Slice 单独准入，处理后重新选择 Flow。
 4. 每处理一条都重新检查原有水位，水位达标立即停止。**选中历史 Flow 不意味着强制排空整个 Flow。**
 5. 历史队头还未排空时留在原位置，下次需要淘汰继续处理它。
 6. 只有队头数据、worker、已准入 I/O 和延迟回调全部收敛，完成 WCache/Flow 退役后，才切换到下一个历史 Flow。
-7. 历史队列为空时，在符合当前 PT 的活跃 Flow 之间按 flowId 游标轮转；一个 Flow 处理一批后，下一批从后续 Flow 开始。
+7. 历史队列为空时，比较符合当前 PT 的全部活跃 Flow 的队首入队序号，选择最小序号。选中的队首忙碌或失败时等待重试，不改选较新的 Flow。
 
-活跃判定使用可写状态、完整 PT 版本、所属磁盘、本地主节点和正常 PT 状态。恢复 Flow 即使与当前 PT 编码相同，也仍为历史 Flow。flowId 中截断后的 PT 版本不能代替完整版本比较；同一 PT 代际的多个合法 Flow 都参与轮转。
+活跃判定使用可写状态、完整 PT 版本、所属磁盘、本地主节点和正常 PT 状态。恢复 Flow 即使与当前 PT 编码相同，也仍为历史 Flow。flowId 中截断后的 PT 版本不能代替完整版本比较；同一 PT 代际的多个合法 Flow 都参与队首比较。
+
+### 活跃 Flow 的年龄与定向淘汰
+
+每个 Slice 进入一个 tier 的淘汰队列时，在该队列锁内取得全进程唯一的递增序号。序号表示该 tier 的可淘汰入队顺序，不表示客户端请求时间或最近读取时间。Get 不刷新序号；失败后放回队首保留序号。MEMORY 到 DISK 的迁移完成后，磁盘 Slice 按进入 DISK 队列的时间取得新序号。
+
+Manager 只比较各 Flow 队首，不扫描全部 key。每次比较先截取当前序号上界，本次扫描中新入队的对象留待下一次选择，避免并发入队使扫描结果越过更早的队首。每处理一条 Slice 都重新比较，因此即使同一个 Flow 中同时有较老和较新的数据，也不会把该 Flow 的较新数据一起批量淘汰。
+
+定向操作携带选中队首的序号上界，并在出队锁内复核。前台同步下刷若已推进队首，后台不使用过期选择删除新队首，而是重新选择。每个调度任务仍有 32 条处理预算；选择复杂度为每条 O(Flow 数)，并且不增加 key 内容日志。
+
+该策略保证正常活跃 Flow 间按 tier 入队顺序选择。历史 Flow 优先退役、强制 Flush/ExpiredClear、故障清理和显式 Delete 有各自的生命周期语义。序号仅存在于运行时 Slice 中，不参与序列化或持久化；恢复 Flow 继续使用下面的历史顺序规则。所有 BoostIO 内部组件需要一起重新编译。
 
 历史队列由 Flow 生命周期入口维护：`RecoverCache()` 在恢复成功后入队；`MarkPtFlowsReadOnly()` 在同一个 Manager 锁内完成只读标记和入队，加盘/rejoin 及创建 Flow 时发现 PT 版本变化均复用此入口。全局淘汰轮次只选择候选，不再扫描全部 Flow 重新分类；后续新增只读转换路径也必须同步完成历史队列登记。
 
@@ -22,11 +32,11 @@ FIFO 的顺序是运行时进入历史队列的顺序。恢复时沿已有扫描
 
 ## 内存与磁盘
 
-有盘模式的内存下刷单独在全部可处理 Flow 间轮转，沿用全局内存水位和目标盘容量检查。内存到磁盘仍使用同一个 SliceRef，不产生最终 DELETE。
+有盘模式的内存下刷单独比较全部可处理 Flow 的 MEMORY 队首序号，沿用全局内存水位和目标盘容量检查。内存到磁盘仍使用同一个 SliceRef，不产生最终 DELETE。
 
 磁盘最终淘汰使用所属盘水位，不受其他盘空闲容量稀释。历史队头如果仍有内存数据或延迟下刷，保留队头等待该 Flow 的正常下刷收敛，不强制 Flush，也不越过队头删除后续历史 Flow。严格 FIFO 因此可能等待队头的内存下刷、I/O 或 reader。
 
-无盘模式将 MEMORY 作为最终淘汰层，应用相同的历史 FIFO、活跃轮转和内存水位停止规则。
+无盘模式将 MEMORY 作为最终淘汰层，应用相同的历史 FIFO、活跃队首年龄比较和内存水位停止规则。
 
 无盘且启用 UnderFS 时，保留 MEMORY 直接写入 UnderFS 的路径；PENDING Slice 等待索引发布后才允许最终淘汰。该路径使用紧凑元数据，truncate 游标初始化和元数据截断偏移均按对应 tier 的实际记录大小计算。
 
@@ -67,10 +77,12 @@ Delete 成功不承诺立即崩溃后的重启安全性：迁移期间的删除�
 
 ## 代码与验证入口
 
-- `src/cache/write/wcache_manager.cpp/.h`：历史队列、活跃候选检查、任务合并、轮转、重试和退役。
+- `src/flow/flow_manager.cpp/.h`：进程内入队序号分配。
+- `src/cache/cache_slice.h`：不参与序列化的运行时入队序号。
+- `src/cache/write/wcache_manager.cpp/.h`：历史队列、活跃候选检查、最老队首选择、任务合并、重试和退役。
 - `src/cache/write/wcache.cpp/.h`：正常调度回调、批次准入、水位循环、任务在途计数。
-- `src/cache/write/wcache_tier.cpp/.h`：恢复游标起点、空洞与连续截断。
+- `src/cache/write/wcache_tier.cpp/.h`：入队年龄、带序号上界的定向出队、恢复游标起点、空洞与连续截断。
 - `src/server/bio_server.cpp`：全部恢复完成并发布 Cache 就绪状态后启用调度。
-- `test/llt/unit-tests/cache/write/test_wcache_global_evict.cpp`：水位停止与继续队头、活跃轮转、队头失败/reader 延迟、PT 代际、迁移、按盘水位、故障准入、tombstone 预算、无盘模式及重复请求合并。
+- `test/llt/unit-tests/cache/write/test_wcache_global_evict.cpp`：水位停止与继续队头、跨 Flow 年龄排序、批内重选、不均匀写入时保留新工作集、过期选择保护、队头失败/reader 延迟、PT 代际、迁移、按盘水位、故障准入、tombstone 预算、无盘模式及重复请求合并。
 
 验证使用模拟元数据和 allocator 回调，不操作真实磁盘。设备故障、实际 SSD 持久化恢复和压力性能仍需在专用环境验证。

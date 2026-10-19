@@ -185,6 +185,19 @@ protected:
         return manager.mWCacheManager.at(id)->mCacheTiers[type]->mEvictSliceQueue.size();
     }
 
+    std::vector<WCacheSliceRefPtr> TakeQueue(uint64_t id, WCacheTierType type = WCACHE_DISK)
+    {
+        auto tier = manager.mWCacheManager.at(id)->mCacheTiers[type];
+        std::vector<WCacheSliceRefPtr> refs(tier->mEvictSliceQueue.begin(), tier->mEvictSliceQueue.end());
+        tier->mEvictSliceQueue.clear();
+        return refs;
+    }
+
+    void Admit(const WCacheSliceRefPtr &ref, WCacheTierType type = WCACHE_DISK)
+    {
+        manager.mWCacheManager.at(ref->GetSlice()->GetFlowId())->mCacheTiers[type]->AddEvictQueue(ref);
+    }
+
     void Run(uint16_t diskId = 0)
     {
         manager.RunGlobalEvict(Domain(manager.mHasDiskCache ? WCACHE_DISK : WCACHE_MEMORY, diskId));
@@ -308,7 +321,7 @@ TEST_F(TestWCacheGlobalEvict, historical_head_stops_at_watermark_and_resumes_bef
     EXPECT_EQ(manager.mGlobalEvictQueues.at(Domain(WCACHE_DISK, 0)).inactiveFlows.front(), second);
 }
 
-TEST_F(TestWCacheGlobalEvict, active_flows_rotate_in_bounded_batches)
+TEST_F(TestWCacheGlobalEvict, active_flows_evict_oldest_slices_in_bounded_batches)
 {
     auto first = AddFlow(40);
     auto second = AddFlow(40);
@@ -316,14 +329,147 @@ TEST_F(TestWCacheGlobalEvict, active_flows_rotate_in_bounded_batches)
     EXPECT_EQ(Queued(first), 8U);
     EXPECT_EQ(Queued(second), 40U);
     Run();
-    EXPECT_EQ(Queued(first), 8U);
-    EXPECT_EQ(Queued(second), 8U);
-    Run();
     EXPECT_EQ(Queued(first), 0U);
-    EXPECT_EQ(Queued(second), 8U);
+    EXPECT_EQ(Queued(second), 16U);
     Run();
     EXPECT_EQ(Queued(second), 0U);
     EXPECT_EQ(deletedFlows.size(), 80U);
+}
+
+TEST_F(TestWCacheGlobalEvict, slice_age_not_flow_id_determines_eviction)
+{
+    auto first = AddFlow(1);
+    auto second = AddFlow(1);
+    auto refs = TakeQueue(first);
+    Admit(refs.front());
+    Config().wcacheDiskEvictLevel = 1;
+    Run();
+    ASSERT_EQ(deletedFlows.size(), 1U);
+    EXPECT_EQ(deletedFlows.front(), second);
+    EXPECT_EQ(Queued(first), 1U);
+    EXPECT_EQ(Queued(second), 0U);
+}
+
+TEST_F(TestWCacheGlobalEvict, reselects_oldest_head_after_each_slice_within_one_batch)
+{
+    auto first = AddFlow(2);
+    auto second = AddFlow(2);
+    auto a = TakeQueue(first);
+    auto b = TakeQueue(second);
+    Admit(a[0]);
+    Admit(b[0]);
+    Admit(b[1]);
+    Admit(a[1]);
+    Config().wcacheDiskEvictLevel = 1;
+    Run();
+    EXPECT_EQ(deletedFlows, (std::vector<uint64_t>{first, second, second}));
+    EXPECT_EQ(Queued(first), 1U);
+    EXPECT_NE(a[1]->GetSlice(), nullptr);
+    EXPECT_EQ(FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_DISK, 0), TEST_SEGMENT);
+}
+
+TEST_F(TestWCacheGlobalEvict, uneven_flows_keep_new_working_set_smaller_than_half_capacity)
+{
+    auto first = AddFlow(3);
+    auto second = AddFlow(26);
+    auto a = TakeQueue(first);
+    auto b = TakeQueue(second);
+    // Twenty old slices, followed by nine new ones, unevenly distributed across flows.
+    Admit(a[0]);
+    Admit(a[1]);
+    for (uint32_t i = 0; i < 18; ++i) {
+        Admit(b[i]);
+    }
+    Admit(a[2]);
+    for (uint32_t i = 18; i < 26; ++i) {
+        Admit(b[i]);
+    }
+    Config().wcacheDiskEvictLevel = 20;
+    Run();
+    EXPECT_EQ(deletedFlows.size(), 9U);
+    EXPECT_EQ(Queued(first), 1U);
+    EXPECT_EQ(Queued(second), 19U);
+    EXPECT_NE(a[2]->GetSlice(), nullptr);
+    for (uint32_t i = 18; i < 26; ++i) {
+        EXPECT_NE(b[i]->GetSlice(), nullptr);
+    }
+    EXPECT_EQ(FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_DISK, 0), 20 * TEST_SEGMENT);
+}
+
+TEST_F(TestWCacheGlobalEvict, busy_oldest_active_flow_does_not_evict_younger_flow)
+{
+    auto first = AddFlow(1);
+    auto second = AddFlow(1);
+    auto flow = manager.mWCacheManager.at(first);
+    ASSERT_TRUE(flow->BeginEvictBatch(WCACHE_DISK));
+    Run();
+    EXPECT_TRUE(deletedFlows.empty());
+    EXPECT_EQ(Queued(second), 1U);
+    EXPECT_FALSE(manager.mRetryManager[WCACHE_DISK].empty());
+    uint32_t count = 0;
+    ASSERT_EQ(flow->EvictBatch(WCACHE_DISK, 0, count), BIO_OK);
+    Config().wcacheDiskEvictLevel = 1;
+    Run();
+    ASSERT_EQ(deletedFlows.size(), 1U);
+    EXPECT_EQ(deletedFlows.front(), first);
+}
+
+TEST_F(TestWCacheGlobalEvict, retry_preserves_age_and_does_not_evict_younger_flow)
+{
+    auto first = AddFlow(1);
+    auto second = AddFlow(1);
+    auto flow = manager.mWCacheManager.at(first);
+    uint64_t before = 0;
+    ASSERT_TRUE(flow->GetOldestEvictSequence(WCACHE_DISK, before));
+    auto ref = flow->mCacheTiers[WCACHE_DISK]->mEvictSliceQueue.front();
+    ASSERT_TRUE(ref->OpLock());
+    Run();
+    EXPECT_TRUE(deletedFlows.empty());
+    uint64_t after = 0;
+    ASSERT_TRUE(flow->GetOldestEvictSequence(WCACHE_DISK, after));
+    EXPECT_EQ(before, after);
+    EXPECT_EQ(Queued(second), 1U);
+    ref->OpUnLock();
+    Config().wcacheDiskEvictLevel = 1;
+    Run();
+    ASSERT_EQ(deletedFlows.size(), 1U);
+    EXPECT_EQ(deletedFlows.front(), first);
+}
+
+TEST_F(TestWCacheGlobalEvict, advanced_head_is_not_evicted_using_stale_selection)
+{
+    auto id = AddFlow(2);
+    auto flow = manager.mWCacheManager.at(id);
+    uint64_t time = 0;
+    uint64_t sequence = 0;
+    auto selected = manager.SelectEvictFlowLocked(Domain(WCACHE_DISK, 0),
+        BioServer::Instance()->GetPtView(&time), sequence);
+    ASSERT_EQ(selected, flow);
+    auto tier = flow->mCacheTiers[WCACHE_DISK];
+    auto head = tier->GetEvictSlice();
+    uint32_t count = 0;
+    EXPECT_EQ(selected->EvictBatch(WCACHE_DISK, 1, count, sequence), BIO_OK);
+    EXPECT_EQ(count, 0U);
+    EXPECT_EQ(Queued(id), 1U);
+    EXPECT_TRUE(deletedFlows.empty());
+    tier->RetryEvictQueue(head);
+    uint64_t retried = 0;
+    ASSERT_TRUE(tier->GetOldestEvictSequence(retried));
+    EXPECT_EQ(sequence, retried);
+}
+
+TEST_F(TestWCacheGlobalEvict, no_disk_active_eviction_uses_slice_age)
+{
+    manager.mHasDiskCache = false;
+    Config().hasDiskCache = false;
+    auto first = AddFlow(1);
+    auto second = AddFlow(1);
+    auto refs = TakeQueue(first, WCACHE_MEMORY);
+    Admit(refs.front(), WCACHE_MEMORY);
+    Config().wcacheMemEvictLevel = 1;
+    Run();
+    EXPECT_EQ(deletedFlows, (std::vector<uint64_t>{second}));
+    EXPECT_EQ(Queued(first, WCACHE_MEMORY), 1U);
 }
 
 TEST_F(TestWCacheGlobalEvict, failed_head_is_retried_without_eviction_of_later_flows)
@@ -436,8 +582,9 @@ TEST_F(TestWCacheGlobalEvict, fault_fences_admitted_batch_and_removes_history_qu
     auto failed = AddFlow(1, true, 0);
     auto healthy = AddFlow(1, true, 1);
     uint64_t time = 0;
+    uint64_t sequence = 0;
     auto task = manager.SelectEvictFlowLocked(Domain(WCACHE_DISK, 0),
-        BioServer::Instance()->GetPtView(&time));
+        BioServer::Instance()->GetPtView(&time), sequence);
     ASSERT_NE(task, nullptr);
     EXPECT_EQ(task->GetFlyIo(), 0U);
     EXPECT_FALSE(task->IsEvictIoFinish());
@@ -1014,7 +1161,8 @@ TEST_F(TestWCacheGlobalEvict, repeated_triggers_coalesce_while_a_disk_batch_is_r
     }
     manager.mEvictService[WCACHE_DISK]->Stop();
     EXPECT_TRUE(started);
-    EXPECT_EQ(deletedFlows.size(), 2U);
+    // Shutdown finishes the admitted slice without admitting another selection.
+    EXPECT_EQ(deletedFlows.size(), 1U);
 }
 
 TEST(WCacheGlobalRecoveryCursor, nonzero_start_and_holes_do_not_block_contiguous_truncate)
