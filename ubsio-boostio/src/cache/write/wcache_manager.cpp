@@ -11,6 +11,7 @@
  */
 
 #include "wcache_manager.h"
+#include "flow_manager.h"
 #include <algorithm>
 #include <iterator>
 #include <unordered_set>
@@ -1721,7 +1722,7 @@ bool WCacheManager::RetireInactiveFlows(const EvictDomain &domain)
 }
 
 WCachePtr WCacheManager::SelectEvictFlowLocked(const EvictDomain &domain,
-    const std::map<uint16_t, CmPtInfo> &ptView)
+    const std::map<uint16_t, CmPtInfo> &ptView, uint64_t &sequence)
 {
     auto &queue = mGlobalEvictQueues.at(domain);
     bool memoryDownflow = domain.second == MEMORY_EVICT_DOMAIN;
@@ -1732,30 +1733,37 @@ WCachePtr WCacheManager::SelectEvictFlowLocked(const EvictDomain &domain,
         }
         auto flow = iter->second;
         // Never skip a busy or partially drained historical head, even if the next flow is ready.
-        return flow->NeedEvict(domain.first) && flow->BeginEvictBatch(domain.first) ? flow : nullptr;
+        return flow->NeedEvict(domain.first) && flow->GetOldestEvictSequence(domain.first, sequence) &&
+            flow->BeginEvictBatch(domain.first) ? flow : nullptr;
     }
 
-    std::vector<uint64_t> candidates;
+    // Ignore admissions made during this scan. They belong to the next selection;
+    // otherwise an initially empty flow could gain an older head than one we see later.
+    const uint64_t admittedSequence = FlowManager::GetEvictSequence();
+    WCachePtr oldest;
+    sequence = NO_MAX_VALUE64;
     for (const auto &entry : mWCacheManager) {
         const auto &flow = entry.second;
         if ((!memoryDownflow && (flow->GetDiskId() != domain.second || !IsCurrentFlow(flow, ptView))) ||
             !flow->NeedEvict(domain.first)) {
             continue;
         }
-        candidates.push_back(entry.first);
-    }
-    std::sort(candidates.begin(), candidates.end());
-    std::rotate(candidates.begin(), std::upper_bound(candidates.begin(), candidates.end(), queue.cursor),
-        candidates.end());
-    for (uint64_t flowId : candidates) {
-        auto flow = mWCacheManager.at(flowId);
-        if (flow->BeginEvictBatch(domain.first)) {
-            queue.cursor = flowId;
-            return flow;
+        uint64_t headSequence;
+        if (flow->GetOldestEvictSequence(domain.first, headSequence) && headSequence <= admittedSequence &&
+            (oldest == nullptr || headSequence < sequence ||
+                (headSequence == sequence && flow->GetFlowId() < oldest->GetFlowId()))) {
+            oldest = flow;
+            sequence = headSequence;
         }
     }
-    if (!candidates.empty()) {
-        mRetryManager[domain.first].push_back(candidates.front());
+    if (oldest != nullptr) {
+        if (oldest->BeginEvictBatch(domain.first)) {
+            LOG_DEBUG("Select oldest eviction head, flowId:" << oldest->GetFlowId() << ", tier:" <<
+                domain.first << ", diskId:" << domain.second << ", sequence:" << sequence);
+            return oldest;
+        }
+        // A busy oldest head must not cause eviction of a younger flow.
+        mRetryManager[domain.first].push_back(oldest->GetFlowId());
     }
     return nullptr;
 }
@@ -1770,18 +1778,27 @@ void WCacheManager::RunGlobalEvict(const EvictDomain &domain)
         mGlobalEvictQueues.at(domain).pending = false;
     }
     bool retired = RetireInactiveFlows(domain);
-    WCachePtr flow;
-    {
-        WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
-        if (mRunning && mGlobalEvictReady) {
-            flow = SelectEvictFlowLocked(domain, ptView);
-        }
-    }
     uint32_t evictedCount = 0;
     BResult ret = BIO_OK;
-    if (flow != nullptr) {
-        ret = flow->EvictBatch(domain.first, GLOBAL_EVICT_BATCH_SIZE, evictedCount);
-        flow = nullptr;
+    for (uint32_t processed = 0; processed < GLOBAL_EVICT_BATCH_SIZE; ++processed) {
+        WCachePtr flow;
+        uint64_t sequence = NO_MAX_VALUE64;
+        {
+            WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
+            if (mRunning && mGlobalEvictReady) {
+                flow = SelectEvictFlowLocked(domain, ptView, sequence);
+            }
+        }
+        if (flow == nullptr) {
+            break;
+        }
+        uint32_t count = 0;
+        // Re-select across flows after each slice, including within a manager batch.
+        ret = flow->EvictBatch(domain.first, 1, count, sequence);
+        evictedCount += count;
+        if (ret != BIO_OK) {
+            break;
+        }
     }
     retired = RetireInactiveFlows(domain) || retired;
     {

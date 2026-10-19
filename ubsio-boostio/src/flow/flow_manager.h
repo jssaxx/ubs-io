@@ -92,6 +92,17 @@ public:
         return mUsedSize[cacheType][type][mediaId];
     }
 
+    // Process-local queue admission order; never serialized to disk or sent over the wire.
+    static uint64_t NextEvictSequence()
+    {
+        return mEvictSequence.fetch_add(1, std::memory_order_relaxed) + 1;
+    }
+
+    static uint64_t GetEvictSequence()
+    {
+        return mEvictSequence.load(std::memory_order_relaxed);
+    }
+
     static BResult MediaAlloc(FlowType type, uint32_t mediaId, uint64_t flowId, uint64_t flowOffset, uint64_t len,
         uint64_t *chunkId)
     {
@@ -166,6 +177,7 @@ private:
     FlowTaskPoolPtr mTaskPool[FLOW_BUTT]{ nullptr, nullptr };
 
     static std::atomic<uint64_t> mUsedSize[FLOW_CACHE][FLOW_BUTT][DEVICE_SIZE];
+    static std::atomic<uint64_t> mEvictSequence;
 
     static MemAllocator mMemAllocator;
     static DiskAllocator mDiskAllocator;

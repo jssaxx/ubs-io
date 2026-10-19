@@ -187,7 +187,6 @@ private:
     using EvictDomain = std::pair<WCacheTierType, uint16_t>;
     struct GlobalEvictQueue {
         std::deque<uint64_t> inactiveFlows;
-        uint64_t cursor = 0;
         bool scheduled = false;
         bool pending = false;
     };
@@ -198,7 +197,8 @@ private:
     void EnqueueInactiveLocked(const WCachePtr &flow);
     void RemoveEvictFlowLocked(uint16_t diskId, uint64_t flowId);
     bool RetireInactiveFlows(const EvictDomain &domain);
-    WCachePtr SelectEvictFlowLocked(const EvictDomain &domain, const std::map<uint16_t, CmPtInfo> &ptView);
+    WCachePtr SelectEvictFlowLocked(const EvictDomain &domain, const std::map<uint16_t, CmPtInfo> &ptView,
+        uint64_t &sequence);
     void RetryGlobalEviction();
     void DestroyEvictThread();
     void ScheduleFlushMetaEvents();

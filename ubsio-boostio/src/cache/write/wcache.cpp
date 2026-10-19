@@ -632,7 +632,13 @@ bool WCache::BeginEvictBatch(WCacheTierType type)
     return true;
 }
 
-BResult WCache::EvictBatch(WCacheTierType type, uint32_t maxCount, uint32_t &evictedCount)
+bool WCache::GetOldestEvictSequence(WCacheTierType type, uint64_t &sequence)
+{
+    return type < MAX_WCACHE_TIER && mCacheTiers[type] != nullptr &&
+        mCacheTiers[type]->GetOldestEvictSequence(sequence);
+}
+
+BResult WCache::EvictBatch(WCacheTierType type, uint32_t maxCount, uint32_t &evictedCount, uint64_t maxSequence)
 {
     evictedCount = 0;
     if (type >= MAX_WCACHE_TIER || mEvictOnFlyRef[type].load() == 0) {
@@ -642,8 +648,8 @@ BResult WCache::EvictBatch(WCacheTierType type, uint32_t maxCount, uint32_t &evi
     BResult ret = BIO_INNER_RETRY;
     try {
         if (!mStandaloneFault.load() && IsOwnDiskNormal()) {
-            ret = type == WCACHE_MEMORY ? EvictAllMemSliceToDisk(maxCount, &evictedCount) :
-                EvictAllDiskSliceToUnderFs(maxCount, &evictedCount);
+            ret = type == WCACHE_MEMORY ? EvictAllMemSliceToDisk(maxCount, &evictedCount, maxSequence) :
+                EvictAllDiskSliceToUnderFs(maxCount, &evictedCount, maxSequence);
         }
     } catch (const std::bad_alloc &) {
         ret = BIO_ALLOC_FAIL;
@@ -1445,17 +1451,17 @@ BResult WCache::CreateDiskTombstone(const WCacheSlicePtr &slice)
     return BIO_OK;
 }
 
-BResult WCache::EvictAllMemSliceToDisk(uint32_t maxCount, uint32_t *evictedCount)
+BResult WCache::EvictAllMemSliceToDisk(uint32_t maxCount, uint32_t *evictedCount, uint64_t maxSequence)
 {
     if (!mHasDiskCache) {
-        return EvictAllMemSliceWithoutDisk(maxCount, evictedCount);
+        return EvictAllMemSliceWithoutDisk(maxCount, evictedCount, maxSequence);
     }
 
     uint32_t processed = 0;
     bool isSatisfied = EvictMemSatisfiedCond();
     while ((isSatisfied || (evictedCount == nullptr && mIsForced)) && processed < maxCount &&
         !mStandaloneFault.load()) {
-        WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice();
+        WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice(maxSequence);
         if (sliceRef == nullptr) {
             break;
         }
@@ -1482,7 +1488,7 @@ BResult WCache::EvictAllMemSliceToDisk(uint32_t maxCount, uint32_t *evictedCount
     return BIO_OK;
 }
 
-BResult WCache::EvictAllMemSliceWithoutDisk(uint32_t maxCount, uint32_t *evictedCount)
+BResult WCache::EvictAllMemSliceWithoutDisk(uint32_t maxCount, uint32_t *evictedCount, uint64_t maxSequence)
 {
     uint32_t processed = 0;
     bool isSatisfied = EvictMemSatisfiedCond();
@@ -1490,7 +1496,7 @@ BResult WCache::EvictAllMemSliceWithoutDisk(uint32_t maxCount, uint32_t *evicted
     ChkTrueNot(metaEventBatch != nullptr, BIO_ALLOC_FAIL);
     while ((isSatisfied || (evictedCount == nullptr && mIsForced)) && processed < maxCount &&
         !mStandaloneFault.load()) {
-        WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice();
+        WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice(maxSequence);
         if (sliceRef == nullptr) {
             break;
         }
@@ -1544,7 +1550,7 @@ BResult WCache::EvictAllMemSliceWithoutDisk(uint32_t maxCount, uint32_t *evicted
     return BIO_OK;
 }
 
-BResult WCache::EvictAllDiskSliceToUnderFs(uint32_t maxCount, uint32_t *evictedCount)
+BResult WCache::EvictAllDiskSliceToUnderFs(uint32_t maxCount, uint32_t *evictedCount, uint64_t maxSequence)
 {
     if (!mHasDiskCache) {
         if (evictedCount == nullptr) {
@@ -1586,7 +1592,7 @@ BResult WCache::EvictAllDiskSliceToUnderFs(uint32_t maxCount, uint32_t *evictedC
     uint32_t processed = 0;
     while ((isSatisfied || (evictedCount == nullptr && mIsForced)) && processed < maxCount &&
         !mStandaloneFault.load()) {
-        WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_DISK]->GetEvictSlice();
+        WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_DISK]->GetEvictSlice(maxSequence);
         if (sliceRef == nullptr) {
             break;
         }
