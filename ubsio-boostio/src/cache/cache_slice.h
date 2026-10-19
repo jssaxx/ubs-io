@@ -139,6 +139,16 @@ public:
         return mIndexInFlow;
     }
 
+    uint64_t GetEvictSequence() const
+    {
+        return mEvictSequence;
+    }
+
+    void SetEvictSequence(uint64_t sequence)
+    {
+        mEvictSequence = sequence;
+    }
+
     inline std::string ToString() override
     {
         return Slice::ToString();
@@ -211,6 +221,7 @@ private:
     uint64_t mFlowId{ 0 };
     uint64_t mOffsetInFlow{ 0 }; /* the offset of a slice in the flow. */
     uint64_t mIndexInFlow{ 0 };  /* the index of a slice in the flow, which is unique in a flow. */
+    uint64_t mEvictSequence{ 0 }; // Runtime-only order in the current tier's eviction queue.
 };
 using WCacheSlicePtr = Ref<WCacheSlice>;
 
