@@ -33,6 +33,7 @@ concurrency:
 
 permissions:
   repository: read
+  pr: write
 
 stages:
   ut_stage:
