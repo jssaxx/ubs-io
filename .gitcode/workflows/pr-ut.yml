@@ -90,8 +90,7 @@ stages:
                 openssl-devel \
                 dos2unix \
                 liburing \
-                liburing-devel \
-                lcov
+                liburing-devel
 
               sudo python3 -m pip config set global.index-url \
                 https://repo.huaweicloud.com/repository/pypi/simple
