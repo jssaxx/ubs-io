@@ -41,7 +41,7 @@ stages:
     jobs:
       ubs-io_ut:
         name: ubs-io_ut
-        runs-on: [self-hosted, openeuler, x86, cpu=16]
+        runs-on: [self-hosted, openeuler, arm, cpu=16]
         container:
           image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
         steps:
