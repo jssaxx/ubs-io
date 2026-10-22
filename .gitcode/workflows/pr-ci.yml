@@ -1,0 +1,197 @@
+name: UBS-IO_CI
+
+on:
+  pull_request:
+    types:
+      - open
+      - reopen
+      - update
+    branches: ['*']
+
+  pull_request_comment:
+    types: [created]
+    comments: ['^/retest$']
+    branches: ['*']
+
+env:
+  PR_ID: ${{ atomgit.event.pull_request.number }}
+  TARGET_BRANCH: ${{ atomgit.event.pull_request.base.ref }}
+  HEAD_SHA: ${{ atomgit.event.pull_request.head.sha }}
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  enable: true
+  max: 3
+  exceed-action: QUEUE
+  preemption:
+    enable: true
+    events: [mr_id]
+
+permissions:
+  repository: read
+  pr: none
+  issue: none
+  note: none
+  project: none
+
+jobs:
+  pre_commit:
+    name: pre-commit
+    runs-on: [self-hosted, openeuler, arm, cpu=8]
+    container:
+      image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
+
+    steps:
+      - name: Checkout PR merge code
+        uses: checkout
+        with:
+          ref: refs/merge-requests/${{ env.PR_ID }}/merge
+
+      - name: Install pre-commit
+        run: |
+          set -euxo pipefail
+          sudo yum install -y python3 python3-pip clang-tools-extra
+          sudo python3 -m pip install "pre-commit==4.3.0"
+
+      - name: Run clang-format
+        run: |
+          set -euxo pipefail
+
+          # 与原 Jenkins 保持一致：
+          # 将配置中的自动修改参数 -i 改成只检查的 -n --Werror
+          sed -i 's/, -i/, -n, --Werror/g' .pre-commit-config.yaml
+
+          pre-commit run clang-format --all-files
+
+  build:
+    name: build-${{ matrix.arch }}
+    runs-on: [self-hosted, openeuler, '${{ matrix.runner_label }}', cpu=8]
+    container:
+      image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner_label: x86_64
+          - arch: aarch64
+            runner_label: arm
+
+    steps:
+      - name: Checkout PR merge code
+        uses: checkout
+        with:
+          ref: refs/merge-requests/${{ env.PR_ID }}/merge
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+
+          sudo yum install -y \
+            python3 \
+            python3-pip \
+            python3-devel \
+            pybind11-devel \
+            gcc \
+            gcc-c++ \
+            make \
+            cmake \
+            maven \
+            hostname \
+            fuse-devel \
+            automake \
+            librados-devel \
+            libaio-devel \
+            libtool \
+            numactl-devel \
+            libcurl-devel \
+            libboundscheck \
+            rdma-core-devel \
+            openssl \
+            openssl-devel \
+            dos2unix \
+            liburing \
+            liburing-devel
+
+          sudo python3 -m pip config set global.index-url \
+            https://repo.huaweicloud.com/repository/pypi/simple
+          sudo python3 -m pip config set global.timeout 120
+
+          sudo python3 -m pip install wheel pybind11 \
+            -i https://repo.huaweicloud.com/repository/pypi/simple \
+            --trusted-host repo.huaweicloud.com \
+            --timeout 120
+
+      - name: Build UBSIO-BoostIO release
+        run: |
+          set -euxo pipefail
+          cd ubsio-boostio
+          bash build.sh -t release
+
+      - name: Upload release package
+        uses: upload-artifact
+        with:
+          name: ubsio-boostio-release-${{ matrix.arch }}
+          path: ubsio-boostio/BoostIO_*.tar.gz
+
+  dt:
+    name: DT
+    runs-on: [self-hosted, openeuler, arm, cpu=8]
+    container:
+      image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
+
+    steps:
+      - name: Checkout PR merge code
+        uses: checkout
+        with:
+          ref: refs/merge-requests/${{ env.PR_ID }}/merge
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+
+          sudo yum install -y \
+            python3 \
+            python3-pip \
+            python3-devel \
+            pybind11-devel \
+            gcc \
+            gcc-c++ \
+            make \
+            cmake \
+            maven \
+            hostname \
+            fuse-devel \
+            automake \
+            librados-devel \
+            libaio-devel \
+            libtool \
+            numactl-devel \
+            libcurl-devel \
+            libboundscheck \
+            rdma-core-devel \
+            openssl \
+            openssl-devel \
+            dos2unix \
+            liburing \
+            liburing-devel
+
+      - name: Run UBSIO-BoostIO DT
+        run: |
+          set -euxo pipefail
+          cd ubsio-boostio/test/llt
+          bash run_dt.sh
+
+      - name: Upload DT reports
+        if: ${{ always() }}
+        uses: upload-artifact
+        with:
+          name: ubsio-boostio-dt
+          path: |
+            ubsio-boostio/coverage_report/
+            ubsio-boostio/coverage_report/report.xml
+            ubsio-boostio/coverage_report/coverage.info
