@@ -1,4 +1,4 @@
-name: ubs-io_UT
+name: UBS-IO_UT
 
 on:
   pull_request:
