@@ -41,7 +41,7 @@ stages:
     jobs:
       ubs-io_ut:
         name: ubs-io_ut
-        runs-on: [self-hosted, openeuler, x86, cpu=16]
+        runs-on: [self-hosted, openeuler, arm, cpu=8]
         container:
           image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
         steps:
@@ -91,8 +91,7 @@ stages:
                 openssl-devel \
                 dos2unix \
                 liburing \
-                liburing-devel \
-                lcov
+                liburing-devel
 
               sudo python3 -m pip config set global.index-url \
                 https://repo.huaweicloud.com/repository/pypi/simple
