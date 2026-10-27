@@ -100,7 +100,7 @@ jobs:
           repo_url: 'https://gitcode.com/${{ env.SOURCE_REPO }}.git'
           branch: ${{ env.SOURCE_REF }}
           rule_sets: '[{"language":"C"},{"language":"C++"},{"language":"SHELL"},{"language":"PYTHON"}]'
-          access_token: ${{ secrets.GITCODE_ACCESS_TOKEN }}
+          access_token: ${{ secrets.CODE_CHECK_TOKEN }}
 
   check_package_license:
     name: check_package_license
