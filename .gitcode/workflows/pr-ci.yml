@@ -68,7 +68,7 @@ jobs:
     name: build-x86_64
     runs-on: [self-hosted, openeuler, x86, cpu=8]
     container:
-      image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
+      image: swr.cn-north-4.myhuaweicloud.com/ubscore/soe:latest
 
     steps:
       - name: Checkout PR merge code
@@ -131,7 +131,7 @@ jobs:
     name: build-aarch64
     runs-on: [self-hosted, openeuler, arm, cpu=8]
     container:
-      image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
+      image: swr.cn-north-4.myhuaweicloud.com/ubscore/soe:latest
 
     steps:
       - name: Checkout PR merge code
