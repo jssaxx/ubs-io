@@ -95,6 +95,8 @@ jobs:
   check_package_license:
     name: check_package_license
     runs-on: [self-hosted, openeuler, arm, cpu=8]
+    outputs:
+      result: ${{ steps.record_result.outputs.result }}
 
     steps:
       - name: Checkout PR merge code
@@ -114,9 +116,23 @@ jobs:
             echo "check_package_license=WARNING" >> "${ATOMGIT_STEP_SUMMARY}"
           fi
 
+      - name: Record result
+        id: record_result
+        if: ${{ always() }}
+        env:
+          CURRENT_JOB_STATUS: ${{ job.status }}
+        run: |
+          if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
+            echo "result=SUCCESS" >> "$ATOMGIT_OUTPUT"
+          else
+            echo "result=FAILED" >> "$ATOMGIT_OUTPUT"
+          fi
+
   check_sca:
     name: check_sca
     runs-on: [self-hosted, openeuler, arm, cpu=8]
+    outputs:
+      result: ${{ steps.record_result.outputs.result }}
 
     steps:
       - name: Run OpenLibing SCA
@@ -125,9 +141,23 @@ jobs:
           project-name: ubs-io
           platform-domain: https://gitcode.com
 
+      - name: Record result
+        id: record_result
+        if: ${{ always() }}
+        env:
+          CURRENT_JOB_STATUS: ${{ job.status }}
+        run: |
+          if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
+            echo "result=SUCCESS" >> "$ATOMGIT_OUTPUT"
+          else
+            echo "result=FAILED" >> "$ATOMGIT_OUTPUT"
+          fi
+
   check_issue_associate:
     name: check_issue_associate
     runs-on: [self-hosted, openeuler, arm, cpu=8]
+    outputs:
+      result: ${{ steps.record_result.outputs.result }}
 
     steps:
       - name: Check associated issue
@@ -166,9 +196,23 @@ jobs:
             exit 1
           fi
 
+      - name: Record result
+        id: record_result
+        if: ${{ always() }}
+        env:
+          CURRENT_JOB_STATUS: ${{ job.status }}
+        run: |
+          if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
+            echo "result=SUCCESS" >> "$ATOMGIT_OUTPUT"
+          else
+            echo "result=FAILED" >> "$ATOMGIT_OUTPUT"
+          fi
+
   check_docs:
     name: check_docs
     runs-on: [self-hosted, openeuler, arm, cpu=8]
+    outputs:
+      result: ${{ steps.record_result.outputs.result }}
 
     steps:
       - name: Checkout PR merge code
@@ -277,6 +321,18 @@ jobs:
             exit 1
           fi
 
+      - name: Record result
+        id: record_result
+        if: ${{ always() }}
+        env:
+          CURRENT_JOB_STATUS: ${{ job.status }}
+        run: |
+          if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
+            echo "result=SUCCESS" >> "$ATOMGIT_OUTPUT"
+          else
+            echo "result=FAILED" >> "$ATOMGIT_OUTPUT"
+          fi
+
   gate_report:
     name: gate-report
     if: ${{ always() }}
@@ -293,6 +349,10 @@ jobs:
         env:
           ATOMGIT_TOKEN: ${{ atomgit.token }}
           GATE_STATUS_TOKEN: ${{ secrets.CODE_CHECK_TOKEN }}
+          PACKAGE_LICENSE_RESULT: ${{ jobs.check_package_license.outputs.result }}
+          SCA_RESULT: ${{ jobs.check_sca.outputs.result }}
+          ISSUE_RESULT: ${{ jobs.check_issue_associate.outputs.result }}
+          DOCS_RESULT: ${{ jobs.check_docs.outputs.result }}
         run: |
           set -euo pipefail
 
@@ -350,26 +410,9 @@ jobs:
             fi
           }
 
-          status_of() {
-            local run_json="$1"
-            local job_name="$2"
-
-            jq -r \
-              --arg name "${job_name}" \
-              '
-                [
-                  .jobs[]?,
-                  .stages[]?.jobs[]?
-                  | select(.name == $name or .identifier == $name)
-                  | .status
-                ]
-                | last // "NOT_FOUND"
-              ' <<<"${run_json}"
-          }
-
-          normalize_status() {
-            case "${1:-NOT_FOUND}" in
-              COMPLETED|SUCCESS)
+          normalize_result() {
+            case "${1:-FAILED}" in
+              success|SUCCESS|completed|COMPLETED)
                 printf 'SUCCESS'
                 ;;
               *)
@@ -470,21 +513,10 @@ jobs:
             sleep 15
           done
 
-          check_sca_status="$(
-            normalize_status "$(status_of "${platform_run_json}" "check_sca")"
-          )"
-
-          issue_status="$(
-            normalize_status "$(status_of "${platform_run_json}" "check_issue_associate")"
-          )"
-
-          docs_status="$(
-            normalize_status "$(status_of "${platform_run_json}" "check_docs")"
-          )"
-
-          package_job_status="$(
-            normalize_status "$(status_of "${platform_run_json}" "check_package_license")"
-          )"
+          check_sca_status="$(normalize_result "${SCA_RESULT}")"
+          issue_status="$(normalize_result "${ISSUE_RESULT}")"
+          docs_status="$(normalize_result "${DOCS_RESULT}")"
+          package_job_status="$(normalize_result "${PACKAGE_LICENSE_RESULT}")"
 
           if [[ "${build_run_status}" == "COMPLETED" || "${build_run_status}" == "SUCCESS" ]]; then
             x86_status="SUCCESS"
