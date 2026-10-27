@@ -97,6 +97,19 @@ jobs:
     runs-on: [self-hosted, openeuler, arm, cpu=8]
 
     steps:
+      - name: Verify CodeCheck token exists
+        env:
+          CODE_CHECK_TOKEN: ${{ secrets.CODE_CHECK_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${CODE_CHECK_TOKEN}" ]]; then
+            echo "CODE_CHECK_TOKEN is empty or not configured"
+            exit 1
+          fi
+
+          echo "CODE_CHECK_TOKEN is configured"
+
       - name: Run CodeCheck
         uses: codecheck_gitcode_v2
         with:
@@ -306,6 +319,7 @@ jobs:
       - name: Collect results and post PR comment
         env:
           ATOMGIT_TOKEN: ${{ atomgit.token }}
+          GATE_STATUS_TOKEN: ${{ secrets.CODE_CHECK_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -328,14 +342,14 @@ jobs:
             local response
 
             if response="$(curl -fsSL \
-              -H "PRIVATE-TOKEN: ${ATOMGIT_TOKEN}" \
+              -H "PRIVATE-TOKEN: ${GATE_STATUS_TOKEN}" \
               "${url}" 2>/dev/null)"; then
               printf '%s' "${response}"
               return 0
             fi
 
             curl -fsSL \
-              -H "Authorization: token ${ATOMGIT_TOKEN}" \
+              -H "Authorization: token ${GATE_STATUS_TOKEN}" \
               "${url}"
           }
 
