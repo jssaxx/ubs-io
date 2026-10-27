@@ -886,7 +886,7 @@ BResult BioClientAgent::GetLocal(GetRequest &req, char *value, uint64_t &realLen
         if (req.enableCrc && ret == BIO_OK) {
             uint32_t currentCrc = BioCrcUtil::Crc32(value, rsp.realLen);
             if (rsp.dataCrc != currentCrc) {
-                CLIENT_LOG_ERROR("Client get failed to verify the CRC, key:" << req.key << ", origin crc:" <<
+                CLIENT_LOG_WARN("Client get failed to verify the CRC, key:" << req.key << ", origin crc:" <<
                     rsp.dataCrc << ", current crc:" << currentCrc << ".");
                 ret = BIO_CRC_ERR;
             }
@@ -900,7 +900,7 @@ BResult BioClientAgent::GetLocal(GetRequest &req, char *value, uint64_t &realLen
 BResult BioClientAgent::BatchGetKeyDiskAddrLocal(BatchParseKeyAddrRequest *req, uint32_t reqLen, KeyAddrInfo* infos)
 {
     if (UNLIKELY(IsDirectMode())) {
-        CLIENT_LOG_ERROR("Batch get key disk addr only supports separate deployment.");
+        CLIENT_LOG_WARN("Batch get key disk addr only supports separate deployment.");
         return BIO_INNER_ERR;
     }
     return SendBatchGetKeyDiskAddrRequestLocal(req, reqLen, infos);
@@ -928,7 +928,7 @@ void BioClientAgent::BatchGetLocal(BatchGetRequest *req,  uint32_t reqLen, Callb
 BResult BioClientAgent::BatchGetLocalSync(BatchGetRequest *req, BatchGetResponse &rsp)
 {
     if (UNLIKELY(mMode != STANDALONE || req == nullptr)) {
-        CLIENT_LOG_ERROR("Invalid standalone batch get request.");
+        CLIENT_LOG_WARN("Invalid standalone batch get request.");
         return BIO_INVALID_PARAM;
     }
 
@@ -958,7 +958,7 @@ BResult BioClientAgent::GetLocal(GetRequest &req, char *value, Callback callback
         if (req.enableCrc) {
             uint32_t currentCrc = BioCrcUtil::Crc32(value, rsp.realLen);
             if (UNLIKELY(rsp.dataCrc != currentCrc)) {
-                CLIENT_LOG_ERROR("Client get failed to verify the CRC, key:" << req.key << ", origin crc:" <<
+                CLIENT_LOG_WARN("Client get failed to verify the CRC, key:" << req.key << ", origin crc:" <<
                     rsp.dataCrc << ", current crc:" << currentCrc << ".");
                 ret = BIO_CRC_ERR;
             }
@@ -1099,7 +1099,7 @@ BResult BioClientAgent::BatchStatLocalSync(const char **keys, ObjLocation *locat
     BatchObjStat *stats)
 {
     if (UNLIKELY(mMode != STANDALONE || batchStatOp == nullptr)) {
-        CLIENT_LOG_ERROR("Batch stat only supports standalone direct mode.");
+        CLIENT_LOG_WARN("Batch stat only supports standalone direct mode.");
         return BIO_NOT_READY;
     }
     return static_cast<BResult>(batchStatOp(keys, locations, count, stats));
@@ -1109,7 +1109,7 @@ BResult BioClientAgent::BatchExistStandaloneLocalSync(const char **keys, ObjLoca
     bool *results)
 {
     if (UNLIKELY(mMode != STANDALONE || batchExistStandaloneOp == nullptr)) {
-        CLIENT_LOG_ERROR("Batch exist only supports standalone direct mode.");
+        CLIENT_LOG_WARN("Batch exist only supports standalone direct mode.");
         return BIO_NOT_READY;
     }
     return static_cast<BResult>(batchExistStandaloneOp(keys, locations, count, results));
