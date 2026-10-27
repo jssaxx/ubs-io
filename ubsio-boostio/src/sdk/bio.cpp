@@ -125,12 +125,12 @@ inline static void StatisticGetIoSize(uint64_t length)
 inline static bool KeyValid(const char *key)
 {
     if (UNLIKELY(key == nullptr)) {
-        CLIENT_LOG_ERROR("Parameter key is nullptr.");
+        CLIENT_LOG_WARN("Parameter key is nullptr.");
         return false;
     }
     size_t len = strlen(key);
     if (UNLIKELY(len == 0 || len >= KEY_MAX_SIZE)) {
-        CLIENT_LOG_ERROR("Invalid parameter key, len:" << len << ".");
+        CLIENT_LOG_WARN("Invalid parameter key, len:" << len << ".");
         return false;
     }
     return true;
@@ -151,7 +151,7 @@ CResult Bio::Put(const char *key, const char *value, uint64_t length, const ObjL
     }
 
     if (UNLIKELY(!KeyValid(key) || value == nullptr || length == 0)) {
-        CLIENT_LOG_ERROR("Invalid put parameter, key or value pointers is nullptr, length:" << length << "(Mb).");
+        CLIENT_LOG_WARN("Invalid put parameter, key or value pointers is nullptr, length:" << length << "(Mb).");
         return RET_CACHE_EPERM;
     }
 
@@ -163,7 +163,7 @@ CResult Bio::Put(const char *key, const char *value, uint64_t length, const ObjL
     BIO_TRACE_END(SDK_TRACE_PUT, ret);
     CResult cRet = ToCResult(ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Put value failed, ret:" << ret << ", key:" << key << ", length:" << length <<
+        CLIENT_LOG_WARN("Put value failed, ret:" << ret << ", key:" << key << ", length:" << length <<
             ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
     } else {
         CLIENT_LOG_DEBUG("Put value success, key:" << key << ", length:" << length << ", location0:" <<
@@ -180,7 +180,7 @@ CResult Bio::AsyncPut(const char *key, const char *value, uint64_t length, const
     }
 
     if (UNLIKELY(!KeyValid(key) || value == nullptr || length == 0)) {
-        CLIENT_LOG_ERROR("Invalid put parameter, key or value pointers is nullptr, length:" << length << "(Mb).");
+        CLIENT_LOG_WARN("Invalid put parameter, key or value pointers is nullptr, length:" << length << "(Mb).");
         return RET_CACHE_EPERM;
     }
 
@@ -191,7 +191,7 @@ CResult Bio::AsyncPut(const char *key, const char *value, uint64_t length, const
     BResult ret = gClient->AsyncPut(param, cbParam.callback, cbParam.context);
     BIO_TRACE_END(SDK_TRACE_ASYNC_PUT, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Async put value failed, ret:" << ret << ", key:" << key << ", length:" << length <<
+        CLIENT_LOG_WARN("Async put value failed, ret:" << ret << ", key:" << key << ", length:" << length <<
             ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
     } else {
         CLIENT_LOG_DEBUG("Async put value success, key:" << key << ", length:" << length << ", location0:" <<
@@ -228,7 +228,7 @@ CResult Bio::Put(const char *key, CacheSpaceDesc &spaceInfo)
     BIO_TRACE_END(SDK_TRACE_PUT, ret);
     CResult cRet = ToCResult(ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Put copy free value failed, ret:" << ret << ", key:" << key << ", length:" << length <<
+        CLIENT_LOG_WARN("Put copy free value failed, ret:" << ret << ", key:" << key << ", length:" << length <<
             ", location0:" << spaceInfo.loc.location[0] << ", location1:" << spaceInfo.loc.location[1] << ".");
     } else {
         CLIENT_LOG_DEBUG("Put copy free value success, key:" << key << ", length:" << length << ", location0:" <<
@@ -249,7 +249,7 @@ CResult Bio::BatchGetKeyDiskAddr(const char **keys, ObjLocation *locations, cons
 
     for (uint32_t i = 0; i < count; i++) {
         if (UNLIKELY(!KeyValid(keys[i]))) {
-            CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr.");
+            CLIENT_LOG_WARN("Invalid get parameter, key or value pointers is nullptr.");
             return RET_CACHE_EPERM;
         }
     }
@@ -266,7 +266,7 @@ CResult Bio::Get(const char *key, uint64_t offset, uint64_t length, const ObjLoc
     }
 
     if (UNLIKELY(!KeyValid(key) || value == nullptr || length == 0)) {
-        CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, length:" << length << ".");
+        CLIENT_LOG_WARN("Invalid get parameter, key or value pointers is nullptr, length:" << length << ".");
         return RET_CACHE_EPERM;
     }
 
@@ -278,7 +278,7 @@ CResult Bio::Get(const char *key, uint64_t offset, uint64_t length, const ObjLoc
     BIO_TRACE_END(SDK_TRACE_GET, ret);
     CResult cRet = ToCResult(ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Get value failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
+        CLIENT_LOG_WARN("Get value failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
             length << ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
     } else {
         CLIENT_LOG_DEBUG("Get value success, key:" << key << ", offset:" << offset << ", length:" << length <<
@@ -301,7 +301,7 @@ CResult Bio::BatchGet(const char **keys, const uint32_t count, uint64_t *offsets
     }
     for (uint32_t i = 0; i < count; i++) {
         if (UNLIKELY(!KeyValid(keys[i]) || lengths[i] == 0)) {
-            CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, length:" << lengths[i] << ", index:" << i);
+            CLIENT_LOG_WARN("Invalid get parameter, key or value pointers is nullptr, length:" << lengths[i] << ", index:" << i);
             return RET_CACHE_EPERM;
         }
     }
@@ -312,7 +312,7 @@ CResult Bio::BatchGet(const char **keys, const uint32_t count, uint64_t *offsets
     BIO_TRACE_END(SDK_TRACE_BATCH_GET, ret);
     CResult cRet = ToCResult(ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Batch get value failed, ret:" << ret << ", key count:" << count << ".");
+        CLIENT_LOG_WARN("Batch get value failed, ret:" << ret << ", key count:" << count << ".");
     } else {
         CLIENT_LOG_DEBUG("Batch get value success, key count:" << count << ".");
     }
@@ -336,7 +336,7 @@ CResult Bio::AsyncGet(AsyncGetParam param, const ObjLocation &location, AsyncOpP
     uint64_t offset = param.offset;
     uint64_t length = param.length;
     if (UNLIKELY(!KeyValid(key) || value == nullptr || length == 0)) {
-        CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, length:" << length << ".");
+        CLIENT_LOG_WARN("Invalid get parameter, key or value pointers is nullptr, length:" << length << ".");
         return RET_CACHE_EPERM;
     }
 
@@ -346,7 +346,7 @@ CResult Bio::AsyncGet(AsyncGetParam param, const ObjLocation &location, AsyncOpP
     BResult ret = gClient->AsyncGet(getParam, opParam);
     BIO_TRACE_END(SDK_TRACE_ASYNC_GET, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Async get value failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
+        CLIENT_LOG_WARN("Async get value failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
             length << ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
     } else {
         CLIENT_LOG_DEBUG("Async get value success, key:" << key << ", offset:" << offset << ", length:" << length <<
@@ -441,7 +441,7 @@ CResult Bio::Stat(const char *key, const ObjLocation &location, ObjStat &stat)
     }
 
     if (UNLIKELY(!KeyValid(key))) {
-        CLIENT_LOG_ERROR("Invalid Stat parameter, key:" << key << ".");
+        CLIENT_LOG_WARN("Invalid Stat parameter, key:" << key << ".");
         return RET_CACHE_EPERM;
     }
 
@@ -457,7 +457,7 @@ CResult Bio::BatchStat(const char **keys, ObjLocation *locations, uint32_t count
         return RET_CACHE_NOT_READY;
     }
     if (UNLIKELY(gClient->GetMode() != STANDALONE)) {
-        CLIENT_LOG_ERROR("BioBatchStat only supports standalone mode.");
+        CLIENT_LOG_WARN("BioBatchStat only supports standalone mode.");
         return RET_CACHE_EPERM;
     }
     if (UNLIKELY(keys == nullptr || locations == nullptr || stats == nullptr || count == 0 ||
@@ -466,7 +466,7 @@ CResult Bio::BatchStat(const char **keys, ObjLocation *locations, uint32_t count
     }
     for (uint32_t index = 0; index < count; ++index) {
         if (UNLIKELY(!KeyValid(keys[index]))) {
-            CLIENT_LOG_ERROR("Invalid batch stat key, index:" << index << ".");
+            CLIENT_LOG_WARN("Invalid batch stat key, index:" << index << ".");
             return RET_CACHE_EPERM;
         }
     }
@@ -492,7 +492,7 @@ CResult Bio::BatchExist(const char *key[], ObjLocation location[], uint32_t coun
     }
     for (uint32_t i = 0; i < count; i++) {
         if (UNLIKELY(!KeyValid(key[i]))) {
-            CLIENT_LOG_ERROR("Invalid batch exist parameter, key is invalid, index:" << i << ".");
+            CLIENT_LOG_WARN("Invalid batch exist parameter, key is invalid, index:" << i << ".");
             return RET_CACHE_EPERM;
         }
     }
@@ -578,7 +578,7 @@ CResult Bio::AllocSpace(uint64_t objectId, uint64_t length, CacheSpaceDesc &spac
     auto ret = gClient->AllocSpace(param, spaceInfo);
     BIO_TRACE_END(SDK_TRACE_ALLOC_SPACE, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Alloc space failed, ret:" << ret << ", objectId:" << objectId << ", length:" << length <<
+        CLIENT_LOG_WARN("Alloc space failed, ret:" << ret << ", objectId:" << objectId << ", length:" << length <<
             ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
     } else {
         CLIENT_LOG_DEBUG("Alloc space success, objectId:" << objectId << ", length:" << length << ", location0:" <<
@@ -1364,7 +1364,7 @@ WriteCopyFreeHook g_writeCopyFreeHook = nullptr;
 int BioReadHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, int *readLen)
 {
     if (g_readHook == nullptr) {
-        CLIENT_LOG_ERROR("g_readHook is nullptr.");
+        CLIENT_LOG_WARN("g_readHook is nullptr.");
         return RET_CACHE_ERROR;
     }
     return g_readHook(inode, buff, count, offset, readLen);
@@ -1373,7 +1373,7 @@ int BioReadHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, int
 int BioWriteHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, uint64_t fh)
 {
     if (g_writeHook == nullptr) {
-        CLIENT_LOG_ERROR("g_writeHook is nullptr.");
+        CLIENT_LOG_WARN("g_writeHook is nullptr.");
         return RET_CACHE_ERROR;
     }
     return g_writeHook(inode, buff, count, offset, fh);
@@ -1382,7 +1382,7 @@ int BioWriteHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, ui
 int BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceDesc *space)
 {
     if (g_writeCopyFreeHook == nullptr) {
-        CLIENT_LOG_ERROR("g_writeCopyFreeHook is nullptr.");
+        CLIENT_LOG_WARN("g_writeCopyFreeHook is nullptr.");
         return RET_CACHE_ERROR;
     }
     return g_writeCopyFreeHook(inode, offset, count, space);

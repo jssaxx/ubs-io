@@ -110,18 +110,18 @@ void BioClient::BioClientUpdateHandle()
 
     auto ret = mMirror->RebuildNodeView();
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Failed to rebuild node view, ret:" << ret << ".");
+        CLIENT_LOG_WARN("Failed to rebuild node view, ret:" << ret << ".");
         return;
     }
     ret = netEngine->Rebuild(mMirror->GetLocalNodeInfo().VNodeId(), mMirror->GetNodeView());
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Failed to rebuild net engine, ret" << ret << ".");
+        CLIENT_LOG_WARN("Failed to rebuild net engine, ret" << ret << ".");
         return;
     }
 
     ret = mMirror->RebuildPtView();
     if (ret != BIO_OK) {
-        CLIENT_LOG_ERROR("Failed to rebuild pt view, ret:" << ret << ".");
+        CLIENT_LOG_WARN("Failed to rebuild pt view, ret:" << ret << ".");
         return;
     }
 
