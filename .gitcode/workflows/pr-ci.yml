@@ -60,14 +60,12 @@ jobs:
         run: |
           set -euxo pipefail
 
-          # 与原 Jenkins 保持一致：只检查，不自动修改代码
           sed -i 's/, -i/, -n, --Werror/g' .pre-commit-config.yaml
-
           pre-commit run clang-format --all-files
 
   build_x86_64:
     name: build-x86_64
-    runs-on: [self-hosted, openeuler, x86_64, cpu=8]
+    runs-on: [self-hosted, openeuler, x86, cpu=16]
     container:
       image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
 
