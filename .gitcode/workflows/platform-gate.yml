@@ -351,19 +351,20 @@ jobs:
           }
 
           status_of() {
-            local jobs_json="$1"
+            local run_json="$1"
             local job_name="$2"
 
             jq -r \
               --arg name "${job_name}" \
               '
                 [
-                  .jobs[]?
+                  .jobs[]?,
+                  .stages[]?.jobs[]?
                   | select(.name == $name or .identifier == $name)
                   | .status
                 ]
                 | last // "NOT_FOUND"
-              ' <<<"${jobs_json}"
+              ' <<<"${run_json}"
           }
 
           normalize_status() {
@@ -427,10 +428,6 @@ jobs:
           platform_start="$(jq -r '.start_time // 0' <<<"${platform_run_json}")"
           since="$((platform_start - 10000))"
 
-          platform_jobs_json="$(
-            api_get "${api_v8}/repos/${repo}/actions/runs/${platform_run_id}/jobs?per_page=100"
-          )"
-
           build_run_id=""
           build_run_status="NOT_FOUND"
 
@@ -474,19 +471,19 @@ jobs:
           done
 
           check_sca_status="$(
-            normalize_status "$(status_of "${platform_jobs_json}" "check_sca")"
+            normalize_status "$(status_of "${platform_run_json}" "check_sca")"
           )"
 
           issue_status="$(
-            normalize_status "$(status_of "${platform_jobs_json}" "check_issue_associate")"
+            normalize_status "$(status_of "${platform_run_json}" "check_issue_associate")"
           )"
 
           docs_status="$(
-            normalize_status "$(status_of "${platform_jobs_json}" "check_docs")"
+            normalize_status "$(status_of "${platform_run_json}" "check_docs")"
           )"
 
           package_job_status="$(
-            normalize_status "$(status_of "${platform_jobs_json}" "check_package_license")"
+            normalize_status "$(status_of "${platform_run_json}" "check_package_license")"
           )"
 
           if [[ "${build_run_status}" == "COMPLETED" || "${build_run_status}" == "SUCCESS" ]]; then
