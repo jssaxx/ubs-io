@@ -53,8 +53,9 @@ jobs:
       - name: Install pre-commit
         run: |
           set -euxo pipefail
-          sudo yum install -y python3 python3-pip clang-tools-extra
-          sudo python3 -m pip install "pre-commit==4.3.0"
+          sudo yum install -y python3 python3-pip
+          sudo python3 -m pip install "pre-commit==4.3.0" "clang-format==12.0.1"
+          clang-format --version
 
       - name: Run clang-format
         run: |
