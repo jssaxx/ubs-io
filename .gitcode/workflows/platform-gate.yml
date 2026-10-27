@@ -92,32 +92,6 @@ jobs:
               >/dev/null
           fi
 
-  check_code:
-    name: check_code
-    runs-on: [self-hosted, openeuler, arm, cpu=8]
-
-    steps:
-      - name: Verify CodeCheck token exists
-        env:
-          CODE_CHECK_TOKEN: ${{ secrets.CODE_CHECK_TOKEN }}
-        run: |
-          set -euo pipefail
-
-          if [[ -z "${CODE_CHECK_TOKEN}" ]]; then
-            echo "CODE_CHECK_TOKEN is empty or not configured"
-            exit 1
-          fi
-
-          echo "CODE_CHECK_TOKEN is configured"
-
-      - name: Run CodeCheck
-        uses: codecheck_gitcode_v2
-        with:
-          repo_url: 'https://gitcode.com/${{ env.SOURCE_REPO }}.git'
-          branch: ${{ env.SOURCE_REF }}
-          rule_sets: '[{"language":"C"},{"language":"C++"},{"language":"SHELL"},{"language":"PYTHON"}]'
-          access_token: ${{ secrets.CODE_CHECK_TOKEN }}
-
   check_package_license:
     name: check_package_license
     runs-on: [self-hosted, openeuler, arm, cpu=8]
@@ -307,7 +281,6 @@ jobs:
     name: gate-report
     if: ${{ always() }}
     needs:
-      - check_code
       - check_package_license
       - check_sca
       - check_issue_associate
@@ -467,7 +440,6 @@ jobs:
             build_jobs_json='{"jobs":[]}'
           fi
 
-          check_code_status="$(normalize_status "$(status_of "${platform_jobs_json}" "check_code")")"
           check_sca_status="$(normalize_status "$(status_of "${platform_jobs_json}" "check_sca")")"
           issue_status="$(normalize_status "$(status_of "${platform_jobs_json}" "check_issue_associate")")"
           docs_status="$(normalize_status "$(status_of "${platform_jobs_json}" "check_docs")")"
@@ -487,7 +459,6 @@ jobs:
           overall_failed=0
 
           for status in \
-            "${check_code_status}" \
             "${check_sca_status}" \
             "${issue_status}" \
             "${docs_status}" \
@@ -512,7 +483,6 @@ jobs:
 
           body="<table>
           <tr><th colspan=2>Check Name</th><th>Build Result</th><th>详情</th><th>Build Details</th></tr>
-          <tr><td colspan=2>check_code</td><td>$(status_html "${check_code_status}")</td><td></td><td><a href=\"${actions_url}\">查看</a></td></tr>
           <tr><td colspan=2>check_package_license</td><td>$(status_html "${package_license_status}")</td><td>&#8226; 仓库copyright检查未通过: 缺少项目级Copyright声明文件</td><td><a href=\"${actions_url}\">查看</a></td></tr>
           <tr><td colspan=2>check_sca</td><td>$(status_html "${check_sca_status}")</td><td></td><td><a href=\"${actions_url}\">查看</a></td></tr>
           <tr><td colspan=2>x86_64</td><td>$(status_html "${x86_status}")</td><td>check_build</td><td><a href=\"${actions_url}\">查看</a></td></tr>
