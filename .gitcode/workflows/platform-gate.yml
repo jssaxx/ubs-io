@@ -95,8 +95,6 @@ jobs:
   check_package_license:
     name: check_package_license
     runs-on: [self-hosted, openeuler, arm, cpu=8]
-    outputs:
-      result: ${{ steps.record_result.outputs.result }}
 
     steps:
       - name: Checkout PR merge code
@@ -116,23 +114,28 @@ jobs:
             echo "check_package_license=WARNING" >> "${ATOMGIT_STEP_SUMMARY}"
           fi
 
-      - name: Record result
-        id: record_result
+      - name: Save result
         if: ${{ always() }}
         env:
           CURRENT_JOB_STATUS: ${{ job.status }}
         run: |
+          mkdir -p .gate-results
           if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
-            echo "result=SUCCESS" >> "$ATOMGIT_OUTPUT"
+            echo "SUCCESS" > .gate-results/check_package_license
           else
-            echo "result=FAILED" >> "$ATOMGIT_OUTPUT"
+            echo "FAILED" > .gate-results/check_package_license
           fi
+
+      - name: Upload result
+        if: ${{ always() }}
+        uses: upload-artifact
+        with:
+          name: gate-result-package-license
+          path: .gate-results/check_package_license
 
   check_sca:
     name: check_sca
     runs-on: [self-hosted, openeuler, arm, cpu=8]
-    outputs:
-      result: ${{ steps.record_result.outputs.result }}
 
     steps:
       - name: Run OpenLibing SCA
@@ -141,23 +144,28 @@ jobs:
           project-name: ubs-io
           platform-domain: https://gitcode.com
 
-      - name: Record result
-        id: record_result
+      - name: Save result
         if: ${{ always() }}
         env:
           CURRENT_JOB_STATUS: ${{ job.status }}
         run: |
+          mkdir -p .gate-results
           if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
-            echo "result=SUCCESS" >> "$ATOMGIT_OUTPUT"
+            echo "SUCCESS" > .gate-results/check_sca
           else
-            echo "result=FAILED" >> "$ATOMGIT_OUTPUT"
+            echo "FAILED" > .gate-results/check_sca
           fi
+
+      - name: Upload result
+        if: ${{ always() }}
+        uses: upload-artifact
+        with:
+          name: gate-result-sca
+          path: .gate-results/check_sca
 
   check_issue_associate:
     name: check_issue_associate
     runs-on: [self-hosted, openeuler, arm, cpu=8]
-    outputs:
-      result: ${{ steps.record_result.outputs.result }}
 
     steps:
       - name: Check associated issue
@@ -196,23 +204,28 @@ jobs:
             exit 1
           fi
 
-      - name: Record result
-        id: record_result
+      - name: Save result
         if: ${{ always() }}
         env:
           CURRENT_JOB_STATUS: ${{ job.status }}
         run: |
+          mkdir -p .gate-results
           if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
-            echo "result=SUCCESS" >> "$ATOMGIT_OUTPUT"
+            echo "SUCCESS" > .gate-results/check_issue_associate
           else
-            echo "result=FAILED" >> "$ATOMGIT_OUTPUT"
+            echo "FAILED" > .gate-results/check_issue_associate
           fi
+
+      - name: Upload result
+        if: ${{ always() }}
+        uses: upload-artifact
+        with:
+          name: gate-result-issue-associate
+          path: .gate-results/check_issue_associate
 
   check_docs:
     name: check_docs
     runs-on: [self-hosted, openeuler, arm, cpu=8]
-    outputs:
-      result: ${{ steps.record_result.outputs.result }}
 
     steps:
       - name: Checkout PR merge code
@@ -321,17 +334,24 @@ jobs:
             exit 1
           fi
 
-      - name: Record result
-        id: record_result
+      - name: Save result
         if: ${{ always() }}
         env:
           CURRENT_JOB_STATUS: ${{ job.status }}
         run: |
+          mkdir -p .gate-results
           if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
-            echo "result=SUCCESS" >> "$ATOMGIT_OUTPUT"
+            echo "SUCCESS" > .gate-results/check_docs
           else
-            echo "result=FAILED" >> "$ATOMGIT_OUTPUT"
+            echo "FAILED" > .gate-results/check_docs
           fi
+
+      - name: Upload result
+        if: ${{ always() }}
+        uses: upload-artifact
+        with:
+          name: gate-result-docs
+          path: .gate-results/check_docs
 
   gate_report:
     name: gate-report
@@ -345,14 +365,38 @@ jobs:
     runs-on: [self-hosted, openeuler, arm, cpu=8]
 
     steps:
+      - name: Download package result
+        if: ${{ always() }}
+        uses: download-artifact
+        with:
+          name: gate-result-package-license
+          path: .gate-results/package
+
+      - name: Download SCA result
+        if: ${{ always() }}
+        uses: download-artifact
+        with:
+          name: gate-result-sca
+          path: .gate-results/sca
+
+      - name: Download issue result
+        if: ${{ always() }}
+        uses: download-artifact
+        with:
+          name: gate-result-issue-associate
+          path: .gate-results/issue
+
+      - name: Download docs result
+        if: ${{ always() }}
+        uses: download-artifact
+        with:
+          name: gate-result-docs
+          path: .gate-results/docs
+
       - name: Collect results and post PR comment
         env:
           ATOMGIT_TOKEN: ${{ atomgit.token }}
           GATE_STATUS_TOKEN: ${{ secrets.CODE_CHECK_TOKEN }}
-          PACKAGE_LICENSE_RESULT: ${{ needs.check_package_license.outputs.result }}
-          SCA_RESULT: ${{ needs.check_sca.outputs.result }}
-          ISSUE_RESULT: ${{ needs.check_issue_associate.outputs.result }}
-          DOCS_RESULT: ${{ needs.check_docs.outputs.result }}
         run: |
           set -euo pipefail
 
@@ -410,15 +454,14 @@ jobs:
             fi
           }
 
-          normalize_result() {
-            case "${1:-FAILED}" in
-              success|SUCCESS|completed|COMPLETED)
-                printf 'SUCCESS'
-                ;;
-              *)
-                printf 'FAILED'
-                ;;
-            esac
+          read_result() {
+            local file="$1"
+
+            if [[ -f "${file}" ]]; then
+              tr -d '[:space:]' < "${file}"
+            else
+              printf 'FAILED'
+            fi
           }
 
           status_html() {
@@ -434,6 +477,22 @@ jobs:
                 ;;
             esac
           }
+
+          check_sca_status="$(
+            read_result ".gate-results/sca/check_sca"
+          )"
+
+          issue_status="$(
+            read_result ".gate-results/issue/check_issue_associate"
+          )"
+
+          docs_status="$(
+            read_result ".gate-results/docs/check_docs"
+          )"
+
+          package_job_status="$(
+            read_result ".gate-results/package/check_package_license"
+          )"
 
           now_ms="$(date +%s%3N)"
           runs_json="$(api_get "${api_v8}/repos/${repo}/actions/runs?per_page=100")"
@@ -512,11 +571,6 @@ jobs:
 
             sleep 15
           done
-
-          check_sca_status="$(normalize_result "${SCA_RESULT}")"
-          issue_status="$(normalize_result "${ISSUE_RESULT}")"
-          docs_status="$(normalize_result "${DOCS_RESULT}")"
-          package_job_status="$(normalize_result "${PACKAGE_LICENSE_RESULT}")"
 
           if [[ "${build_run_status}" == "COMPLETED" || "${build_run_status}" == "SUCCESS" ]]; then
             x86_status="SUCCESS"
