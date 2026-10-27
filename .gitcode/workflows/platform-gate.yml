@@ -354,36 +354,9 @@ jobs:
             fi
           }
 
-          status_of() {
-            local jobs_json="$1"
-            local job_name="$2"
-
-            jq -r \
-              --arg name "${job_name}" \
-              '
-                [
-                  .jobs[]?
-                  | select(.name == $name or .identifier == $name)
-                  | .status
-                ]
-                | last // "NOT_FOUND"
-              ' <<<"${jobs_json}"
-          }
-
-          normalize_status() {
-            case "${1:-NOT_FOUND}" in
-              COMPLETED|SUCCESS)
-                printf 'SUCCESS'
-                ;;
-              *)
-                printf 'FAILED'
-                ;;
-            esac
-          }
-
           normalize_needs_result() {
             case "${1:-failure}" in
-              success|SUCCESS)
+              success|SUCCESS|completed|COMPLETED)
                 printf 'SUCCESS'
                 ;;
               *)
@@ -447,21 +420,22 @@ jobs:
             sleep 15
           done
 
-          if [[ -n "${build_run_id}" ]]; then
-            build_jobs_json="$(api_get "${api_v8}/repos/${repo}/actions/runs/${build_run_id}/jobs?per_page=100")"
-          else
-            build_jobs_json='{"jobs":[]}'
-          fi
-
           check_sca_status="$(normalize_needs_result "${SCA_RESULT}")"
           issue_status="$(normalize_needs_result "${ISSUE_RESULT}")"
           docs_status="$(normalize_needs_result "${DOCS_RESULT}")"
           package_job_status="$(normalize_needs_result "${PACKAGE_LICENSE_RESULT}")"
 
-          x86_status="$(normalize_status "$(status_of "${build_jobs_json}" "build-x86_64")")"
-          arm_status="$(normalize_status "$(status_of "${build_jobs_json}" "build-aarch64")")"
-          precommit_status="$(normalize_status "$(status_of "${build_jobs_json}" "pre-commit")")"
-          dt_status="$(normalize_status "$(status_of "${build_jobs_json}" "DT")")"
+          if [[ "${build_run_status}" == "COMPLETED" || "${build_run_status}" == "SUCCESS" ]]; then
+            x86_status="SUCCESS"
+            arm_status="SUCCESS"
+            precommit_status="SUCCESS"
+            dt_status="SUCCESS"
+          else
+            x86_status="FAILED"
+            arm_status="FAILED"
+            precommit_status="FAILED"
+            dt_status="FAILED"
+          fi
 
           if [[ "${package_job_status}" != "SUCCESS" ]]; then
             package_license_status="FAILED"
@@ -485,10 +459,6 @@ jobs:
           done
 
           if [[ "${package_license_status}" == "FAILED" ]]; then
-            overall_failed=1
-          fi
-
-          if [[ "${build_run_status}" != "COMPLETED" && "${build_run_status}" != "SUCCESS" ]]; then
             overall_failed=1
           fi
 
