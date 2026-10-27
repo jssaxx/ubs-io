@@ -349,10 +349,10 @@ jobs:
         env:
           ATOMGIT_TOKEN: ${{ atomgit.token }}
           GATE_STATUS_TOKEN: ${{ secrets.CODE_CHECK_TOKEN }}
-          PACKAGE_LICENSE_RESULT: ${{ jobs.check_package_license.outputs.result }}
-          SCA_RESULT: ${{ jobs.check_sca.outputs.result }}
-          ISSUE_RESULT: ${{ jobs.check_issue_associate.outputs.result }}
-          DOCS_RESULT: ${{ jobs.check_docs.outputs.result }}
+          PACKAGE_LICENSE_RESULT: ${{ needs.check_package_license.outputs.result }}
+          SCA_RESULT: ${{ needs.check_sca.outputs.result }}
+          ISSUE_RESULT: ${{ needs.check_issue_associate.outputs.result }}
+          DOCS_RESULT: ${{ needs.check_docs.outputs.result }}
         run: |
           set -euo pipefail
 
