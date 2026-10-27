@@ -49,7 +49,7 @@ jobs:
 
     steps:
       - name: Run CodeCheck
-        uses: codecheck-action@0.0.3
+        uses: codecheck_gitcode_v2
         with:
           repo_url: 'https://gitcode.com/${{ env.SOURCE_REPO }}.git'
           branch: ${{ env.SOURCE_REF }}
@@ -297,9 +297,6 @@ jobs:
                 ;;
               WARNING)
                 printf '&#9888;<strong>WARNING</strong>'
-                ;;
-              FAILED)
-                printf '&#10060;<strong>FAILED</strong>'
                 ;;
               *)
                 printf '&#10060;<strong>FAILED</strong>'
