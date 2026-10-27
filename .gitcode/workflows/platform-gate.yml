@@ -320,7 +320,7 @@ jobs:
           api_root="${api_root%/v8}"
           api_root="${api_root%/api}"
           api_v5="${api_root}/api/v5"
-          api_v8="${api_root}/v8"
+          api_v8="${api_root}/api/v8"
           server_url="${ATOMGIT_SERVER_URL:-https://gitcode.com}"
 
           api_get() {
