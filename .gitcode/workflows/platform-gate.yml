@@ -37,9 +37,9 @@ concurrency:
 permissions:
   repository: read
   pr: write
-  issue: read
+  issue: write
   id-token: write
-  note: none
+  note: write
   project: none
 
 jobs:
