@@ -19,6 +19,8 @@ env:
   HEAD_SHA: ${{ atomgit.event.pull_request.head.sha }}
   SOURCE_REPO: ${{ atomgit.event.pull_request.head.repo.full_name }}
   SOURCE_REF: ${{ atomgit.event.pull_request.head.ref }}
+  REPO_FULL_NAME: ${{ atomgit.event.repository.full_name }}
+  PR_AUTHOR: ${{ atomgit.event.pull_request.user.login }}
 
 defaults:
   run:
@@ -41,11 +43,55 @@ permissions:
   project: none
 
 jobs:
+  gate_start:
+    name: gate-start
+    runs-on: [self-hosted, openeuler, arm, cpu=8]
+
+    steps:
+      - name: Post running comment
+        env:
+          ATOMGIT_TOKEN: ${{ atomgit.token }}
+        run: |
+          set -euo pipefail
+
+          sudo yum install -y curl jq
+
+          repo="${ATOMGIT_REPOSITORY:-${REPO_FULL_NAME}}"
+          api_root="${ATOMGIT_API_URL:-https://api.gitcode.com/api}"
+          api_root="${api_root%/}"
+          api_root="${api_root%/v5}"
+          api_root="${api_root%/v8}"
+          api_v5="${api_root}/v5"
+          server_url="${ATOMGIT_SERVER_URL:-https://gitcode.com}"
+
+          actions_url="${server_url}/${repo}/actions"
+
+          body="门禁正在运行，您可以通过以下链接查看实时门禁检查结果。
+          若您对门禁结果含义不清晰或者遇到问题不知如何解决，可参考门禁指导手册。
+          门禁入口及编码规范检查: <a href=\"${actions_url}\">${actions_url}</a>"
+
+          payload="$(jq -n --arg body "${body}" '{body: $body}')"
+          comment_url="${api_v5}/repos/${repo}/pulls/${PR_ID}/comments"
+
+          if ! curl -fsSL \
+            -X POST \
+            -H "PRIVATE-TOKEN: ${ATOMGIT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data "${payload}" \
+            "${comment_url}" \
+            >/dev/null 2>&1; then
+            curl -fsSL \
+              -X POST \
+              -H "Authorization: token ${ATOMGIT_TOKEN}" \
+              -H "Content-Type: application/json" \
+              --data "${payload}" \
+              "${comment_url}" \
+              >/dev/null
+          fi
+
   check_code:
     name: check_code
     runs-on: [self-hosted, openeuler, arm, cpu=8]
-    container:
-      image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
 
     steps:
       - name: Run CodeCheck
@@ -59,34 +105,18 @@ jobs:
   check_package_license:
     name: check_package_license
     runs-on: [self-hosted, openeuler, arm, cpu=8]
-    container:
-      image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
 
     steps:
+      - name: Checkout PR merge code
+        uses: checkout
+        with:
+          ref: refs/merge-requests/${{ env.PR_ID }}/merge
+
       - name: Check project-level Copyright declaration
-        env:
-          ATOMGIT_TOKEN: ${{ atomgit.token }}
         run: |
           set -euo pipefail
 
-          sudo yum install -y curl jq
-
-          api_root="${ATOMGIT_API_URL%/}"
-          api_root="${api_root%/v5}"
-          api_root="${api_root%/v8}"
-          api_v5="${api_root}/v5"
-
-          files_json="$(
-            curl -fsSL \
-              -H "Authorization: token ${ATOMGIT_TOKEN}" \
-              "${api_v5}/repos/${SOURCE_REPO}/contents?ref=${HEAD_SHA}"
-          )"
-
-          if printf '%s' "${files_json}" | jq -e '
-            .[]
-            | select(.type == "file")
-            | select((.name | ascii_downcase) == "copyright")
-          ' >/dev/null; then
+          if find . -maxdepth 1 -type f -iname 'copyright' | grep -q .; then
             echo "项目级 Copyright 声明文件存在。"
             echo "check_package_license=SUCCESS" >> "${ATOMGIT_STEP_SUMMARY}"
           else
@@ -97,8 +127,6 @@ jobs:
   check_sca:
     name: check_sca
     runs-on: [self-hosted, openeuler, arm, cpu=8]
-    container:
-      image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
 
     steps:
       - name: Run OpenLibing SCA
@@ -110,8 +138,6 @@ jobs:
   check_issue_associate:
     name: check_issue_associate
     runs-on: [self-hosted, openeuler, arm, cpu=8]
-    container:
-      image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
 
     steps:
       - name: Check associated issue
@@ -122,16 +148,22 @@ jobs:
 
           sudo yum install -y curl jq
 
-          api_root="${ATOMGIT_API_URL%/}"
+          repo="${ATOMGIT_REPOSITORY:-${REPO_FULL_NAME}}"
+          api_root="${ATOMGIT_API_URL:-https://api.gitcode.com/api}"
+          api_root="${api_root%/}"
           api_root="${api_root%/v5}"
           api_root="${api_root%/v8}"
           api_v5="${api_root}/v5"
 
-          issues_json="$(
-            curl -fsSL \
+          issues_url="${api_v5}/repos/${repo}/pulls/${PR_ID}/issues"
+
+          if ! issues_json="$(curl -fsSL \
+            -H "PRIVATE-TOKEN: ${ATOMGIT_TOKEN}" \
+            "${issues_url}" 2>/dev/null)"; then
+            issues_json="$(curl -fsSL \
               -H "Authorization: token ${ATOMGIT_TOKEN}" \
-              "${api_v5}/repos/${ATOMGIT_REPOSITORY}/pulls/${PR_ID}/issues"
-          )"
+              "${issues_url}")"
+          fi
 
           issue_count="$(jq 'length' <<<"${issues_json}")"
           echo "PR #${PR_ID} 关联 Issue 数量: ${issue_count}"
@@ -144,8 +176,6 @@ jobs:
   check_docs:
     name: check_docs
     runs-on: [self-hosted, openeuler, arm, cpu=8]
-    container:
-      image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
 
     steps:
       - name: Checkout PR merge code
@@ -165,27 +195,47 @@ jobs:
         run: |
           set -euo pipefail
 
-          api_root="${ATOMGIT_API_URL%/}"
+          repo="${ATOMGIT_REPOSITORY:-${REPO_FULL_NAME}}"
+          api_root="${ATOMGIT_API_URL:-https://api.gitcode.com/api}"
+          api_root="${api_root%/}"
           api_root="${api_root%/v5}"
           api_root="${api_root%/v8}"
           api_v5="${api_root}/v5"
+          server_url="${ATOMGIT_SERVER_URL:-https://gitcode.com}"
+
+          comment_url="${api_v5}/repos/${repo}/pulls/${PR_ID}/comments"
 
           post_comment() {
             local body="$1"
-            curl -fsSL \
+            local payload
+            payload="$(jq -n --arg body "${body}" '{body: $body}')"
+
+            if ! curl -fsSL \
               -X POST \
-              -H "Authorization: token ${ATOMGIT_TOKEN}" \
+              -H "PRIVATE-TOKEN: ${ATOMGIT_TOKEN}" \
               -H "Content-Type: application/json" \
-              --data "$(jq -n --arg body "${body}" '{body: $body}')" \
-              "${api_v5}/repos/${ATOMGIT_REPOSITORY}/pulls/${PR_ID}/comments" \
-              >/dev/null
+              --data "${payload}" \
+              "${comment_url}" \
+              >/dev/null 2>&1; then
+              curl -fsSL \
+                -X POST \
+                -H "Authorization: token ${ATOMGIT_TOKEN}" \
+                -H "Content-Type: application/json" \
+                --data "${payload}" \
+                "${comment_url}" \
+                >/dev/null
+            fi
           }
 
-          files_json="$(
-            curl -fsSL \
+          files_url="${api_v5}/repos/${repo}/pulls/${PR_ID}/files?per_page=100"
+
+          if ! files_json="$(curl -fsSL \
+            -H "PRIVATE-TOKEN: ${ATOMGIT_TOKEN}" \
+            "${files_url}" 2>/dev/null)"; then
+            files_json="$(curl -fsSL \
               -H "Authorization: token ${ATOMGIT_TOKEN}" \
-              "${api_v5}/repos/${ATOMGIT_REPOSITORY}/pulls/${PR_ID}/files?per_page=100"
-          )"
+              "${files_url}")"
+          fi
 
           docs_count="$(
             jq '[.[] | select(.filename | test("^docs/.*\\.md$"))] | length' \
@@ -210,10 +260,10 @@ jobs:
           set +e
           node docs-ci-v2.js \
             --repoPath="${repo_root}" \
-            --targetOwnerRepo="${ATOMGIT_REPOSITORY}" \
-            --targetOwnerName="${ATOMGIT_REPOSITORY}" \
+            --targetOwnerRepo="${repo}" \
+            --targetOwnerName="${repo}" \
             --targetBranch="${TARGET_BRANCH}" \
-            --detailUrl="${ATOMGIT_SERVER_URL}/${ATOMGIT_REPOSITORY}/actions" \
+            --detailUrl="${server_url}/${repo}/actions" \
             --outputCount="20" \
             --ciConfigUrl="https://raw.gitcode.com/openeuler/docs/raw/stable-common/.doctools/config.json"
           docs_rc=$?
@@ -231,7 +281,7 @@ jobs:
             exit 1
           fi
 
-  gate-report:
+  gate_report:
     name: gate-report
     if: ${{ always() }}
     needs:
@@ -242,8 +292,6 @@ jobs:
       - check_docs
 
     runs-on: [self-hosted, openeuler, arm, cpu=8]
-    container:
-      image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
 
     steps:
       - name: Collect results and post PR comment
@@ -254,14 +302,54 @@ jobs:
 
           sudo yum install -y curl jq
 
-          api_root="${ATOMGIT_API_URL%/}"
+          repo="${ATOMGIT_REPOSITORY:-${REPO_FULL_NAME}}"
+          api_root="${ATOMGIT_API_URL:-https://api.gitcode.com/api}"
+          api_root="${api_root%/}"
           api_root="${api_root%/v5}"
           api_root="${api_root%/v8}"
           api_v5="${api_root}/v5"
           api_v8="${api_root}/v8"
+          server_url="${ATOMGIT_SERVER_URL:-https://gitcode.com}"
 
-          auth_header="Authorization: token ${ATOMGIT_TOKEN}"
-          own_run_id="${ATOMGIT_RUN_ID}"
+          api_get() {
+            local url="$1"
+            local response
+
+            if response="$(curl -fsSL \
+              -H "PRIVATE-TOKEN: ${ATOMGIT_TOKEN}" \
+              "${url}" 2>/dev/null)"; then
+              printf '%s' "${response}"
+              return 0
+            fi
+
+            curl -fsSL \
+              -H "Authorization: token ${ATOMGIT_TOKEN}" \
+              "${url}"
+          }
+
+          post_comment() {
+            local body="$1"
+            local payload
+
+            payload="$(jq -n --arg body "${body}" '{body: $body}')"
+            local comment_url="${api_v5}/repos/${repo}/pulls/${PR_ID}/comments"
+
+            if ! curl -fsSL \
+              -X POST \
+              -H "PRIVATE-TOKEN: ${ATOMGIT_TOKEN}" \
+              -H "Content-Type: application/json" \
+              --data "${payload}" \
+              "${comment_url}" \
+              >/dev/null 2>&1; then
+              curl -fsSL \
+                -X POST \
+                -H "Authorization: token ${ATOMGIT_TOKEN}" \
+                -H "Content-Type: application/json" \
+                --data "${payload}" \
+                "${comment_url}" \
+                >/dev/null
+            fi
+          }
 
           status_of() {
             local jobs_json="$1"
@@ -304,25 +392,15 @@ jobs:
             esac
           }
 
-          own_run_json="$(
-            curl -fsSL \
-              -H "${auth_header}" \
-              "${api_v8}/repos/${ATOMGIT_REPOSITORY}/actions/runs/${own_run_id}"
-          )"
-
-          since="$(
-            jq -r '(.start_time // 0) - 10000' <<<"${own_run_json}"
-          )"
+          own_run_id="${ATOMGIT_RUN_ID}"
+          own_run_json="$(api_get "${api_v8}/repos/${repo}/actions/runs/${own_run_id}")"
+          since="$(jq -r '(.start_time // 0) - 10000' <<<"${own_run_json}")"
 
           build_run_id=""
           build_run_status="NOT_FOUND"
 
           for _ in $(seq 1 120); do
-            runs_json="$(
-              curl -fsSL \
-                -H "${auth_header}" \
-                "${api_v8}/repos/${ATOMGIT_REPOSITORY}/actions/runs?per_page=100"
-            )"
+            runs_json="$(api_get "${api_v8}/repos/${repo}/actions/runs?per_page=100")"
 
             build_run_id="$(
               jq -r \
@@ -342,15 +420,8 @@ jobs:
             )"
 
             if [[ -n "${build_run_id}" ]]; then
-              build_run_json="$(
-                curl -fsSL \
-                  -H "${auth_header}" \
-                  "${api_v8}/repos/${ATOMGIT_REPOSITORY}/actions/runs/${build_run_id}"
-              )"
-
-              build_run_status="$(
-                jq -r '.status // "NOT_FOUND"' <<<"${build_run_json}"
-              )"
+              build_run_json="$(api_get "${api_v8}/repos/${repo}/actions/runs/${build_run_id}")"
+              build_run_status="$(jq -r '.status // "NOT_FOUND"' <<<"${build_run_json}")"
 
               case "${build_run_status}" in
                 COMPLETED|FAILED|CANCELLED|TIMED_OUT)
@@ -362,18 +433,10 @@ jobs:
             sleep 15
           done
 
-          platform_jobs_json="$(
-            curl -fsSL \
-              -H "${auth_header}" \
-              "${api_v8}/repos/${ATOMGIT_REPOSITORY}/actions/runs/${own_run_id}/jobs?per_page=100"
-          )"
+          platform_jobs_json="$(api_get "${api_v8}/repos/${repo}/actions/runs/${own_run_id}/jobs?per_page=100")"
 
           if [[ -n "${build_run_id}" ]]; then
-            build_jobs_json="$(
-              curl -fsSL \
-                -H "${auth_header}" \
-                "${api_v8}/repos/${ATOMGIT_REPOSITORY}/actions/runs/${build_run_id}/jobs?per_page=100"
-            )"
+            build_jobs_json="$(api_get "${api_v8}/repos/${repo}/actions/runs/${build_run_id}/jobs?per_page=100")"
           else
             build_jobs_json='{"jobs":[]}'
           fi
@@ -392,22 +455,7 @@ jobs:
           if [[ "${package_job_status}" != "SUCCESS" ]]; then
             package_license_status="FAILED"
           else
-            source_files_json="$(
-              curl -fsSL \
-                -H "${auth_header}" \
-                "${api_v5}/repos/${SOURCE_REPO}/contents?ref=${HEAD_SHA}" \
-                2>/dev/null || printf '[]'
-            )"
-
-            if printf '%s' "${source_files_json}" | jq -e '
-              .[]
-              | select(.type == "file")
-              | select((.name | ascii_downcase) == "copyright")
-            ' >/dev/null 2>&1; then
-              package_license_status="SUCCESS"
-            else
-              package_license_status="WARNING"
-            fi
+            package_license_status="WARNING"
           fi
 
           overall_failed=0
@@ -434,27 +482,24 @@ jobs:
             overall_failed=1
           fi
 
-          actions_url="${ATOMGIT_SERVER_URL}/${ATOMGIT_REPOSITORY}/actions"
+          actions_url="${server_url}/${repo}/actions"
 
           body="<table>
-          <tr><th colspan=2>Check Name</th><th>Build Result</th><th>Build Details</th></tr>
-          <tr><td colspan=2>check_code</td><td>$(status_html "${check_code_status}")</td><td><a href=\"${actions_url}\">查看</a></td></tr>
-          <tr><td colspan=2>check_package_license</td><td>$(status_html "${package_license_status}")</td><td>缺少项目级Copyright声明文件</td></tr>
-          <tr><td colspan=2>check_sca</td><td>$(status_html "${check_sca_status}")</td><td><a href=\"${actions_url}\">查看</a></td></tr>
-          <tr><td colspan=2>x86_64</td><td>$(status_html "${x86_status}")</td><td><a href=\"${actions_url}\">查看</a></td></tr>
-          <tr><td colspan=2>aarch64</td><td>$(status_html "${arm_status}")</td><td><a href=\"${actions_url}\">查看</a></td></tr>
-          <tr><td colspan=2>pre-commit</td><td>$(status_html "${precommit_status}")</td><td><a href=\"${actions_url}\">查看</a></td></tr>
-          <tr><td colspan=2>DT</td><td>$(status_html "${dt_status}")</td><td><a href=\"${actions_url}\">查看</a></td></tr>
-          <tr><td colspan=2>check_issue_associate</td><td>$(status_html "${issue_status}")</td><td><a href=\"${actions_url}\">查看</a></td></tr>
+          <tr><th colspan=2>Check Name</th><th>Build Result</th><th>详情</th><th>Build Details</th></tr>
+          <tr><td colspan=2>check_code</td><td>$(status_html "${check_code_status}")</td><td></td><td><a href=\"${actions_url}\">查看</a></td></tr>
+          <tr><td colspan=2>check_package_license</td><td>$(status_html "${package_license_status}")</td><td>&#8226; 仓库copyright检查未通过: 缺少项目级Copyright声明文件</td><td><a href=\"${actions_url}\">查看</a></td></tr>
+          <tr><td colspan=2>check_sca</td><td>$(status_html "${check_sca_status}")</td><td></td><td><a href=\"${actions_url}\">查看</a></td></tr>
+          <tr><td colspan=2>x86_64</td><td>$(status_html "${x86_status}")</td><td>check_build</td><td><a href=\"${actions_url}\">查看</a></td></tr>
+          <tr><td colspan=2>aarch64</td><td>$(status_html "${arm_status}")</td><td>check_build</td><td><a href=\"${actions_url}\">查看</a></td></tr>
+          <tr><td colspan=2>pre-commit</td><td>$(status_html "${precommit_status}")</td><td>check_build</td><td><a href=\"${actions_url}\">查看</a></td></tr>
+          <tr><td colspan=2>DT</td><td>$(status_html "${dt_status}")</td><td>check_build</td><td><a href=\"${actions_url}\">查看</a></td></tr>
+          <tr><td colspan=2>check_issue_associate</td><td>$(status_html "${issue_status}")</td><td>check_build</td><td><a href=\"${actions_url}\">查看</a></td></tr>
           </table>"
 
-          curl -fsSL \
-            -X POST \
-            -H "${auth_header}" \
-            -H "Content-Type: application/json" \
-            --data "$(jq -n --arg body "${body}" '{body: $body}')" \
-            "${api_v5}/repos/${ATOMGIT_REPOSITORY}/pulls/${PR_ID}/comments" \
-            >/dev/null
+          post_comment "${body}"
+
+          author_body="[@${PR_AUTHOR}](https://gitcode.com/${PR_AUTHOR})"
+          post_comment "${author_body}"
 
           if [[ "${overall_failed}" -ne 0 ]]; then
             echo "门禁检查失败。"
