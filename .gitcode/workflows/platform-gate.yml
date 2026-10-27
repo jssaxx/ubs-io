@@ -293,6 +293,10 @@ jobs:
         env:
           ATOMGIT_TOKEN: ${{ atomgit.token }}
           GATE_STATUS_TOKEN: ${{ secrets.CODE_CHECK_TOKEN }}
+          PACKAGE_LICENSE_RESULT: ${{ needs.check_package_license.result }}
+          SCA_RESULT: ${{ needs.check_sca.result }}
+          ISSUE_RESULT: ${{ needs.check_issue_associate.result }}
+          DOCS_RESULT: ${{ needs.check_docs.result }}
         run: |
           set -euo pipefail
 
@@ -368,7 +372,18 @@ jobs:
 
           normalize_status() {
             case "${1:-NOT_FOUND}" in
-              COMPLETED)
+              COMPLETED|SUCCESS)
+                printf 'SUCCESS'
+                ;;
+              *)
+                printf 'FAILED'
+                ;;
+            esac
+          }
+
+          normalize_needs_result() {
+            case "${1:-failure}" in
+              success|SUCCESS)
                 printf 'SUCCESS'
                 ;;
               *)
@@ -423,7 +438,7 @@ jobs:
               build_run_status="$(jq -r '.status // "NOT_FOUND"' <<<"${build_run_json}")"
 
               case "${build_run_status}" in
-                COMPLETED|FAILED|CANCELLED|TIMED_OUT)
+                COMPLETED|SUCCESS|FAILED|CANCELLED|TIMED_OUT)
                   break
                   ;;
               esac
@@ -432,18 +447,16 @@ jobs:
             sleep 15
           done
 
-          platform_jobs_json="$(api_get "${api_v8}/repos/${repo}/actions/runs/${own_run_id}/jobs?per_page=100")"
-
           if [[ -n "${build_run_id}" ]]; then
             build_jobs_json="$(api_get "${api_v8}/repos/${repo}/actions/runs/${build_run_id}/jobs?per_page=100")"
           else
             build_jobs_json='{"jobs":[]}'
           fi
 
-          check_sca_status="$(normalize_status "$(status_of "${platform_jobs_json}" "check_sca")")"
-          issue_status="$(normalize_status "$(status_of "${platform_jobs_json}" "check_issue_associate")")"
-          docs_status="$(normalize_status "$(status_of "${platform_jobs_json}" "check_docs")")"
-          package_job_status="$(normalize_status "$(status_of "${platform_jobs_json}" "check_package_license")")"
+          check_sca_status="$(normalize_needs_result "${SCA_RESULT}")"
+          issue_status="$(normalize_needs_result "${ISSUE_RESULT}")"
+          docs_status="$(normalize_needs_result "${DOCS_RESULT}")"
+          package_job_status="$(normalize_needs_result "${PACKAGE_LICENSE_RESULT}")"
 
           x86_status="$(normalize_status "$(status_of "${build_jobs_json}" "build-x86_64")")"
           arm_status="$(normalize_status "$(status_of "${build_jobs_json}" "build-aarch64")")"
@@ -475,7 +488,7 @@ jobs:
             overall_failed=1
           fi
 
-          if [[ "${build_run_status}" != "COMPLETED" ]]; then
+          if [[ "${build_run_status}" != "COMPLETED" && "${build_run_status}" != "SUCCESS" ]]; then
             overall_failed=1
           fi
 
