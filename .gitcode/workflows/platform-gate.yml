@@ -56,7 +56,9 @@ jobs:
 
           sudo yum install -y curl jq
 
-          repo="${ATOMGIT_REPOSITORY:-${REPO_FULL_NAME}}"
+          repo_url="${ATOMGIT_REPOSITORY_URL:-https://gitcode.com/ComputingActionTest/ubs-io.git}"
+          repo="${repo_url#https://gitcode.com/}"
+          repo="${repo%.git}"
           api_root="${ATOMGIT_API_URL:-https://api.gitcode.com/api}"
           api_root="${api_root%/}"
           api_root="${api_root%/v5}"
@@ -148,7 +150,9 @@ jobs:
 
           sudo yum install -y curl jq
 
-          repo="${ATOMGIT_REPOSITORY:-${REPO_FULL_NAME}}"
+          repo_url="${ATOMGIT_REPOSITORY_URL:-https://gitcode.com/ComputingActionTest/ubs-io.git}"
+          repo="${repo_url#https://gitcode.com/}"
+          repo="${repo%.git}"
           api_root="${ATOMGIT_API_URL:-https://api.gitcode.com/api}"
           api_root="${api_root%/}"
           api_root="${api_root%/v5}"
@@ -195,7 +199,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          repo="${ATOMGIT_REPOSITORY:-${REPO_FULL_NAME}}"
+          repo_url="${ATOMGIT_REPOSITORY_URL:-https://gitcode.com/ComputingActionTest/ubs-io.git}"
+          repo="${repo_url#https://gitcode.com/}"
+          repo="${repo%.git}"
           api_root="${ATOMGIT_API_URL:-https://api.gitcode.com/api}"
           api_root="${api_root%/}"
           api_root="${api_root%/v5}"
@@ -302,7 +308,9 @@ jobs:
 
           sudo yum install -y curl jq
 
-          repo="${ATOMGIT_REPOSITORY:-${REPO_FULL_NAME}}"
+          repo_url="${ATOMGIT_REPOSITORY_URL:-https://gitcode.com/ComputingActionTest/ubs-io.git}"
+          repo="${repo_url#https://gitcode.com/}"
+          repo="${repo%.git}"
           api_root="${ATOMGIT_API_URL:-https://api.gitcode.com/api}"
           api_root="${api_root%/}"
           api_root="${api_root%/v5}"
