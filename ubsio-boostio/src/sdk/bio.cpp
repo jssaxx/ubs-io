@@ -136,6 +136,12 @@ inline static bool KeyValid(const char *key)
     return true;
 }
 
+inline static bool ShouldLimitPutFailureLog(BResult ret)
+{
+    // Quota refill rejection also wakes writers with BIO_INNER_RETRY.
+    return ret == BIO_QUOTA_NOT_ENOUGH || ret == BIO_QUOTA_TIMEOUT || ret == BIO_INNER_RETRY;
+}
+
 CResult Bio::CalculateLocation(uint64_t objectId, ObjLocation &location)
 {
     if (UNLIKELY(!gClient->Ready())) {
@@ -163,7 +169,8 @@ CResult Bio::Put(const char *key, const char *value, uint64_t length, const ObjL
     BIO_TRACE_END(SDK_TRACE_PUT, ret);
     CResult cRet = ToCResult(ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_WARN("Put value failed, ret:" << ret << ", key:" << key << ", length:" << length <<
+        CLIENT_LOG_WARN_LIMIT_IF(ShouldLimitPutFailureLog(ret),
+            "Put value failed, ret:" << ret << ", length:" << length <<
             ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
     } else {
         CLIENT_LOG_DEBUG("Put value success, key:" << key << ", length:" << length << ", location0:" <<
@@ -191,7 +198,8 @@ CResult Bio::AsyncPut(const char *key, const char *value, uint64_t length, const
     BResult ret = gClient->AsyncPut(param, cbParam.callback, cbParam.context);
     BIO_TRACE_END(SDK_TRACE_ASYNC_PUT, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_WARN("Async put value failed, ret:" << ret << ", key:" << key << ", length:" << length <<
+        CLIENT_LOG_WARN_LIMIT_IF(ShouldLimitPutFailureLog(ret),
+            "Async put value failed, ret:" << ret << ", length:" << length <<
             ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
     } else {
         CLIENT_LOG_DEBUG("Async put value success, key:" << key << ", length:" << length << ", location0:" <<
@@ -228,7 +236,8 @@ CResult Bio::Put(const char *key, CacheSpaceDesc &spaceInfo)
     BIO_TRACE_END(SDK_TRACE_PUT, ret);
     CResult cRet = ToCResult(ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_WARN("Put copy free value failed, ret:" << ret << ", key:" << key << ", length:" << length <<
+        CLIENT_LOG_WARN_LIMIT_IF(ShouldLimitPutFailureLog(ret),
+            "Put copy free value failed, ret:" << ret << ", length:" << length <<
             ", location0:" << spaceInfo.loc.location[0] << ", location1:" << spaceInfo.loc.location[1] << ".");
     } else {
         CLIENT_LOG_DEBUG("Put copy free value success, key:" << key << ", length:" << length << ", location0:" <<

@@ -91,6 +91,7 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(DATA_CRC_ENABLE, VStrBoolRange::Create(DATA_CRC_ENABLE.first));
     AddStrConf(BIO_TRACE_ENABLE, VStrBoolRange::Create(BIO_TRACE_ENABLE.first));
     AddStrConf(BIO_CACHE_QOS_ENABLE, VStrBoolRange::Create(BIO_CACHE_QOS_ENABLE.first));
+    AddIntConf(BIO_CACHE_QOS_WATER_LEVEL, VIntRange::Create(BIO_CACHE_QOS_WATER_LEVEL.first, NO_1, NO_100));
     AddIntConf(WCACHE_EVICT_WATER_LEVEL, VIntRange::Create(WCACHE_EVICT_WATER_LEVEL.first, 0, NO_100));
     AddIntConf(WCACHE_DISK_EVICT_WATER_LEVEL, VIntRange::Create(WCACHE_DISK_EVICT_WATER_LEVEL.first, 0, NO_100));
     AddIntConf(RCACHE_EVICT_WATER_LEVEL, VIntRange::Create(RCACHE_EVICT_WATER_LEVEL.first, 0, NO_100));
@@ -377,6 +378,48 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
         LOG_INFO("This server config  memory is 0, disk config is invalid , server can not join pt.");
     }
 
+    return AutoConfigQos(conf);
+}
+
+BResult BioConfig::AutoConfigQos(const ConfigurationPtr &conf)
+{
+    mDaemonConfig.qosWaterLevel = std::min<uint32_t>(
+        static_cast<uint32_t>(conf->GetInt(BIO_CACHE_QOS_WATER_LEVEL.first)), QOS_MAX_WATER_LEVEL);
+    mQosEvictWaterLevelLimit = NO_100;
+    if (!mDaemonConfig.enableQos) {
+        return BIO_OK;
+    }
+
+    if (mStandaloneMode) {
+        const uint64_t capacity = mDaemonConfig.memCap * mDaemonConfig.memWriteRatio / NO_10;
+        // CM configuration is parsed after daemon configuration; use the validated input here.
+        const uint64_t ptCount = static_cast<uint64_t>(conf->GetInt(CM_PT_NUM.first));
+        const uint64_t segment = mDaemonConfig.segment;
+        // Two flows per PT, each with head/tail rounding, plus one spare segment.
+        // 1% covers the metadata of the intended roughly 100 KiB and larger objects.
+        const uint64_t reserved = (NO_4 * ptCount + 1) * segment + (capacity + NO_100 - 1) / NO_100;
+        if (capacity <= reserved) {
+            BIO_LOG_STD_ERR("Standalone QoS memory budget cannot fit, wcacheCapacity:" << capacity <<
+                ", ptCount:" << ptCount << ", segment:" << segment << ", reserved:" << reserved << ".");
+            return BIO_INVALID_PARAM;
+        }
+        const uint64_t capacityLevel = (capacity - reserved) * NO_100 / capacity;
+        mDaemonConfig.qosWaterLevel = std::min<uint32_t>(mDaemonConfig.qosWaterLevel, capacityLevel);
+        const uint64_t quota = capacity / NO_100 * mDaemonConfig.qosWaterLevel;
+        // Match the 128 MiB quota retry floor and allow one object up to 16 MiB plus rounding.
+        const uint64_t refillMargin = (NO_128 + NO_16) * MB_SIZE + segment;
+        if (quota < refillMargin) {
+            BIO_LOG_STD_ERR("Standalone QoS refill budget cannot fit, wcacheCapacity:" << capacity <<
+                ", ptCount:" << ptCount << ", qosWaterLevel:" << mDaemonConfig.qosWaterLevel <<
+                ", quota:" << quota << ", required:" << refillMargin << ".");
+            return BIO_INVALID_PARAM;
+        }
+        mQosEvictWaterLevelLimit = (quota - refillMargin) * NO_100 / capacity;
+    }
+    const uint64_t percentLimit = mDaemonConfig.qosWaterLevel > NO_5 ?
+        mDaemonConfig.qosWaterLevel - NO_5 : 0;
+    mQosEvictWaterLevelLimit = std::min(mQosEvictWaterLevelLimit, percentLimit);
+    mDaemonConfig.wcacheMemEvictLevel = std::min(mDaemonConfig.wcacheMemEvictLevel, mQosEvictWaterLevelLimit);
     return BIO_OK;
 }
 
@@ -914,6 +957,20 @@ void BioConfig::DumpToLog()
     KVReader reader;
     conf->Dump(reader);
 
+    const auto configuredQosLevel = static_cast<uint32_t>(conf->GetInt(BIO_CACHE_QOS_WATER_LEVEL.first));
+    if (mDaemonConfig.enableQos && mDaemonConfig.qosWaterLevel != configuredQosLevel) {
+        LOG_WARN("QoS write quota watermark adjusted, configured:" << configuredQosLevel <<
+            "%, effective:" << mDaemonConfig.qosWaterLevel << "%, standalone:" << mStandaloneMode <<
+            ", memCapacity:" << mDaemonConfig.memCap << ", writeRatio:" << mDaemonConfig.memWriteRatio <<
+            ", ptCount:" << mCmConfig.ptNum << ", segment:" << mDaemonConfig.segment << ".");
+    }
+    const auto configuredEvictLevel = static_cast<uint64_t>(conf->GetInt(WCACHE_EVICT_WATER_LEVEL.first));
+    if (mDaemonConfig.wcacheMemEvictLevel != configuredEvictLevel) {
+        LOG_WARN("Memory eviction watermark adjusted by cache mode and QoS settings, configured:" <<
+            configuredEvictLevel << "%, effective:" << mDaemonConfig.wcacheMemEvictLevel <<
+            "%, qosEnabled:" << mDaemonConfig.enableQos << ", qosWaterLevel:" << mDaemonConfig.qosWaterLevel << "%.");
+    }
+
     std::lock_guard<std::mutex> guard(mMutex);
     LOG_INFO("Configuration Dump:");
     for (uint32_t i = 0; i < reader.Size(); i++) {
@@ -932,6 +989,7 @@ uint64_t BioConfig::ModifyConfigEvictWaterLevel(uint8_t tier, uint64_t level)
     uint64_t ori;
     if (tier == 0) {
         ori = mDaemonConfig.wcacheMemEvictLevel;
+        level = std::min(level, mQosEvictWaterLevelLimit);
         mDaemonConfig.wcacheMemEvictLevel = level;
     } else {
         ori = mDaemonConfig.wcacheDiskEvictLevel;

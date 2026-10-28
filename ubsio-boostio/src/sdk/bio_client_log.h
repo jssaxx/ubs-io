@@ -173,6 +173,10 @@ private:
 #define CLIENT_LOG_INFO(args) BASE_LOG(static_cast<int>(BioClientLog::Level::LOG_LEVEL_INFO), args)
 #define CLIENT_LOG_WARN(args) BASE_LOG(static_cast<int>(BioClientLog::Level::LOG_LEVEL_WARN), args)
 #define CLIENT_LOG_ERROR(args) BASE_LOG(static_cast<int>(BioClientLog::Level::LOG_LEVEL_ERROR), args)
+#define CLIENT_LOG_DEBUG_LIMIT(args) BIO_LOG_LIMIT_IF(true, CLIENT_LOG_DEBUG(args))
+#define CLIENT_LOG_WARN_LIMIT(args) BIO_LOG_LIMIT_IF(true, CLIENT_LOG_WARN(args))
+#define CLIENT_LOG_WARN_LIMIT_IF(condition, args) BIO_LOG_LIMIT_IF(condition, CLIENT_LOG_WARN(args))
+#define CLIENT_LOG_ERROR_LIMIT_IF(condition, args) BIO_LOG_LIMIT_IF(condition, CLIENT_LOG_ERROR(args))
 }
 }
 #endif

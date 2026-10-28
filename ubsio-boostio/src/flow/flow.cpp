@@ -187,7 +187,6 @@ BResult Flow::Seal()
 void Flow::PreLoadHandle()
 {
     uint64_t chunkId;
-    uint64_t offset;
     bool isReady;
     do {
         BIO_TRACE_START(FLOW_TRACE_PRELOAD_ALLOC);
@@ -200,13 +199,12 @@ void Flow::PreLoadHandle()
             break;
         }
         BIO_TRACE_END(FLOW_TRACE_PRELOAD_ALLOC, ret);
-        mLock.LockWrite();
+        WriteLocker<ReadWriteLock> lock(&mLock);
         mChunkList.push_back(chunkId);
         mPreLoadOffset += mChunkSize;
         isReady = (mPreLoadOffset >= mWrittenOffset + mPreLoadSize);
-        offset = mPreLoadOffset;
-        mLock.UnLock();
-        HoldClean(offset, BIO_OK, !isReady);
+        // Publish completion before a new waiter can rely on this preload task.
+        HoldCleanLocked(mPreLoadOffset.load(), BIO_OK, !isReady);
     } while (!isReady);
 }
 
@@ -238,7 +236,7 @@ void Flow::PreLoadSchedule()
     auto ret = FlowManager::Instance()->PreLoadObject(mType, func);
     if (ret != BIO_OK) {
         LOG_ERROR("Preload failed:" << ret << ", flowId:" << mFlowId);
-        mPreLoadFlag = false;
+        HoldClean(NO_MAX_VALUE64, BIO_INNER_RETRY, false);
         DecreaseRef();
         return;
     }
@@ -246,8 +244,13 @@ void Flow::PreLoadSchedule()
 
 void Flow::HoldClean(uint64_t realOffset, int32_t ret, bool preLoadFlag)
 {
+    WriteLocker<ReadWriteLock> lock(&mLock);
+    HoldCleanLocked(realOffset, ret, preLoadFlag);
+}
+
+void Flow::HoldCleanLocked(uint64_t realOffset, int32_t ret, bool preLoadFlag)
+{
     IoHoldCtx *waitCtx = nullptr;
-    mLock.LockWrite();
     mPreLoadFlag = preLoadFlag;
     while (!mHoldList.empty()) {
         waitCtx = mHoldList.front();
@@ -259,7 +262,6 @@ void Flow::HoldClean(uint64_t realOffset, int32_t ret, bool preLoadFlag)
             break;
         }
     }
-    mLock.UnLock();
 }
 
 BResult Flow::HoldWait(uint64_t needOffset)

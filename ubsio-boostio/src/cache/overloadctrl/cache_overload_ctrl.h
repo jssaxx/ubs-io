@@ -111,12 +111,11 @@ public:
     {
         WriteLocker<ReadWriteLock> lock(&mLock);
         if (mWriteQuota < allocSize) {
-            LOG_WARN("Cache write quota not enough, remain quota:" << mWriteQuota << ", alloc quota:" << allocSize <<
+            LOG_WARN_LIMIT("Cache write quota not enough, remain quota:" << mWriteQuota << ", alloc quota:" << allocSize <<
                 ", holder:" << holder.nodeId << "-" << holder.clientId << ".");
             return BIO_QUOTA_NOT_ENOUGH;
         }
 
-        mWriteQuota -= allocSize;
         auto iter = mHolders.find(holder);
         if (UNLIKELY(iter == mHolders.end())) {
             uint64_t size = mHolders.size();
@@ -135,6 +134,7 @@ public:
             }
             iter->second += allocSize;
         }
+        mWriteQuota -= allocSize;
         // 计算下次申请的期望预期配额资源大小.
         expectAllocSize = GetAdjustWriteQuota(allocSize);
         LOG_DEBUG("Alloc quota success, alloc quota: " << allocSize << ", holder: " << holder.nodeId << "-" <<

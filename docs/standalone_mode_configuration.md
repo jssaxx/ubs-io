@@ -48,7 +48,9 @@ ubsio.underfs.file_system_type = none
 ubsio.net.tls.enable.switch = false
 ubsio.sdkmem.size_in_mb = 0
 ubsio.cli_tools.enable = true
-ubsio.cache.qos.enable = false
+ubsio.cache.qos.enable = true
+# QoS 写配额水位默认88%，生效上限90%；单机模式可能按内存预算进一步下调。
+ubsio.cache.qos.water_level = 88
 
 # standalone BatchGet 使用 scratch buffer 中转数据。
 ubsio.batch_read.standalone.use_scratch_pool = true
@@ -88,7 +90,8 @@ ubsio.batch_read.copy_workers = 4
 | `ubsio.net.tls.enable.switch` | 布尔值 | 可选 | `false` | `true` 或 `false` | 本地单机运行且没有 TLS 文件时，将该项设为 `false`。 |
 | `ubsio.trace.enable` | 布尔值 | 可选 | `true` | `true` 或 `false` | 启用或禁用 HTrace 采集。单机模式会初始化 tracer 模块。 |
 | `ubsio.data.crc.enable` | 布尔值 | 可选 | `false` | `true` 或 `false` | 启用缓存数据 CRC 校验。单机 direct-call 路径会把该设置传给 SDK 和 cache 模块。 |
-| `ubsio.cache.qos.enable` | 布尔值 | 可选 | `false` | `true` 或 `false` | 启用 cache QoS 和过载控制行为。 |
+| `ubsio.cache.qos.enable` | 布尔值 | 可选 | `true` | `true` 或 `false` | 启用 cache QoS 和过载控制行为。 |
+| `ubsio.cache.qos.water_level` | 整数 | 可选 | `88` | 输入为 `1` 到 `100`，实际生效上限为 `90` | 写配额上限占 WCache 内存容量的百分比；配置超过 `90` 时按 `90` 处理，单机模式还可能按内存预算进一步下调。启用 QoS 时，实际内存淘汰水位不超过原生效水位和 `max(0, 实际QoS水位−5)`，单机模式下还受配额补充余量约束。 |
 | `ubsio.wcache.evict_water_level` | 整数 | 可选 | `0` | `0` 到 `100` | L2.5 写缓存内存淘汰水位。无盘模式下配置为 `0` 时，运行时水位按 `90` 处理；仅使用 L3 时设置为 `0`；同时使用 L2.5 和 L3 时设置为大于 `0`。 |
 | `ubsio.wcache.disk_evict_water_level` | 整数 | 可选 | `90` | `0` 到 `100` | 写缓存磁盘淘汰水位，占配置的写缓存磁盘容量的百分比。 |
 | `ubsio.rcache.evict_water_level` | 整数 | 可选 | `90` | `0` 到 `100` | 读缓存淘汰水位。内存和磁盘读缓存淘汰阈值使用同一个值。 |
@@ -170,6 +173,8 @@ ubsio.mem.size_in_gb = 10
 ### `ubsio.wcache.evict_water_level`
 
 `ubsio.wcache.evict_water_level` 是 L2.5 写缓存的内存淘汰水位，表示 L2.5 使用量达到写缓存内存容量的多少百分比后开始淘汰，取值范围为 `0` 到 `100`。
+
+启用 QoS 时，这个配置是请求水位，实际生效值还受 QoS 预算限制。默认 QoS 水位为 `88%` 时，内存淘汰水位最高为 `83%`；小容量配置可能进一步降低。应以启动日志中打印的实际生效水位为准。
 
 - L2.5 是 UBS IO 的内存写缓存层，位于上层 DRAM 缓存与本地 SSD 缓存之间。
 - L3 是 `ubsio.disk.path` 指定的本地 SSD 缓存层。

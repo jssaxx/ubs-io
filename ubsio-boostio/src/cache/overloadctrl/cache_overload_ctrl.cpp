@@ -244,7 +244,8 @@ void CacheOverloadCtrl::InitQuotaManager()
 {
     CacheResDescription desc = { 0 };
     Cache::Instance().GetCacheResources(desc, WRITE_CACHE);
-    mLimitWriteQuota = static_cast<uint64_t>(desc.memCapacity / NO_100 * NO_80); // 预留空间用于meta flow的存放缓存索引元数据.
+    auto waterLevel = BioConfig::Instance()->GetDaemonConfig().qosWaterLevel;
+    mLimitWriteQuota = desc.memCapacity / NO_100 * waterLevel;
     mWriteQuota = mLimitWriteQuota;
     mAdjustWQuota.store(NO_128 * NO_1024 * NO_1024);
     LOG_INFO("Initialize write cache quota pool success, write quota:" << mWriteQuota << ".");

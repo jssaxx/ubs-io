@@ -1465,7 +1465,7 @@ BResult WCache::EvictAllMemSliceToDisk(uint32_t maxCount, uint32_t *evictedCount
         if (sliceRef == nullptr) {
             break;
         }
-        CacheOverloadCtrl::Instance().AddBandwidth(BW_STAT_EVICT_TO_DISK, sliceRef->GetSlice()->GetLength());
+        const uint64_t length = sliceRef->GetSlice()->GetLength();
         auto ret = (sliceRef->GetState() == SLICE_INVALID) ? EvictMemoryTombstone(sliceRef) :
             EvictFromMemToDisk(sliceRef);
         if (ret != BIO_OK) {
@@ -1475,6 +1475,7 @@ BResult WCache::EvictAllMemSliceToDisk(uint32_t maxCount, uint32_t *evictedCount
             mRetryCallback(mFlowId, WCACHE_MEMORY);
             return ret;
         }
+        CacheOverloadCtrl::Instance().AddBandwidth(BW_STAT_EVICT_TO_DISK, length);
         ++processed;
         if (evictedCount != nullptr) {
             *evictedCount = processed;

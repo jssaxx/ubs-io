@@ -22,13 +22,10 @@ void BioQuota::WakeForce(uint16_t nodeSet, bool isLock)
     if (!isLock) {
         mLock.LockWrite();
     }
-    if (mTaskRunFlag.find(nodeSet) == mTaskRunFlag.end()) {
-        if (!isLock) {
-            mLock.UnLock();
-        }
-        return;
+    auto task = mTaskRunFlag.find(nodeSet);
+    if (task != mTaskRunFlag.end()) {
+        task->second = false;
     }
-    mTaskRunFlag.find(nodeSet)->second = false;
 
     auto iter = mIoQueueMap.find(nodeSet);
     if (UNLIKELY(iter == mIoQueueMap.end())) {
@@ -38,21 +35,13 @@ void BioQuota::WakeForce(uint16_t nodeSet, bool isLock)
         return;
     }
     uint64_t currentTime = Monotonic::TimeSec();
+    // Submission can fail while inserting the task flag. Drain the queue even without that flag,
+    // and avoid allocating diagnostics while recovering from std::bad_alloc.
     do {
         auto entry = iter->second.Top();
         if (LIKELY(entry != nullptr)) {
             iter->second.Pop();
-            if (UNLIKELY((currentTime - entry->time) >= NO_45)) {
-                CLIENT_LOG_WARN("IO hang time is too long, nodeSet:" << nodeSet << ", key:" << entry->key << ".");
-                BIO_TRACE_START(SDK_TRACE_QOS_WAKE_BUSY);
-                entry->Wake(BIO_QUOTA_NOT_ENOUGH);
-                BIO_TRACE_END(SDK_TRACE_QOS_WAKE_BUSY, BIO_OK);
-            } else {
-                CLIENT_LOG_DEBUG("IO wake, put retry, nodeSet:" << nodeSet << ", key:" << entry->key << ".");
-                BIO_TRACE_START(SDK_TRACE_QOS_WAKE_RETRY);
-                entry->Wake(BIO_INNER_RETRY);
-                BIO_TRACE_END(SDK_TRACE_QOS_WAKE_RETRY, BIO_OK);
-            }
+            entry->Wake((currentTime - entry->time) >= NO_45 ? BIO_QUOTA_NOT_ENOUGH : BIO_INNER_RETRY);
         } else {
             break;
         }
@@ -92,7 +81,8 @@ void BioQuota::UpdateQuotaRes(CmPtInfo *ptEntry, uint16_t nodeSet, uint64_t allo
         auto entry = iter2->second.Top();
         if (LIKELY(entry != nullptr)) {
             if (UNLIKELY((currentTime - entry->time) >= NO_45)) {
-                CLIENT_LOG_WARN("IO hang time is too long, nodeSet:" << nodeSet << ", key:" << entry->key << ".");
+                CLIENT_LOG_WARN_LIMIT("IO hang time is too long, nodeSet:" << nodeSet <<
+                    ", waitedSec:" << currentTime - entry->time << ".");
                 BIO_TRACE_START(SDK_TRACE_QOS_WAKE_BUSY);
                 iter2->second.Pop();
                 entry->Wake(BIO_QUOTA_NOT_ENOUGH);
@@ -106,7 +96,7 @@ void BioQuota::UpdateQuotaRes(CmPtInfo *ptEntry, uint16_t nodeSet, uint64_t allo
                 entry->Wake(BIO_OK);
                 BIO_TRACE_END(SDK_TRACE_QOS_WAKE_OK, BIO_OK);
             } else {
-                CLIENT_LOG_DEBUG("IO wake execute preload task, nodeSet:" << nodeSet << ", key:" << entry->key <<
+                CLIENT_LOG_DEBUG_LIMIT("IO wake execute preload task, nodeSet:" << nodeSet <<
                     ", size:" << entry->size << ", remain quota:" << iter->second << ".");
                 ExecutePreloadTask(ptEntry, nodeSet); // 写资源配额不满则继续启动预取任务.
                 break;
@@ -184,7 +174,8 @@ void BioQuota::AsyncPreloadQuota(CmPtInfo *ptEntry, uint16_t nodeSet)
             ret = SendAllocQuotaRemote(dstNid, req, expectPreloadSize);
         }
         if (UNLIKELY(ret != BIO_OK)) {
-            CLIENT_LOG_ERROR("Send preload quota failed, ret:" << ret << ", dstNid:" << dstNid << ".");
+            CLIENT_LOG_ERROR_LIMIT_IF(ret == BIO_QUOTA_NOT_ENOUGH,
+                "Send preload quota failed, ret:" << ret << ", dstNid:" << dstNid << ".");
             break;
         }
         successNodeVec.push_back(dstNid);
@@ -193,7 +184,7 @@ void BioQuota::AsyncPreloadQuota(CmPtInfo *ptEntry, uint16_t nodeSet)
     BIO_TRACE_END(SDK_TRACE_QOS_PRELOAD, ret);
 
     mPreloadSize = (ret == BIO_OK) ? expectPreloadSize : QUOTA_MIN_PRELOAD_SIZE;
-    CLIENT_LOG_DEBUG("Dynamic adjust preload size, ret:" << ret << ", preload quota form " << preloadSize << " to" <<
+    CLIENT_LOG_DEBUG_LIMIT("Dynamic adjust preload size, ret:" << ret << ", preload quota form " << preloadSize << " to" <<
         mPreloadSize << ".");
     if (UNLIKELY(ret != BIO_OK)) {
         RollbackAllocQuotaReq(ptEntry, successNodeVec, successQuotaVec);

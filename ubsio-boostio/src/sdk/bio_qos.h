@@ -14,10 +14,12 @@
 #define BIO_QOS_H
 
 #include <atomic>
+#include <condition_variable>
+#include <exception>
 #include <list>
+#include <mutex>
 #include <utility>
 #include <vector>
-#include <semaphore.h>
 #include "bio_ref.h"
 #include "bio_err.h"
 #include "bio_def.h"
@@ -49,40 +51,40 @@ struct IoWaitEntry {
     BResult result;
     uint64_t size;
     uint64_t time;
-    sem_t sem;
 
     IoWaitEntry(std::string k, uint64_t allocSize) : key(k), result(BIO_OK), size(allocSize)
     {
         time = Monotonic::TimeSec();
-        sem_init(&sem, 0, 0);
     }
 
     IoWaitEntry(std::string k, uint64_t allocSize, uint64_t originTime) : key(k), result(BIO_OK),
         size(allocSize), time(originTime)
     {
-        sem_init(&sem, 0, 0);
-    }
-
-    ~IoWaitEntry()
-    {
-        sem_destroy(&sem);
     }
 
     inline void Wait()
     {
-        sem_wait(&sem);
+        std::unique_lock<std::mutex> lock(mWaitLock);
+        mCondition.wait(lock, [this]() { return mReady; });
     }
 
     inline void Wake(BResult ret)
     {
+        std::lock_guard<std::mutex> lock(mWaitLock);
         result = ret;
-        sem_post(&sem);
+        mReady = true;
+        mCondition.notify_one();
     }
 
     inline BResult Result() const
     {
         return result;
     }
+
+private:
+    std::mutex mWaitLock;
+    std::condition_variable mCondition;
+    bool mReady = false;
 };
 
 class IoHangQueue {
@@ -182,7 +184,7 @@ public:
         }
         uint32_t count = iter->second.Size();
         if (UNLIKELY(count >= MAX_IO_HANG_COUNT)) {
-            CLIENT_LOG_WARN("IO hang is too much, nodeSet:" << nodeSet << ", key:" << key << ", count:" << count);
+            CLIENT_LOG_WARN_LIMIT("IO hang is too much, nodeSet:" << nodeSet << ", count:" << count);
             return BIO_QUOTA_NOT_ENOUGH;
         }
 
@@ -210,7 +212,7 @@ public:
                 return BIO_OK;
             }
 
-            CLIENT_LOG_DEBUG("Add IO hang queue, nodeSet:" << nodeSet << ", key:" << key << ", size:" << size << ".");
+            CLIENT_LOG_DEBUG_LIMIT("Add IO hang queue, nodeSet:" << nodeSet << ", size:" << size << ".");
             auto ret = HangIO(key, ptEntry, nodeSet, &entry);
             if (UNLIKELY(ret != BIO_OK)) {
                 return ret;
@@ -220,22 +222,69 @@ public:
         return entry.Result();
     }
 
+    // Only return a reservation before AllocPutOffset succeeds. Later requests may
+    // allocate the reserved Flow range even if this request has not been submitted.
+    void ReturnQuota(CmPtInfo *ptEntry, uint64_t size)
+    {
+        if (!mEnable) {
+            return;
+        }
+        WriteLocker<ReadWriteLock> lock(&mLock);
+        // A successful AllocQuota already created this entry and deducted size.
+        mQuotaMgr.at(GenerateNodeSet(ptEntry)) += size;
+    }
+
     inline void ExecutePreloadTask(CmPtInfo *ptEntry, uint64_t nodeSet)
     {
-        // 1. 更新任务状态, 防止重复执行加载任务.
-        auto iter = mTaskRunFlag.find(nodeSet);
-        if (iter == mTaskRunFlag.end()) {
-            mTaskRunFlag.emplace(nodeSet, true);
-        } else if (iter != mTaskRunFlag.end() && iter->second) {
-            return;
-        } else {
-            iter->second = true;
-        }
+        try {
+            // 1. 更新任务状态, 防止重复执行加载任务.
+            auto iter = mTaskRunFlag.find(nodeSet);
+            if (iter == mTaskRunFlag.end()) {
+                mTaskRunFlag.emplace(nodeSet, true);
+            } else if (iter->second) {
+                return;
+            } else {
+                iter->second = true;
+            }
 
-        // 2. 启动任务.
-        if (!(mQuotaAllocExecutor->Execute([this, ptEntry, nodeSet]() { AsyncPreloadQuota(ptEntry, nodeSet); }))) {
-            CLIENT_LOG_ERROR("Execute preload quota task failed, nodeSet:" << nodeSet << ".");
-            WakeForce(nodeSet, true); // 任务启动失败则强制唤醒该nodeSet上的所有悬挂IO进行重试.
+            // 2. 启动任务.
+            CmPtInfo ptSnapshot = *ptEntry;
+            if (!(mQuotaAllocExecutor->Execute([this, ptSnapshot, nodeSet]() mutable {
+                const uint64_t preloadSize = mPreloadSize;
+                try {
+                    AsyncPreloadQuota(&ptSnapshot, nodeSet);
+                } catch (const std::exception &ex) {
+                    CLIENT_LOG_ERROR("QoS preload exception, stage:run, nodeSet:" << nodeSet <<
+                        ", ptId:" << ptSnapshot.ptId << ", ptVersion:" << ptSnapshot.version <<
+                        ", preloadSize:" << preloadSize << ", error:" << ex.what());
+                    throw;
+                } catch (...) {
+                    CLIENT_LOG_ERROR("QoS preload exception, stage:run, nodeSet:" << nodeSet <<
+                        ", ptId:" << ptSnapshot.ptId << ", ptVersion:" << ptSnapshot.version <<
+                        ", preloadSize:" << preloadSize << ", error:unknown");
+                    throw;
+                }
+            }))) {
+                CLIENT_LOG_ERROR("Execute preload quota task failed, nodeSet:" << nodeSet << ".");
+                WakeForce(nodeSet, true); // 任务启动失败则强制唤醒该nodeSet上的所有悬挂IO进行重试.
+            }
+        } catch (const std::exception &ex) {
+            // Both callers hold mLock. Wake stack-owned entries before returning an error through Wait().
+            WakeForce(nodeSet, true);
+            try {
+                CLIENT_LOG_ERROR("QoS preload exception, stage:submit, nodeSet:" << nodeSet <<
+                    ", ptId:" << ptEntry->ptId << ", ptVersion:" << ptEntry->version << ", error:" << ex.what());
+            } catch (...) {
+                // Diagnostics must not interrupt recovery from allocation failure.
+            }
+        } catch (...) {
+            WakeForce(nodeSet, true);
+            try {
+                CLIENT_LOG_ERROR("QoS preload exception, stage:submit, nodeSet:" << nodeSet <<
+                    ", ptId:" << ptEntry->ptId << ", ptVersion:" << ptEntry->version << ", error:unknown");
+            } catch (...) {
+                // Diagnostics must not interrupt recovery from allocation failure.
+            }
         }
     }
 
@@ -366,7 +415,7 @@ public:
 
         BResult ret = BIO_OK;
         if (UNLIKELY((Monotonic::TimeSec() - applyParam.startTime) >= NO_45 && applyParam.size != 0)) {
-            CLIENT_LOG_WARN("QOS apply timeout, key:" << applyParam.key << ", time:" <<
+            CLIENT_LOG_WARN_LIMIT("QOS apply timeout, size:" << applyParam.size << ", time:" <<
                 Monotonic::TimeSec() - applyParam.startTime);
             return BIO_QUOTA_TIMEOUT;
         }
