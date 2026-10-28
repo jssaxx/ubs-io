@@ -1,7 +1,7 @@
-name: UBS-IO_平台门禁
+name: UBS-IO_CI
 
 on:
-  pull_request_target:
+  pull_request:
     types:
       - open
       - reopen
@@ -17,10 +17,6 @@ env:
   PR_ID: ${{ atomgit.event.pull_request.number }}
   TARGET_BRANCH: ${{ atomgit.event.pull_request.base.ref }}
   HEAD_SHA: ${{ atomgit.event.pull_request.head.sha }}
-  SOURCE_REPO: ${{ atomgit.event.pull_request.head.repo.full_name }}
-  SOURCE_REF: ${{ atomgit.event.pull_request.head.ref }}
-  REPO_FULL_NAME: ${{ atomgit.event.repository.full_name }}
-  PR_AUTHOR: ${{ atomgit.event.pull_request.user.login }}
 
 defaults:
   run:
@@ -36,65 +32,17 @@ concurrency:
 
 permissions:
   repository: read
-  pr: write
-  issue: write
-  id-token: write
-  note: write
+  pr: none
+  issue: none
+  note: none
   project: none
 
 jobs:
-  gate_start:
-    name: gate-start
+  pre_commit:
+    name: pre-commit
     runs-on: [self-hosted, openeuler, arm, cpu=8]
-
-    steps:
-      - name: Post running comment
-        env:
-          ATOMGIT_TOKEN: ${{ atomgit.token }}
-        run: |
-          set -euo pipefail
-
-          sudo yum install -y curl jq
-
-          repo_url="${ATOMGIT_REPOSITORY_URL:-https://gitcode.com/ComputingActionTest/ubs-io.git}"
-          repo="${repo_url#https://gitcode.com/}"
-          repo="${repo%.git}"
-          api_root="${ATOMGIT_API_URL:-https://api.gitcode.com}"
-          api_root="${api_root%/}"
-          api_root="${api_root%/v5}"
-          api_root="${api_root%/v8}"
-          api_root="${api_root%/api}"
-          api_v5="${api_root}/api/v5"
-          server_url="${ATOMGIT_SERVER_URL:-https://gitcode.com}"
-
-          actions_url="${server_url}/${repo}/actions"
-
-          body="门禁正在运行，您可以通过以下链接查看实时门禁检查结果。
-          若您对门禁结果含义不清晰或者遇到问题不知如何解决，可参考门禁指导手册。
-          门禁入口及编码规范检查: <a href=\"${actions_url}\">${actions_url}</a>"
-
-          payload="$(jq -n --arg body "${body}" '{body: $body}')"
-          comment_url="${api_v5}/repos/${repo}/pulls/${PR_ID}/comments"
-
-          if ! curl -fsSL \
-            -X POST \
-            -H "PRIVATE-TOKEN: ${ATOMGIT_TOKEN}" \
-            -H "Content-Type: application/json" \
-            --data "${payload}" \
-            "${comment_url}" \
-            >/dev/null 2>&1; then
-            curl -fsSL \
-              -X POST \
-              -H "Authorization: token ${ATOMGIT_TOKEN}" \
-              -H "Content-Type: application/json" \
-              --data "${payload}" \
-              "${comment_url}" \
-              >/dev/null
-          fi
-
-  check_package_license:
-    name: check_package_license
-    runs-on: [self-hosted, openeuler, arm, cpu=8]
+    container:
+      image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
 
     steps:
       - name: Checkout PR merge code
@@ -102,534 +50,284 @@ jobs:
         with:
           ref: refs/merge-requests/${{ env.PR_ID }}/merge
 
-      - name: Check project-level Copyright declaration
-        run: |
-          set -euo pipefail
-
-          if find . -maxdepth 1 -type f -iname 'copyright' | grep -q .; then
-            echo "项目级 Copyright 声明文件存在。"
-            echo "check_package_license=SUCCESS" >> "${ATOMGIT_STEP_SUMMARY}"
-          else
-            echo "仓库copyright检查未通过: 缺少项目级Copyright声明文件"
-            echo "check_package_license=WARNING" >> "${ATOMGIT_STEP_SUMMARY}"
-          fi
-
-      - name: Save result
-        if: ${{ always() }}
-        env:
-          CURRENT_JOB_STATUS: ${{ job.status }}
-        run: |
-          mkdir -p .gate-results
-          if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
-            echo "SUCCESS" > .gate-results/check_package_license
-          else
-            echo "FAILED" > .gate-results/check_package_license
-          fi
-
-      - name: Upload result
-        if: ${{ always() }}
-        uses: upload-artifact
-        with:
-          name: gate-result-package-license
-          path: .gate-results/check_package_license
-
-  check_sca:
-    name: check_sca
-    runs-on: [self-hosted, openeuler, arm, cpu=8]
-
-    steps:
-      - name: Run OpenLibing SCA
-        uses: openlibing/sca-action/sca-pr-action@v1.0.1
-        with:
-          project-name: ubs-io
-          platform-domain: https://gitcode.com
-
-      - name: Save result
-        if: ${{ always() }}
-        env:
-          CURRENT_JOB_STATUS: ${{ job.status }}
-        run: |
-          mkdir -p .gate-results
-          if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
-            echo "SUCCESS" > .gate-results/check_sca
-          else
-            echo "FAILED" > .gate-results/check_sca
-          fi
-
-      - name: Upload result
-        if: ${{ always() }}
-        uses: upload-artifact
-        with:
-          name: gate-result-sca
-          path: .gate-results/check_sca
-
-  check_issue_associate:
-    name: check_issue_associate
-    runs-on: [self-hosted, openeuler, arm, cpu=8]
-
-    steps:
-      - name: Check associated issue
-        env:
-          ATOMGIT_TOKEN: ${{ atomgit.token }}
-        run: |
-          set -euo pipefail
-
-          sudo yum install -y curl jq
-
-          repo_url="${ATOMGIT_REPOSITORY_URL:-https://gitcode.com/ComputingActionTest/ubs-io.git}"
-          repo="${repo_url#https://gitcode.com/}"
-          repo="${repo%.git}"
-          api_root="${ATOMGIT_API_URL:-https://api.gitcode.com}"
-          api_root="${api_root%/}"
-          api_root="${api_root%/v5}"
-          api_root="${api_root%/v8}"
-          api_root="${api_root%/api}"
-          api_v5="${api_root}/api/v5"
-
-          issues_url="${api_v5}/repos/${repo}/pulls/${PR_ID}/issues"
-
-          if ! issues_json="$(curl -fsSL \
-            -H "PRIVATE-TOKEN: ${ATOMGIT_TOKEN}" \
-            "${issues_url}" 2>/dev/null)"; then
-            issues_json="$(curl -fsSL \
-              -H "Authorization: token ${ATOMGIT_TOKEN}" \
-              "${issues_url}")"
-          fi
-
-          issue_count="$(jq 'length' <<<"${issues_json}")"
-          echo "PR #${PR_ID} 关联 Issue 数量: ${issue_count}"
-
-          if [[ "${issue_count}" -lt 1 ]]; then
-            echo "PR 未关联任何 Issue。"
-            exit 1
-          fi
-
-      - name: Save result
-        if: ${{ always() }}
-        env:
-          CURRENT_JOB_STATUS: ${{ job.status }}
-        run: |
-          mkdir -p .gate-results
-          if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
-            echo "SUCCESS" > .gate-results/check_issue_associate
-          else
-            echo "FAILED" > .gate-results/check_issue_associate
-          fi
-
-      - name: Upload result
-        if: ${{ always() }}
-        uses: upload-artifact
-        with:
-          name: gate-result-issue-associate
-          path: .gate-results/check_issue_associate
-
-  check_docs:
-    name: check_docs
-    runs-on: [self-hosted, openeuler, arm, cpu=8]
-
-    steps:
-      - name: Checkout PR merge code
-        uses: checkout
-        with:
-          ref: refs/merge-requests/${{ env.PR_ID }}/merge
-
-      - name: Prepare tools
+      - name: Install pre-commit
         run: |
           set -euxo pipefail
-          sudo yum install -y curl jq wget
-          command -v npm >/dev/null 2>&1 || sudo yum install -y nodejs npm
 
-      - name: Run docs gate
-        env:
-          ATOMGIT_TOKEN: ${{ atomgit.token }}
+          sudo yum install -y python3 python3-pip
+
+          sudo python3 -m pip install \
+            --index-url https://repo.huaweicloud.com/repository/pypi/simple \
+            --trusted-host repo.huaweicloud.com \
+            --timeout 120 \
+            --retries 5 \
+            "pre-commit==4.3.0" \
+            "clang-format==12.0.1"
+
+          clang-format --version
+
+      - name: Run clang-format
         run: |
-          set -euo pipefail
-
-          repo_url="${ATOMGIT_REPOSITORY_URL:-https://gitcode.com/ComputingActionTest/ubs-io.git}"
-          repo="${repo_url#https://gitcode.com/}"
-          repo="${repo%.git}"
-          api_root="${ATOMGIT_API_URL:-https://api.gitcode.com}"
-          api_root="${api_root%/}"
-          api_root="${api_root%/v5}"
-          api_root="${api_root%/v8}"
-          api_root="${api_root%/api}"
-          api_v5="${api_root}/api/v5"
-          server_url="${ATOMGIT_SERVER_URL:-https://gitcode.com}"
-
-          comment_url="${api_v5}/repos/${repo}/pulls/${PR_ID}/comments"
-
-          post_comment() {
-            local body="$1"
-            local payload
-            payload="$(jq -n --arg body "${body}" '{body: $body}')"
-
-            if ! curl -fsSL \
-              -X POST \
-              -H "PRIVATE-TOKEN: ${ATOMGIT_TOKEN}" \
-              -H "Content-Type: application/json" \
-              --data "${payload}" \
-              "${comment_url}" \
-              >/dev/null 2>&1; then
-              curl -fsSL \
-                -X POST \
-                -H "Authorization: token ${ATOMGIT_TOKEN}" \
-                -H "Content-Type: application/json" \
-                --data "${payload}" \
-                "${comment_url}" \
-                >/dev/null
-            fi
-          }
-
-          files_url="${api_v5}/repos/${repo}/pulls/${PR_ID}/files?per_page=100"
-
-          if ! files_json="$(curl -fsSL \
-            -H "PRIVATE-TOKEN: ${ATOMGIT_TOKEN}" \
-            "${files_url}" 2>/dev/null)"; then
-            files_json="$(curl -fsSL \
-              -H "Authorization: token ${ATOMGIT_TOKEN}" \
-              "${files_url}")"
-          fi
-
-          docs_count="$(
-            jq '[.[] | select(.filename | test("^docs/.*\\.md$"))] | length' \
-              <<<"${files_json}"
-          )"
-
-          if [[ "${docs_count}" -eq 0 ]]; then
-            post_comment "✅ 跳过 docs ci 检查，没有需要检查的文档文件"
-            exit 0
-          fi
-
-          repo_root="$(git rev-parse --show-toplevel)"
-          work_dir="$(mktemp -d)"
-
-          cd "${work_dir}"
-          wget -q https://raw.gitcode.com/openeuler/docs-website/raw/ci/docs-ci-v2.js
-          wget -q https://raw.gitcode.com/openeuler/docs-website/raw/ci/package.json
-          wget -q https://raw.gitcode.com/openeuler/docs-website/raw/ci/.npmrc
-
-          npm install --silent
-
-          set +e
-          node docs-ci-v2.js \
-            --repoPath="${repo_root}" \
-            --targetOwnerRepo="${repo}" \
-            --targetOwnerName="${repo}" \
-            --targetBranch="${TARGET_BRANCH}" \
-            --detailUrl="${server_url}/${repo}/actions" \
-            --outputCount="20" \
-            --ciConfigUrl="https://raw.gitcode.com/openeuler/docs/raw/stable-common/.doctools/config.json"
-          docs_rc=$?
-          set -e
-
-          if [[ -f output.md ]]; then
-            docs_output="$(cat output.md)"
-          else
-            docs_output="❌ 文档门禁运行失败！"
-          fi
-
-          post_comment "${docs_output}"
-
-          if [[ "${docs_rc}" -ne 0 ]] || grep -q '^❌' <<<"${docs_output}"; then
-            exit 1
-          fi
+          set -euxo pipefail
+          sed -i 's/, -i/, -n, --Werror/g' .pre-commit-config.yaml
+          pre-commit run clang-format --all-files
 
       - name: Save result
         if: ${{ always() }}
         env:
           CURRENT_JOB_STATUS: ${{ job.status }}
         run: |
-          mkdir -p .gate-results
+          mkdir -p .ci-results
           if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
-            echo "SUCCESS" > .gate-results/check_docs
+            echo "SUCCESS" > .ci-results/pre-commit
           else
-            echo "FAILED" > .gate-results/check_docs
+            echo "FAILED" > .ci-results/pre-commit
           fi
 
       - name: Upload result
         if: ${{ always() }}
         uses: upload-artifact
         with:
-          name: gate-result-docs
-          path: .gate-results/check_docs
+          name: ci-result-pre-commit
+          path: .ci-results/pre-commit
 
-  gate_report:
-    name: gate-report
-    if: ${{ always() }}
-    needs:
-      - check_package_license
-      - check_sca
-      - check_issue_associate
-      - check_docs
-
-    runs-on: [self-hosted, openeuler, arm, cpu=8]
+  build_x86_64:
+    name: build-x86_64
+    runs-on: [self-hosted, openeuler, x86, cpu=16]
+    container:
+      image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
 
     steps:
-      - name: Download package result
-        if: ${{ always() }}
-        uses: download-artifact
+      - name: Checkout PR merge code
+        uses: checkout
         with:
-          name: gate-result-package-license
-          path: .gate-results/package
+          ref: refs/merge-requests/${{ env.PR_ID }}/merge
 
-      - name: Download SCA result
-        if: ${{ always() }}
-        uses: download-artifact
-        with:
-          name: gate-result-sca
-          path: .gate-results/sca
-
-      - name: Download issue result
-        if: ${{ always() }}
-        uses: download-artifact
-        with:
-          name: gate-result-issue-associate
-          path: .gate-results/issue
-
-      - name: Download docs result
-        if: ${{ always() }}
-        uses: download-artifact
-        with:
-          name: gate-result-docs
-          path: .gate-results/docs
-
-      - name: Collect results and post PR comment
-        env:
-          ATOMGIT_TOKEN: ${{ atomgit.token }}
-          GATE_STATUS_TOKEN: ${{ secrets.CODE_CHECK_TOKEN }}
+      - name: Install dependencies
         run: |
-          set -euo pipefail
+          set -euxo pipefail
 
-          sudo yum install -y curl jq
+          sudo yum install -y \
+            python3 \
+            python3-pip \
+            python3-devel \
+            pybind11-devel \
+            gcc \
+            gcc-c++ \
+            make \
+            cmake \
+            maven \
+            hostname \
+            fuse-devel \
+            automake \
+            librados-devel \
+            libaio-devel \
+            libtool \
+            numactl-devel \
+            libcurl-devel \
+            libboundscheck \
+            rdma-core-devel \
+            openssl \
+            openssl-devel \
+            dos2unix \
+            liburing \
+            liburing-devel
 
-          repo_url="${ATOMGIT_REPOSITORY_URL:-https://gitcode.com/ComputingActionTest/ubs-io.git}"
-          repo="${repo_url#https://gitcode.com/}"
-          repo="${repo%.git}"
-          api_root="${ATOMGIT_API_URL:-https://api.gitcode.com}"
-          api_root="${api_root%/}"
-          api_root="${api_root%/v5}"
-          api_root="${api_root%/v8}"
-          api_root="${api_root%/api}"
-          api_v5="${api_root}/api/v5"
-          api_v8="${api_root}/api/v8"
-          server_url="${ATOMGIT_SERVER_URL:-https://gitcode.com}"
+          sudo python3 -m pip config set global.index-url \
+            https://repo.huaweicloud.com/repository/pypi/simple
+          sudo python3 -m pip config set global.timeout 120
 
-          api_get() {
-            local url="$1"
-            local response
+          sudo python3 -m pip install wheel pybind11 \
+            -i https://repo.huaweicloud.com/repository/pypi/simple \
+            --trusted-host repo.huaweicloud.com \
+            --timeout 120
 
-            if response="$(curl -fsSL \
-              -H "PRIVATE-TOKEN: ${GATE_STATUS_TOKEN}" \
-              "${url}" 2>/dev/null)"; then
-              printf '%s' "${response}"
-              return 0
-            fi
+      - name: Build UBSIO-BoostIO release
+        run: |
+          set -euxo pipefail
+          cd ubsio-boostio
+          bash build.sh -t release
 
-            curl -fsSL \
-              -H "Authorization: token ${GATE_STATUS_TOKEN}" \
-              "${url}"
-          }
+      - name: Upload release package
+        uses: upload-artifact
+        with:
+          name: ubsio-boostio-release-x86_64
+          path: ubsio-boostio/BoostIO_*.tar.gz
 
-          post_comment() {
-            local body="$1"
-            local payload
-
-            payload="$(jq -n --arg body "${body}" '{body: $body}')"
-            local comment_url="${api_v5}/repos/${repo}/pulls/${PR_ID}/comments"
-
-            if ! curl -fsSL \
-              -X POST \
-              -H "PRIVATE-TOKEN: ${ATOMGIT_TOKEN}" \
-              -H "Content-Type: application/json" \
-              --data "${payload}" \
-              "${comment_url}" \
-              >/dev/null 2>&1; then
-              curl -fsSL \
-                -X POST \
-                -H "Authorization: token ${ATOMGIT_TOKEN}" \
-                -H "Content-Type: application/json" \
-                --data "${payload}" \
-                "${comment_url}" \
-                >/dev/null
-            fi
-          }
-
-          read_result() {
-            local file="$1"
-
-            if [[ -f "${file}" ]]; then
-              tr -d '[:space:]' < "${file}"
-            else
-              printf 'FAILED'
-            fi
-          }
-
-          status_html() {
-            case "${1}" in
-              SUCCESS)
-                printf '&#9989;<strong>SUCCESS</strong>'
-                ;;
-              WARNING)
-                printf '&#9888;<strong>WARNING</strong>'
-                ;;
-              *)
-                printf '&#10060;<strong>FAILED</strong>'
-                ;;
-            esac
-          }
-
-          check_sca_status="$(
-            read_result ".gate-results/sca/check_sca"
-          )"
-
-          issue_status="$(
-            read_result ".gate-results/issue/check_issue_associate"
-          )"
-
-          docs_status="$(
-            read_result ".gate-results/docs/check_docs"
-          )"
-
-          package_job_status="$(
-            read_result ".gate-results/package/check_package_license"
-          )"
-
-          now_ms="$(date +%s%3N)"
-          runs_json="$(api_get "${api_v8}/repos/${repo}/actions/runs?per_page=100")"
-
-          platform_run_id="$(
-            jq -r \
-              --arg pr "${PR_ID}" \
-              --argjson now "${now_ms}" \
-              '
-                [
-                  .workflow_runs[]?
-                  | select((.pull_request_id | tostring) == $pr)
-                  | select(.file_path == ".gitcode/workflows/platform-gate.yml")
-                  | select((.start_time // 0) <= $now)
-                ]
-                | sort_by(.start_time)
-                | last
-                | .workflow_run_id // empty
-              ' <<<"${runs_json}"
-          )"
-
-          if [[ -z "${platform_run_id}" ]]; then
-            platform_run_id="${ATOMGIT_RUN_ID}"
-          fi
-
-          if [[ -z "${platform_run_id}" ]]; then
-            echo "Unable to find current platform run"
-            exit 1
-          fi
-
-          platform_run_json="$(
-            api_get "${api_v8}/repos/${repo}/actions/runs/${platform_run_id}"
-          )"
-
-          platform_start="$(jq -r '.start_time // 0' <<<"${platform_run_json}")"
-          since="$((platform_start - 10000))"
-
-          build_run_id=""
-          build_run_status="NOT_FOUND"
-
-          for _ in $(seq 1 120); do
-            runs_json="$(api_get "${api_v8}/repos/${repo}/actions/runs?per_page=100")"
-
-            build_run_id="$(
-              jq -r \
-                --arg pr "${PR_ID}" \
-                --argjson since "${since}" \
-                '
-                  [
-                    .workflow_runs[]?
-                    | select((.pull_request_id | tostring) == $pr)
-                    | select(.file_path == ".gitcode/workflows/pr-ci.yml")
-                    | select((.start_time // 0) >= $since)
-                  ]
-                  | sort_by(.start_time)
-                  | last
-                  | .workflow_run_id // empty
-                ' <<<"${runs_json}"
-            )"
-
-            if [[ -n "${build_run_id}" ]]; then
-              build_run_json="$(
-                api_get "${api_v8}/repos/${repo}/actions/runs/${build_run_id}"
-              )"
-
-              build_run_status="$(
-                jq -r '.status // "NOT_FOUND"' <<<"${build_run_json}"
-              )"
-
-              case "${build_run_status}" in
-                COMPLETED|SUCCESS|FAILED|CANCELLED|TIMED_OUT)
-                  break
-                  ;;
-              esac
-            fi
-
-            sleep 15
-          done
-
-          if [[ "${build_run_status}" == "COMPLETED" || "${build_run_status}" == "SUCCESS" ]]; then
-            x86_status="SUCCESS"
-            arm_status="SUCCESS"
-            precommit_status="SUCCESS"
-            dt_status="SUCCESS"
+      - name: Save result
+        if: ${{ always() }}
+        env:
+          CURRENT_JOB_STATUS: ${{ job.status }}
+        run: |
+          mkdir -p .ci-results
+          if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
+            echo "SUCCESS" > .ci-results/x86_64
           else
-            x86_status="FAILED"
-            arm_status="FAILED"
-            precommit_status="FAILED"
-            dt_status="FAILED"
+            echo "FAILED" > .ci-results/x86_64
           fi
 
-          if [[ "${package_job_status}" != "SUCCESS" ]]; then
-            package_license_status="FAILED"
+      - name: Upload result
+        if: ${{ always() }}
+        uses: upload-artifact
+        with:
+          name: ci-result-x86-64
+          path: .ci-results/x86_64
+
+  build_aarch64:
+    name: build-aarch64
+    runs-on: [self-hosted, openeuler, arm, cpu=8]
+    container:
+      image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
+
+    steps:
+      - name: Checkout PR merge code
+        uses: checkout
+        with:
+          ref: refs/merge-requests/${{ env.PR_ID }}/merge
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+
+          sudo yum install -y \
+            python3 \
+            python3-pip \
+            python3-devel \
+            pybind11-devel \
+            gcc \
+            gcc-c++ \
+            make \
+            cmake \
+            maven \
+            hostname \
+            fuse-devel \
+            automake \
+            librados-devel \
+            libaio-devel \
+            libtool \
+            numactl-devel \
+            libcurl-devel \
+            libboundscheck \
+            rdma-core-devel \
+            openssl \
+            openssl-devel \
+            dos2unix \
+            liburing \
+            liburing-devel
+
+          sudo python3 -m pip config set global.index-url \
+            https://repo.huaweicloud.com/repository/pypi/simple
+          sudo python3 -m pip config set global.timeout 120
+
+          sudo python3 -m pip install wheel pybind11 \
+            -i https://repo.huaweicloud.com/repository/pypi/simple \
+            --trusted-host repo.huaweicloud.com \
+            --timeout 120
+
+      - name: Build UBSIO-BoostIO release
+        run: |
+          set -euxo pipefail
+          cd ubsio-boostio
+          bash build.sh -t release
+
+      - name: Upload release package
+        uses: upload-artifact
+        with:
+          name: ubsio-boostio-release-aarch64
+          path: ubsio-boostio/BoostIO_*.tar.gz
+
+      - name: Save result
+        if: ${{ always() }}
+        env:
+          CURRENT_JOB_STATUS: ${{ job.status }}
+        run: |
+          mkdir -p .ci-results
+          if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
+            echo "SUCCESS" > .ci-results/aarch64
           else
-            package_license_status="WARNING"
+            echo "FAILED" > .ci-results/aarch64
           fi
 
-          overall_failed=0
+      - name: Upload result
+        if: ${{ always() }}
+        uses: upload-artifact
+        with:
+          name: ci-result-aarch64
+          path: .ci-results/aarch64
 
-          for status in \
-            "${check_sca_status}" \
-            "${issue_status}" \
-            "${docs_status}" \
-            "${x86_status}" \
-            "${arm_status}" \
-            "${precommit_status}" \
-            "${dt_status}"; do
-            if [[ "${status}" != "SUCCESS" ]]; then
-              overall_failed=1
-            fi
-          done
+  dt:
+    name: DT
+    runs-on: [self-hosted, openeuler, arm, cpu=8]
+    container:
+      image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
 
-          if [[ "${package_license_status}" == "FAILED" ]]; then
-            overall_failed=1
+    steps:
+      - name: Checkout PR merge code
+        uses: checkout
+        with:
+          ref: refs/merge-requests/${{ env.PR_ID }}/merge
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+
+          sudo yum install -y \
+            python3 \
+            python3-pip \
+            python3-devel \
+            pybind11-devel \
+            gcc \
+            gcc-c++ \
+            make \
+            cmake \
+            maven \
+            hostname \
+            fuse-devel \
+            automake \
+            librados-devel \
+            libaio-devel \
+            libtool \
+            numactl-devel \
+            libcurl-devel \
+            libboundscheck \
+            rdma-core-devel \
+            openssl \
+            openssl-devel \
+            dos2unix \
+            liburing \
+            liburing-devel
+
+      - name: Run UBSIO-BoostIO DT
+        run: |
+          set -euxo pipefail
+          cd ubsio-boostio/test/llt
+          bash run_dt.sh
+
+      - name: Upload DT reports
+        if: ${{ always() }}
+        uses: upload-artifact
+        with:
+          name: ubsio-boostio-dt
+          path: |
+            ubsio-boostio/coverage_report/
+            ubsio-boostio/coverage_report/report.xml
+            ubsio-boostio/coverage_report/coverage.info
+
+      - name: Save result
+        if: ${{ always() }}
+        env:
+          CURRENT_JOB_STATUS: ${{ job.status }}
+        run: |
+          mkdir -p .ci-results
+          if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
+            echo "SUCCESS" > .ci-results/DT
+          else
+            echo "FAILED" > .ci-results/DT
           fi
 
-          actions_url="${server_url}/${repo}/actions"
-
-          body="<table>
-          <tr><th colspan=2>Check Name</th><th>Build Result</th><th>详情</th><th>Build Details</th></tr>
-          <tr><td colspan=2>check_package_license</td><td>$(status_html "${package_license_status}")</td><td>&#8226; 仓库copyright检查未通过: 缺少项目级Copyright声明文件</td><td><a href=\"${actions_url}\">查看</a></td></tr>
-          <tr><td colspan=2>check_sca</td><td>$(status_html "${check_sca_status}")</td><td></td><td><a href=\"${actions_url}\">查看</a></td></tr>
-          <tr><td colspan=2>x86_64</td><td>$(status_html "${x86_status}")</td><td>check_build</td><td><a href=\"${actions_url}\">查看</a></td></tr>
-          <tr><td colspan=2>aarch64</td><td>$(status_html "${arm_status}")</td><td>check_build</td><td><a href=\"${actions_url}\">查看</a></td></tr>
-          <tr><td colspan=2>pre-commit</td><td>$(status_html "${precommit_status}")</td><td>check_build</td><td><a href=\"${actions_url}\">查看</a></td></tr>
-          <tr><td colspan=2>DT</td><td>$(status_html "${dt_status}")</td><td>check_build</td><td><a href=\"${actions_url}\">查看</a></td></tr>
-          <tr><td colspan=2>check_issue_associate</td><td>$(status_html "${issue_status}")</td><td>check_build</td><td><a href=\"${actions_url}\">查看</a></td></tr>
-          </table>"
-
-          post_comment "${body}"
-
-          author_body="[@${PR_AUTHOR}](https://gitcode.com/${PR_AUTHOR})"
-          post_comment "${author_body}"
-
-          if [[ "${overall_failed}" -ne 0 ]]; then
-            echo "门禁检查失败。"
-            exit 1
-          fi
-
-          echo "全部门禁检查通过。"
+      - name: Upload result
+        if: ${{ always() }}
+        uses: upload-artifact
+        with:
+          name: ci-result-dt
+          path: .ci-results/DT
