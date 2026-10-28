@@ -6,7 +6,8 @@ on:
       - open
       - reopen
       - update
-    branches: ['*']
+    branches: 
+      - master
 
   pull_request_comment:
     types: [created]
