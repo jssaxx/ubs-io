@@ -1,4 +1,4 @@
-name: HAM_平台门禁
+name: UBS-IO_平台门禁
 
 on:
   pull_request_target:
@@ -6,14 +6,12 @@ on:
       - open
       - reopen
       - update
-    branches:
-      - master
+    branches: ['*']
 
   pull_request_comment:
     types: [created]
-    comments: ['^\s*/retest\s*$']
-    branches:
-      - master
+    comments: ['^/retest$']
+    branches: ['*']
 
 env:
   PR_ID: ${{ atomgit.event.pull_request.number }}
@@ -38,7 +36,6 @@ concurrency:
 
 permissions:
   repository: read
-  action: read
   pr: write
   issue: write
   id-token: write
@@ -59,7 +56,7 @@ jobs:
 
           sudo yum install -y curl jq
 
-          repo_url="${ATOMGIT_REPOSITORY_URL:-https://gitcode.com/ComputingActionTest/ham_7628.git}"
+          repo_url="${ATOMGIT_REPOSITORY_URL:-https://gitcode.com/ComputingActionTest/ubs-io.git}"
           repo="${repo_url#https://gitcode.com/}"
           repo="${repo%.git}"
           api_root="${ATOMGIT_API_URL:-https://api.gitcode.com}"
@@ -109,23 +106,25 @@ jobs:
         run: |
           set -euo pipefail
 
-          mkdir -p .gate-results
-
           if find . -maxdepth 1 -type f -iname 'copyright' | grep -q .; then
             echo "项目级 Copyright 声明文件存在。"
-            echo "SUCCESS" > .gate-results/check_package_license
             echo "check_package_license=SUCCESS" >> "${ATOMGIT_STEP_SUMMARY}"
           else
             echo "仓库copyright检查未通过: 缺少项目级Copyright声明文件"
-            echo "WARNING" > .gate-results/check_package_license
             echo "check_package_license=WARNING" >> "${ATOMGIT_STEP_SUMMARY}"
           fi
 
-      - name: Save failed result
-        if: ${{ failure() }}
+      - name: Save result
+        if: ${{ always() }}
+        env:
+          CURRENT_JOB_STATUS: ${{ job.status }}
         run: |
           mkdir -p .gate-results
-          echo "FAILED" > .gate-results/check_package_license
+          if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
+            echo "SUCCESS" > .gate-results/check_package_license
+          else
+            echo "FAILED" > .gate-results/check_package_license
+          fi
 
       - name: Upload result
         if: ${{ always() }}
@@ -142,7 +141,7 @@ jobs:
       - name: Run OpenLibing SCA
         uses: openlibing/sca-action/sca-pr-action@v1.0.1
         with:
-          project-name: ham
+          project-name: ubs-io
           platform-domain: https://gitcode.com
 
       - name: Save result
@@ -177,7 +176,7 @@ jobs:
 
           sudo yum install -y curl jq
 
-          repo_url="${ATOMGIT_REPOSITORY_URL:-https://gitcode.com/ComputingActionTest/ham_7628.git}"
+          repo_url="${ATOMGIT_REPOSITORY_URL:-https://gitcode.com/ComputingActionTest/ubs-io.git}"
           repo="${repo_url#https://gitcode.com/}"
           repo="${repo%.git}"
           api_root="${ATOMGIT_API_URL:-https://api.gitcode.com}"
@@ -224,6 +223,136 @@ jobs:
           name: gate-result-issue-associate
           path: .gate-results/check_issue_associate
 
+  check_docs:
+    name: check_docs
+    runs-on: [self-hosted, openeuler, arm, cpu=8]
+
+    steps:
+      - name: Checkout PR merge code
+        uses: checkout
+        with:
+          ref: refs/merge-requests/${{ env.PR_ID }}/merge
+
+      - name: Prepare tools
+        run: |
+          set -euxo pipefail
+          sudo yum install -y curl jq wget
+          command -v npm >/dev/null 2>&1 || sudo yum install -y nodejs npm
+
+      - name: Run docs gate
+        env:
+          ATOMGIT_TOKEN: ${{ atomgit.token }}
+        run: |
+          set -euo pipefail
+
+          repo_url="${ATOMGIT_REPOSITORY_URL:-https://gitcode.com/ComputingActionTest/ubs-io.git}"
+          repo="${repo_url#https://gitcode.com/}"
+          repo="${repo%.git}"
+          api_root="${ATOMGIT_API_URL:-https://api.gitcode.com}"
+          api_root="${api_root%/}"
+          api_root="${api_root%/v5}"
+          api_root="${api_root%/v8}"
+          api_root="${api_root%/api}"
+          api_v5="${api_root}/api/v5"
+          server_url="${ATOMGIT_SERVER_URL:-https://gitcode.com}"
+
+          comment_url="${api_v5}/repos/${repo}/pulls/${PR_ID}/comments"
+
+          post_comment() {
+            local body="$1"
+            local payload
+            payload="$(jq -n --arg body "${body}" '{body: $body}')"
+
+            if ! curl -fsSL \
+              -X POST \
+              -H "PRIVATE-TOKEN: ${ATOMGIT_TOKEN}" \
+              -H "Content-Type: application/json" \
+              --data "${payload}" \
+              "${comment_url}" \
+              >/dev/null 2>&1; then
+              curl -fsSL \
+                -X POST \
+                -H "Authorization: token ${ATOMGIT_TOKEN}" \
+                -H "Content-Type: application/json" \
+                --data "${payload}" \
+                "${comment_url}" \
+                >/dev/null
+            fi
+          }
+
+          files_url="${api_v5}/repos/${repo}/pulls/${PR_ID}/files?per_page=100"
+
+          if ! files_json="$(curl -fsSL \
+            -H "PRIVATE-TOKEN: ${ATOMGIT_TOKEN}" \
+            "${files_url}" 2>/dev/null)"; then
+            files_json="$(curl -fsSL \
+              -H "Authorization: token ${ATOMGIT_TOKEN}" \
+              "${files_url}")"
+          fi
+
+          docs_count="$(
+            jq '[.[] | select(.filename | test("^docs/.*\\.md$"))] | length' \
+              <<<"${files_json}"
+          )"
+
+          if [[ "${docs_count}" -eq 0 ]]; then
+            post_comment "✅ 跳过 docs ci 检查，没有需要检查的文档文件"
+            exit 0
+          fi
+
+          repo_root="$(git rev-parse --show-toplevel)"
+          work_dir="$(mktemp -d)"
+
+          cd "${work_dir}"
+          wget -q https://raw.gitcode.com/openeuler/docs-website/raw/ci/docs-ci-v2.js
+          wget -q https://raw.gitcode.com/openeuler/docs-website/raw/ci/package.json
+          wget -q https://raw.gitcode.com/openeuler/docs-website/raw/ci/.npmrc
+
+          npm install --silent
+
+          set +e
+          node docs-ci-v2.js \
+            --repoPath="${repo_root}" \
+            --targetOwnerRepo="${repo}" \
+            --targetOwnerName="${repo}" \
+            --targetBranch="${TARGET_BRANCH}" \
+            --detailUrl="${server_url}/${repo}/actions" \
+            --outputCount="20" \
+            --ciConfigUrl="https://raw.gitcode.com/openeuler/docs/raw/stable-common/.doctools/config.json"
+          docs_rc=$?
+          set -e
+
+          if [[ -f output.md ]]; then
+            docs_output="$(cat output.md)"
+          else
+            docs_output="❌ 文档门禁运行失败！"
+          fi
+
+          post_comment "${docs_output}"
+
+          if [[ "${docs_rc}" -ne 0 ]] || grep -q '^❌' <<<"${docs_output}"; then
+            exit 1
+          fi
+
+      - name: Save result
+        if: ${{ always() }}
+        env:
+          CURRENT_JOB_STATUS: ${{ job.status }}
+        run: |
+          mkdir -p .gate-results
+          if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
+            echo "SUCCESS" > .gate-results/check_docs
+          else
+            echo "FAILED" > .gate-results/check_docs
+          fi
+
+      - name: Upload result
+        if: ${{ always() }}
+        uses: upload-artifact
+        with:
+          name: gate-result-docs
+          path: .gate-results/check_docs
+
   gate_report:
     name: gate-report
     if: ${{ always() }}
@@ -231,13 +360,13 @@ jobs:
       - check_package_license
       - check_sca
       - check_issue_associate
+      - check_docs
 
     runs-on: [self-hosted, openeuler, arm, cpu=8]
 
     steps:
       - name: Download package result
         if: ${{ always() }}
-        continue-on-error: true
         uses: download-artifact
         with:
           name: gate-result-package-license
@@ -245,7 +374,6 @@ jobs:
 
       - name: Download SCA result
         if: ${{ always() }}
-        continue-on-error: true
         uses: download-artifact
         with:
           name: gate-result-sca
@@ -253,14 +381,19 @@ jobs:
 
       - name: Download issue result
         if: ${{ always() }}
-        continue-on-error: true
         uses: download-artifact
         with:
           name: gate-result-issue-associate
           path: .gate-results/issue
 
-      - name: Collect results and post PR comment
+      - name: Download docs result
         if: ${{ always() }}
+        uses: download-artifact
+        with:
+          name: gate-result-docs
+          path: .gate-results/docs
+
+      - name: Collect results and post PR comment
         env:
           ATOMGIT_TOKEN: ${{ atomgit.token }}
           GATE_STATUS_TOKEN: ${{ secrets.CODE_CHECK_TOKEN }}
@@ -269,7 +402,7 @@ jobs:
 
           sudo yum install -y curl jq
 
-          repo_url="${ATOMGIT_REPOSITORY_URL:-https://gitcode.com/ComputingActionTest/ham_7628.git}"
+          repo_url="${ATOMGIT_REPOSITORY_URL:-https://gitcode.com/ComputingActionTest/ubs-io.git}"
           repo="${repo_url#https://gitcode.com/}"
           repo="${repo%.git}"
           api_root="${ATOMGIT_API_URL:-https://api.gitcode.com}"
@@ -281,27 +414,26 @@ jobs:
           api_v8="${api_root}/api/v8"
           server_url="${ATOMGIT_SERVER_URL:-https://gitcode.com}"
 
-          status_token="${GATE_STATUS_TOKEN:-${ATOMGIT_TOKEN}}"
-
           api_get() {
             local url="$1"
             local response
 
             if response="$(curl -fsSL \
-              -H "PRIVATE-TOKEN: ${status_token}" \
+              -H "PRIVATE-TOKEN: ${GATE_STATUS_TOKEN}" \
               "${url}" 2>/dev/null)"; then
               printf '%s' "${response}"
               return 0
             fi
 
             curl -fsSL \
-              -H "Authorization: token ${status_token}" \
+              -H "Authorization: token ${GATE_STATUS_TOKEN}" \
               "${url}"
           }
 
           post_comment() {
             local body="$1"
             local payload
+
             payload="$(jq -n --arg body "${body}" '{body: $body}')"
             local comment_url="${api_v5}/repos/${repo}/pulls/${PR_ID}/comments"
 
@@ -354,39 +486,36 @@ jobs:
             read_result ".gate-results/issue/check_issue_associate"
           )"
 
-          package_license_status="$(
+          docs_status="$(
+            read_result ".gate-results/docs/check_docs"
+          )"
+
+          package_job_status="$(
             read_result ".gate-results/package/check_package_license"
           )"
 
           now_ms="$(date +%s%3N)"
-          runs_json=""
+          runs_json="$(api_get "${api_v8}/repos/${repo}/actions/runs?per_page=100")"
 
-          if ! runs_json="$(
-            api_get "${api_v8}/repos/${repo}/actions/runs?per_page=100"
-          )"; then
-            echo "WARNING: Unable to query Actions runs."
-            runs_json='{"workflow_runs":[]}'
-          fi
-
-          platform_run_id="${ATOMGIT_RUN_ID:-}"
+          platform_run_id="$(
+            jq -r \
+              --arg pr "${PR_ID}" \
+              --argjson now "${now_ms}" \
+              '
+                [
+                  .workflow_runs[]?
+                  | select((.pull_request_id | tostring) == $pr)
+                  | select(.file_path == ".gitcode/workflows/platform-gate.yml")
+                  | select((.start_time // 0) <= $now)
+                ]
+                | sort_by(.start_time)
+                | last
+                | .workflow_run_id // empty
+              ' <<<"${runs_json}"
+          )"
 
           if [[ -z "${platform_run_id}" ]]; then
-            platform_run_id="$(
-              jq -r \
-                --arg pr "${PR_ID}" \
-                --argjson now "${now_ms}" \
-                '
-                  [
-                    .workflow_runs[]?
-                    | select((.pull_request_id | tostring) == $pr)
-                    | select(.file_path == ".gitcode/workflows/platform-gate.yml")
-                    | select((.start_time // 0) <= $now)
-                  ]
-                  | sort_by(.start_time)
-                  | last
-                  | .workflow_run_id // empty
-                ' <<<"${runs_json}"
-            )"
+            platform_run_id="${ATOMGIT_RUN_ID}"
           fi
 
           if [[ -z "${platform_run_id}" ]]; then
@@ -394,56 +523,32 @@ jobs:
             exit 1
           fi
 
-          platform_start="${now_ms}"
+          platform_run_json="$(
+            api_get "${api_v8}/repos/${repo}/actions/runs/${platform_run_id}"
+          )"
 
-          if platform_run_json="$(
-            api_get "${api_v8}/repos/${repo}/actions/runs/${platform_run_id}" \
-              2>/dev/null
-          )"; then
-            parsed_start="$(
-              jq -r '.start_time // 0' <<<"${platform_run_json}"
-            )"
-
-            if [[ "${parsed_start}" -gt 0 ]]; then
-              platform_start="${parsed_start}"
-            fi
-          fi
+          platform_start="$(jq -r '.start_time // 0' <<<"${platform_run_json}")"
+          since="$((platform_start - 10000))"
 
           build_run_id=""
           build_run_status="NOT_FOUND"
 
           for _ in $(seq 1 120); do
-            if ! runs_json="$(
-              api_get "${api_v8}/repos/${repo}/actions/runs?per_page=100"
-            )"; then
-              runs_json='{"workflow_runs":[]}'
-            fi
+            runs_json="$(api_get "${api_v8}/repos/${repo}/actions/runs?per_page=100")"
 
             build_run_id="$(
               jq -r \
                 --arg pr "${PR_ID}" \
-                --arg head "${HEAD_SHA}" \
-                --argjson platform_start "${platform_start}" \
+                --argjson since "${since}" \
                 '
                   [
                     .workflow_runs[]?
                     | select((.pull_request_id | tostring) == $pr)
                     | select(.file_path == ".gitcode/workflows/pr-ci.yml")
-                    | select((.head_sha // "") == $head)
-                    | . as $run
-                    | (($run.start_time // 0) - $platform_start) as $delta
-                    | select(
-                        (($delta | if . < 0 then -. else . end) <= 600000)
-                      )
-                    | $run
-                    | . + {
-                        distance_ms: (
-                          $delta | if . < 0 then -. else . end
-                        )
-                      }
+                    | select((.start_time // 0) >= $since)
                   ]
-                  | sort_by(.distance_ms)
-                  | first
+                  | sort_by(.start_time)
+                  | last
                   | .workflow_run_id // empty
                 ' <<<"${runs_json}"
             )"
@@ -457,9 +562,6 @@ jobs:
                 jq -r '.status // "NOT_FOUND"' <<<"${build_run_json}"
               )"
 
-              echo "Matched CI run: ${build_run_id}"
-              echo "CI run status: ${build_run_status}"
-
               case "${build_run_status}" in
                 COMPLETED|SUCCESS|FAILED|CANCELLED|TIMED_OUT)
                   break
@@ -469,10 +571,6 @@ jobs:
 
             sleep 15
           done
-
-          echo "platform_start=${platform_start}"
-          echo "build_run_id=${build_run_id}"
-          echo "build_run_status=${build_run_status}"
 
           if [[ "${build_run_status}" == "COMPLETED" || "${build_run_status}" == "SUCCESS" ]]; then
             x86_status="SUCCESS"
@@ -486,11 +584,18 @@ jobs:
             dt_status="FAILED"
           fi
 
+          if [[ "${package_job_status}" != "SUCCESS" ]]; then
+            package_license_status="FAILED"
+          else
+            package_license_status="WARNING"
+          fi
+
           overall_failed=0
 
           for status in \
             "${check_sca_status}" \
             "${issue_status}" \
+            "${docs_status}" \
             "${x86_status}" \
             "${arm_status}" \
             "${precommit_status}" \
@@ -506,15 +611,9 @@ jobs:
 
           actions_url="${server_url}/${repo}/actions"
 
-          if [[ "${package_license_status}" == "SUCCESS" ]]; then
-            package_detail="项目级Copyright声明文件存在"
-          else
-            package_detail="仓库copyright检查未通过: 缺少项目级Copyright声明文件"
-          fi
-
           body="<table>
           <tr><th colspan=2>Check Name</th><th>Build Result</th><th>详情</th><th>Build Details</th></tr>
-          <tr><td colspan=2>check_package_license</td><td>$(status_html "${package_license_status}")</td><td>${package_detail}</td><td><a href=\"${actions_url}\">查看</a></td></tr>
+          <tr><td colspan=2>check_package_license</td><td>$(status_html "${package_license_status}")</td><td>&#8226; 仓库copyright检查未通过: 缺少项目级Copyright声明文件</td><td><a href=\"${actions_url}\">查看</a></td></tr>
           <tr><td colspan=2>check_sca</td><td>$(status_html "${check_sca_status}")</td><td></td><td><a href=\"${actions_url}\">查看</a></td></tr>
           <tr><td colspan=2>x86_64</td><td>$(status_html "${x86_status}")</td><td>check_build</td><td><a href=\"${actions_url}\">查看</a></td></tr>
           <tr><td colspan=2>aarch64</td><td>$(status_html "${arm_status}")</td><td>check_build</td><td><a href=\"${actions_url}\">查看</a></td></tr>
