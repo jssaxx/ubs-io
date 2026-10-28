@@ -69,15 +69,33 @@ jobs:
       - name: Run clang-format
         run: |
           set -euxo pipefail
-
           sed -i 's/, -i/, -n, --Werror/g' .pre-commit-config.yaml
           pre-commit run clang-format --all-files
 
+      - name: Save result
+        if: ${{ always() }}
+        env:
+          CURRENT_JOB_STATUS: ${{ job.status }}
+        run: |
+          mkdir -p .ci-results
+          if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
+            echo "SUCCESS" > .ci-results/pre-commit
+          else
+            echo "FAILED" > .ci-results/pre-commit
+          fi
+
+      - name: Upload result
+        if: ${{ always() }}
+        uses: upload-artifact
+        with:
+          name: ci-result-pre-commit
+          path: .ci-results/pre-commit
+
   build_x86_64:
     name: build-x86_64
-    runs-on: [self-hosted, openeuler, x86, cpu=8]
+    runs-on: [self-hosted, openeuler, x86, cpu=16]
     container:
-      image: swr.cn-north-4.myhuaweicloud.com/ubscore/soe:latest
+      image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
 
     steps:
       - name: Checkout PR merge code
@@ -136,11 +154,30 @@ jobs:
           name: ubsio-boostio-release-x86_64
           path: ubsio-boostio/BoostIO_*.tar.gz
 
+      - name: Save result
+        if: ${{ always() }}
+        env:
+          CURRENT_JOB_STATUS: ${{ job.status }}
+        run: |
+          mkdir -p .ci-results
+          if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
+            echo "SUCCESS" > .ci-results/x86_64
+          else
+            echo "FAILED" > .ci-results/x86_64
+          fi
+
+      - name: Upload result
+        if: ${{ always() }}
+        uses: upload-artifact
+        with:
+          name: ci-result-x86-64
+          path: .ci-results/x86_64
+
   build_aarch64:
     name: build-aarch64
     runs-on: [self-hosted, openeuler, arm, cpu=8]
     container:
-      image: swr.cn-north-4.myhuaweicloud.com/ubscore/soe:latest
+      image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
 
     steps:
       - name: Checkout PR merge code
@@ -199,6 +236,25 @@ jobs:
           name: ubsio-boostio-release-aarch64
           path: ubsio-boostio/BoostIO_*.tar.gz
 
+      - name: Save result
+        if: ${{ always() }}
+        env:
+          CURRENT_JOB_STATUS: ${{ job.status }}
+        run: |
+          mkdir -p .ci-results
+          if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
+            echo "SUCCESS" > .ci-results/aarch64
+          else
+            echo "FAILED" > .ci-results/aarch64
+          fi
+
+      - name: Upload result
+        if: ${{ always() }}
+        uses: upload-artifact
+        with:
+          name: ci-result-aarch64
+          path: .ci-results/aarch64
+
   dt:
     name: DT
     runs-on: [self-hosted, openeuler, arm, cpu=8]
@@ -256,3 +312,22 @@ jobs:
             ubsio-boostio/coverage_report/
             ubsio-boostio/coverage_report/report.xml
             ubsio-boostio/coverage_report/coverage.info
+
+      - name: Save result
+        if: ${{ always() }}
+        env:
+          CURRENT_JOB_STATUS: ${{ job.status }}
+        run: |
+          mkdir -p .ci-results
+          if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
+            echo "SUCCESS" > .ci-results/DT
+          else
+            echo "FAILED" > .ci-results/DT
+          fi
+
+      - name: Upload result
+        if: ${{ always() }}
+        uses: upload-artifact
+        with:
+          name: ci-result-dt
+          path: .ci-results/DT
