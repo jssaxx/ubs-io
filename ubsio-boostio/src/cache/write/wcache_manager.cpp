@@ -1726,15 +1726,19 @@ WCachePtr WCacheManager::SelectEvictFlowLocked(const EvictDomain &domain,
 {
     auto &queue = mGlobalEvictQueues.at(domain);
     bool memoryDownflow = domain.second == MEMORY_EVICT_DOMAIN;
-    if (!memoryDownflow && !queue.inactiveFlows.empty()) {
-        auto iter = mWCacheManager.find(queue.inactiveFlows.front());
-        if (iter == mWCacheManager.end()) {
-            return nullptr;
+    if (!memoryDownflow) {
+        for (auto flowId : queue.inactiveFlows) {
+            auto iter = mWCacheManager.find(flowId);
+            if (iter == mWCacheManager.end()) {
+                continue;
+            }
+            auto flow = iter->second;
+            if (flow->NeedEvict(domain.first) && flow->GetOldestEvictSequence(domain.first, sequence) &&
+                flow->BeginEvictBatch(domain.first)) {
+                return flow;
+            }
+            // A drained or busy historical flow keeps its position while other flows make progress.
         }
-        auto flow = iter->second;
-        // Never skip a busy or partially drained historical head, even if the next flow is ready.
-        return flow->NeedEvict(domain.first) && flow->GetOldestEvictSequence(domain.first, sequence) &&
-            flow->BeginEvictBatch(domain.first) ? flow : nullptr;
     }
 
     // Ignore admissions made during this scan. They belong to the next selection;

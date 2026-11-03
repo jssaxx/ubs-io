@@ -203,6 +203,49 @@ protected:
         manager.RunGlobalEvict(Domain(manager.mHasDiskCache ? WCACHE_DISK : WCACHE_MEMORY, diskId));
     }
 
+    void CheckHistoricalReaderReclaim(bool hasDisk)
+    {
+        manager.mHasDiskCache = hasDisk;
+        Config().hasDiskCache = hasDisk;
+        auto type = hasDisk ? WCACHE_DISK : WCACHE_MEMORY;
+        auto first = AddFlow(1, true);
+        auto second = AddFlow(1, true);
+        auto active = AddFlow(1);
+        auto key = KeyFor(first, 0);
+        auto pt = manager.mWCacheManager.at(first)->GetPtId();
+        auto reader = manager.mCacheIndex->Aquire(pt, const_cast<char *>(key.c_str()));
+        ASSERT_NE(reader, nullptr);
+        Run();
+        EXPECT_EQ(Queued(first, type), 0U);
+        EXPECT_EQ(Queued(second, type), 0U);
+        EXPECT_EQ(Queued(active, type), 0U);
+        EXPECT_EQ(deletedFlows, (std::vector<uint64_t>{second, active}));
+        EXPECT_EQ(manager.mGlobalEvictQueues.at(Domain(type, 0)).inactiveFlows.front(), first);
+        reader->Release();
+        EXPECT_EQ(reader->GetSlice(), nullptr);
+        EXPECT_FALSE(manager.mCacheIndex->Exist(pt, const_cast<char *>(key.c_str())));
+        EXPECT_EQ(deletedFlows, (std::vector<uint64_t>{second, active, first}));
+        EXPECT_EQ(FlowManager::GetCacheUsedSize(FLOW_WCACHE, hasDisk ? FLOW_DISK : FLOW_MEMORY, 0), 0U);
+
+        // The existing periodic retry retires drained history without another Put or reader wakeup.
+        manager.mEvictService[type] = ExecutorService::Create(1, 128);
+        ASSERT_TRUE(manager.mEvictService[type]->Start());
+        manager.RetryGlobalEviction();
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        bool retired = false;
+        while (std::chrono::steady_clock::now() < deadline) {
+            {
+                ReadLocker<ReadWriteLock> lock(&manager.mWCacheManagerLock);
+                retired = manager.mWCacheManager.count(first) == 0 && manager.mWCacheManager.count(second) == 0;
+            }
+            if (retired) {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        EXPECT_TRUE(retired);
+    }
+
     FlowPtr MemoryFlow(uint64_t id, uint64_t capacity)
     {
         // Fixture buffers are bounded by the largest metadata chunk used by these tests.
@@ -493,22 +536,47 @@ TEST_F(TestWCacheGlobalEvict, failed_head_is_retried_without_eviction_of_later_f
 
 TEST_F(TestWCacheGlobalEvict, delayed_reader_keeps_empty_head_until_callback_and_retirement_finish)
 {
+    CheckHistoricalReaderReclaim(true);
+}
+
+TEST_F(TestWCacheGlobalEvict, no_disk_reader_reclaims_and_retires_history_without_another_put)
+{
+    CheckHistoricalReaderReclaim(false);
+}
+
+TEST_F(TestWCacheGlobalEvict, history_without_disk_candidates_allows_later_history_and_active_flows)
+{
+    auto first = AddFlow(0, true);
+    auto second = AddFlow(1, true);
+    auto active = AddFlow(1);
+    std::vector<FlowAddr> addrs;
+    auto slice = MakeRef<WCacheSlice>(first, 0, 0, TEST_SEGMENT, addrs, FLOW_MEMORY);
+    auto ref = MakeRef<WCacheSliceRef>(slice);
+    manager.mWCacheManager.at(first)->mCacheTiers[WCACHE_MEMORY]->AddEvictQueue(ref);
+    Run();
+    EXPECT_EQ(deletedFlows, (std::vector<uint64_t>{second, active}));
+    EXPECT_EQ(Queued(first, WCACHE_MEMORY), 1U);
+    EXPECT_EQ(manager.mGlobalEvictQueues.at(Domain(WCACHE_DISK, 0)).inactiveFlows.front(), first);
+}
+
+TEST_F(TestWCacheGlobalEvict, busy_history_keeps_its_age_and_allows_later_history_and_active_flows)
+{
     auto first = AddFlow(1, true);
     auto second = AddFlow(1, true);
-    auto key = KeyFor(first, 0);
-    auto reader = manager.mCacheIndex->Aquire(manager.mWCacheManager.at(first)->GetPtId(),
-        const_cast<char *>(key.c_str()));
-    ASSERT_NE(reader, nullptr);
+    auto active = AddFlow(1);
+    auto flow = manager.mWCacheManager.at(first);
+    uint64_t age = 0, after = 0;
+    ASSERT_TRUE(flow->GetOldestEvictSequence(WCACHE_DISK, age));
+    flow->mEvictRef[WCACHE_DISK] = true;
     Run();
-    EXPECT_EQ(Queued(first), 0U);
-    Run();
-    EXPECT_EQ(Queued(second), 1U);
+    EXPECT_EQ(deletedFlows, (std::vector<uint64_t>{second, active}));
+    EXPECT_EQ(Queued(first), 1U);
+    ASSERT_TRUE(flow->GetOldestEvictSequence(WCACHE_DISK, after));
+    EXPECT_EQ(after, age);
     EXPECT_EQ(manager.mGlobalEvictQueues.at(Domain(WCACHE_DISK, 0)).inactiveFlows.front(), first);
-    reader->Release();
+    flow->mEvictRef[WCACHE_DISK] = false;
     Run();
-    EXPECT_EQ(manager.mWCacheManager.count(first), 0U);
-    EXPECT_EQ(manager.mWCacheManager.count(second), 0U);
-    EXPECT_EQ(deletedFlows, std::vector<uint64_t>({first, second}));
+    EXPECT_EQ(deletedFlows, (std::vector<uint64_t>{second, active, first}));
 }
 
 TEST_F(TestWCacheGlobalEvict, full_pt_version_is_checked_and_recovered_flow_stays_historical)
