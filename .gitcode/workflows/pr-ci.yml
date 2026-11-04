@@ -109,6 +109,7 @@ stages:
         name: build-x86-64
         if: ${{ inputs.target_branch == 'master' }}
         runs-on: [self-hosted, ubse, x86, cpu=8]
+        timeout-minutes: 90
         container:
           image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
 
