@@ -1,0 +1,359 @@
+name: UBS-IO-Validation
+
+on:
+  workflow_call:
+    inputs:
+      pr_id:
+        description: Pull request number
+        required: true
+        type: string
+      target_branch:
+        description: Pull request target branch
+        required: true
+        type: string
+      merge_commit_sha:
+        description: Pull request merge commit
+        required: true
+        type: string
+
+env:
+  PR_ID: ${{ inputs.pr_id }}
+  TARGET_BRANCH: ${{ inputs.target_branch }}
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  repository: read
+  pr: none
+  issue: none
+  note: none
+  project: none
+
+stages:
+  checks_stage:
+    name: Checks
+    fail_fast: false
+    jobs:
+      pre_commit:
+        name: pre-commit
+        if: ${{ inputs.target_branch == 'master' }}
+        runs-on: [self-hosted, ubse, arm, cpu=8]
+        container:
+          image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
+
+        steps:
+          - name: Checkout PR merge code
+            uses: checkout
+            with:
+              ref: ${{ inputs.merge_commit_sha }}
+              allow-unsafe-pr-checkout: true
+
+          - name: Install pre-commit dependencies
+            run: |
+              set -euxo pipefail
+
+              sudo yum install -y python3 python3-pip
+
+              sudo python3 -m pip install \
+                --index-url https://repo.huaweicloud.com/repository/pypi/simple \
+                --trusted-host repo.huaweicloud.com \
+                --timeout 120 \
+                --retries 5 \
+                "pre-commit==4.3.0" \
+                "clang-format==12.0.1"
+             
+              if ! command -v python >/dev/null 2>&1; then
+                sudo ln -s "$(command -v python3)" /usr/bin/python
+              fi
+              python --version
+              python3 --version
+              clang-format --version
+
+          - name: Prepare clang-format check
+            run: |
+              set -euxo pipefail
+
+              sed -i 's/, -i/, -n, --Werror/g' .pre-commit-config.yaml
+
+          - name: Run pre-commit
+            uses: openlibing/pre-commit-action@v1.0.1
+            env:
+              SKIP: run-build,run-build-test,clang-tidy,clang-tidy-test
+            with:
+              extra_args: --all-files
+
+          - name: Save result
+            if: ${{ always() }}
+            env:
+              CURRENT_JOB_STATUS: ${{ job.status }}
+            run: |
+              mkdir -p .ci-results
+              if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
+                echo "SUCCESS" > .ci-results/pre-commit
+              else
+                echo "FAILED" > .ci-results/pre-commit
+              fi
+
+              echo "pre-commit: ${CURRENT_JOB_STATUS}" >> "${ATOMGIT_STEP_SUMMARY}"
+
+          - name: Upload result
+            if: ${{ always() }}
+            uses: upload-artifact
+            with:
+              name: ci-result-pre-commit
+              path: .ci-results/pre-commit
+
+      build_x86_64:
+        name: build-x86-64
+        if: ${{ inputs.target_branch == 'master' }}
+        runs-on: [self-hosted, ubse, x86, cpu=8]
+        container:
+          image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
+
+        steps:
+          - name: Checkout PR merge code
+            uses: checkout
+            with:
+              ref: ${{ inputs.merge_commit_sha }}
+              allow-unsafe-pr-checkout: true
+
+          - name: Install dependencies
+            run: |
+              set -euxo pipefail
+
+              sudo yum install -y \
+                python3 \
+                python3-pip \
+                python3-devel \
+                pybind11-devel \
+                gcc \
+                gcc-c++ \
+                make \
+                cmake \
+                maven \
+                hostname \
+                fuse-devel \
+                automake \
+                librados-devel \
+                libaio-devel \
+                libtool \
+                numactl-devel \
+                libcurl-devel \
+                libboundscheck \
+                rdma-core-devel \
+                openssl \
+                openssl-devel \
+                dos2unix \
+                liburing \
+                liburing-devel
+
+              sudo python3 -m pip config set global.index-url \
+                https://repo.huaweicloud.com/repository/pypi/simple
+              sudo python3 -m pip config set global.timeout 120
+
+              sudo python3 -m pip install wheel pybind11 \
+                -i https://repo.huaweicloud.com/repository/pypi/simple \
+                --trusted-host repo.huaweicloud.com \
+                --timeout 120
+
+          - name: Build UBSIO-BoostIO release
+            run: |
+              set -euxo pipefail
+              cd ubsio-boostio
+              bash build.sh -t release
+
+          - name: Upload release package
+            uses: upload-artifact
+            with:
+              name: ubsio-boostio-release-x86_64
+              path: ubsio-boostio/BoostIO_*.tar.gz
+
+          - name: Save result
+            if: ${{ always() }}
+            env:
+              CURRENT_JOB_STATUS: ${{ job.status }}
+            run: |
+              mkdir -p .ci-results
+              if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
+                echo "SUCCESS" > .ci-results/x86_64
+              else
+                echo "FAILED" > .ci-results/x86_64
+              fi
+
+              echo "x86_64: ${CURRENT_JOB_STATUS}" >> "${ATOMGIT_STEP_SUMMARY}"
+
+          - name: Upload result
+            if: ${{ always() }}
+            uses: upload-artifact
+            with:
+              name: ci-result-x86-64
+              path: .ci-results/x86_64
+
+      build_aarch64:
+        name: build-aarch64
+        if: ${{ inputs.target_branch == 'master' }}
+        runs-on: [self-hosted, ubse, arm, cpu=8]
+        container:
+          image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
+
+        steps:
+          - name: Checkout PR merge code
+            uses: checkout
+            with:
+              ref: ${{ inputs.merge_commit_sha }}
+              allow-unsafe-pr-checkout: true
+
+          - name: Install dependencies
+            run: |
+              set -euxo pipefail
+
+              sudo yum install -y \
+                python3 \
+                python3-pip \
+                python3-devel \
+                pybind11-devel \
+                gcc \
+                gcc-c++ \
+                make \
+                cmake \
+                maven \
+                hostname \
+                fuse-devel \
+                automake \
+                librados-devel \
+                libaio-devel \
+                libtool \
+                numactl-devel \
+                libcurl-devel \
+                libboundscheck \
+                rdma-core-devel \
+                openssl \
+                openssl-devel \
+                dos2unix \
+                liburing \
+                liburing-devel
+
+              sudo python3 -m pip config set global.index-url \
+                https://repo.huaweicloud.com/repository/pypi/simple
+              sudo python3 -m pip config set global.timeout 120
+
+              sudo python3 -m pip install wheel pybind11 \
+                -i https://repo.huaweicloud.com/repository/pypi/simple \
+                --trusted-host repo.huaweicloud.com \
+                --timeout 120
+
+          - name: Build UBSIO-BoostIO release
+            run: |
+              set -euxo pipefail
+              cd ubsio-boostio
+              bash build.sh -t release
+
+          - name: Upload release package
+            uses: upload-artifact
+            with:
+              name: ubsio-boostio-release-aarch64
+              path: ubsio-boostio/BoostIO_*.tar.gz
+
+          - name: Save result
+            if: ${{ always() }}
+            env:
+              CURRENT_JOB_STATUS: ${{ job.status }}
+            run: |
+              mkdir -p .ci-results
+              if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
+                echo "SUCCESS" > .ci-results/aarch64
+              else
+                echo "FAILED" > .ci-results/aarch64
+              fi
+
+              echo "aarch64: ${CURRENT_JOB_STATUS}" >> "${ATOMGIT_STEP_SUMMARY}"
+
+          - name: Upload result
+            if: ${{ always() }}
+            uses: upload-artifact
+            with:
+              name: ci-result-aarch64
+              path: .ci-results/aarch64
+
+      dt:
+        name: DT
+        if: ${{ inputs.target_branch == 'master' }}
+        runs-on: [self-hosted, ubse, arm, cpu=8]
+        container:
+          image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
+
+        steps:
+          - name: Checkout PR merge code
+            uses: checkout
+            with:
+              ref: ${{ inputs.merge_commit_sha }}
+              allow-unsafe-pr-checkout: true
+
+          - name: Install dependencies
+            run: |
+              set -euxo pipefail
+
+              sudo yum install -y \
+                python3 \
+                python3-pip \
+                python3-devel \
+                pybind11-devel \
+                gcc \
+                gcc-c++ \
+                make \
+                cmake \
+                maven \
+                hostname \
+                fuse-devel \
+                automake \
+                librados-devel \
+                libaio-devel \
+                libtool \
+                numactl-devel \
+                libcurl-devel \
+                libboundscheck \
+                rdma-core-devel \
+                openssl \
+                openssl-devel \
+                dos2unix \
+                liburing \
+                liburing-devel
+
+          - name: Run UBSIO-BoostIO DT
+            run: |
+              set -euxo pipefail
+              cd ubsio-boostio/test/llt
+              bash run_dt.sh
+
+          - name: Upload DT reports
+            if: ${{ always() }}
+            uses: upload-artifact
+            with:
+              name: ubsio-boostio-dt
+              path: |
+                ubsio-boostio/coverage_report/
+                ubsio-boostio/coverage_report/report.xml
+                ubsio-boostio/coverage_report/coverage.info
+
+          - name: Save result
+            if: ${{ always() }}
+            env:
+              CURRENT_JOB_STATUS: ${{ job.status }}
+            run: |
+              mkdir -p .ci-results
+              if [[ "${CURRENT_JOB_STATUS}" == "success" ]]; then
+                echo "SUCCESS" > .ci-results/DT
+              else
+                echo "FAILED" > .ci-results/DT
+              fi
+
+              echo "DT: ${CURRENT_JOB_STATUS}" >> "${ATOMGIT_STEP_SUMMARY}"
+
+          - name: Upload result
+            if: ${{ always() }}
+            uses: upload-artifact
+            with:
+              name: ci-result-dt
+              path: .ci-results/DT
