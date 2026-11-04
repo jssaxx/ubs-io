@@ -108,7 +108,7 @@ stages:
       build_x86_64:
         name: build-x86-64
         if: ${{ inputs.target_branch == 'master' }}
-        runs-on: [self-hosted, openeuler, x86, cpu=16]
+        runs-on: [self-hosted, openeuler, x86, cpu=8]
         container:
           image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
 
