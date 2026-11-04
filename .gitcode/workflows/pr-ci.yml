@@ -63,7 +63,12 @@ stages:
                 --retries 5 \
                 "pre-commit==4.3.0" \
                 "clang-format==12.0.1"
-
+             
+              if ! command -v python >/dev/null 2>&1; then
+                sudo ln -s "$(command -v python3)" /usr/bin/python
+              fi
+              python --version
+              python3 --version
               clang-format --version
 
           - name: Prepare clang-format check
