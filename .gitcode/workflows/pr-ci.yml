@@ -41,7 +41,7 @@ stages:
         if: ${{ inputs.target_branch == 'master' }}
         runs-on: [self-hosted, ubse, arm, cpu=8]
         container:
-          image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
+          image: swr.cn-north-4.myhuaweicloud.com/ubscore/soe:latest
 
         steps:
           - name: Checkout PR merge code
