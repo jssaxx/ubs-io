@@ -41,7 +41,7 @@ stages:
         if: ${{ inputs.target_branch == 'master' }}
         runs-on: [self-hosted, ubse, arm, cpu=8]
         container:
-          image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
+          image: swr.cn-north-4.myhuaweicloud.com/ubscore/soe:latest
 
         steps:
           - name: Checkout PR merge code
@@ -77,10 +77,12 @@ stages:
               set -euxo pipefail
               sed -i 's/, -i/, -n, --Werror/g' .pre-commit-config.yaml
 
-          - name: Run clang-format check
-            run: |
-              set -euxo pipefail
-              pre-commit run clang-format --all-files
+          - name: Run pre-commit
+            uses: openlibing/pre-commit-action@v1.0.1
+            env:
+              SKIP: run-build,run-build-test,clang-tidy,clang-tidy-test
+            with:
+              extra_args: --all-files
 
           - name: Save result
             if: ${{ always() }}
