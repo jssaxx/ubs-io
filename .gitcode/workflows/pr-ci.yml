@@ -39,7 +39,7 @@ stages:
       pre_commit:
         name: pre-commit
         if: ${{ inputs.target_branch == 'master' }}
-        runs-on: [self-hosted, ubse, arm, cpu=8]
+        runs-on: [self-hosted, openeuler, arm, cpu=8]
         container:
           image: swr.cn-north-4.myhuaweicloud.com/ubscore/soe:latest
 
