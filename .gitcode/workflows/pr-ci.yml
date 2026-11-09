@@ -109,7 +109,7 @@ stages:
         name: build-x86-64
         runs-on: [self-hosted, ubse, x86, cpu=8]
         container:
-          image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
+          image: swr.cn-north-4.myhuaweicloud.com/ubscore/soe:latest
 
         steps:
           - name: Checkout PR merge code
@@ -194,7 +194,7 @@ stages:
         name: build-aarch64
         runs-on: [self-hosted, ubse, arm, cpu=8]
         container:
-          image: swr.cn-north-4.myhuaweicloud.com/ubscore/openeuler-24.03-lts-sp3_ci_build:latest
+          image: swr.cn-north-4.myhuaweicloud.com/ubscore/soe:latest
 
         steps:
           - name: Checkout PR merge code
