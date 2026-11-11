@@ -18,18 +18,18 @@
 
 namespace ock {
 namespace bio {
-using namespace ock::hcom;
+
 
 std::atomic<uint64_t> NetStub::connectCount{ 0UL };
 
-int32_t NetStub::Connect(const std::string &serverUrl, UBSHcomChannelPtr &ch, const UBSHcomConnectOptions &opt)
+int32_t NetStub::Connect(const std::string &serverUrl, ChannelPtr &ch, const ubs_hcom_service_connect_options &opt)
 {
     LOG_INFO("Connect stub.");
     connectCount.fetch_add(1L);
     return BIO_OK;
 }
 
-int32_t NetStub::Call(const UBSHcomRequest &req, UBSHcomResponse &rsp)
+int32_t NetStub::Call(const NetCallRequest &req, NetCallResponse &rsp)
 {
     LOG_INFO("SyncCall stub.");
     if (rsp.address == nullptr && rsp.size == 0) {
@@ -43,7 +43,7 @@ int32_t NetStub::Call(const UBSHcomRequest &req, UBSHcomResponse &rsp)
     return BIO_OK;
 }
 
-int32_t NetStub::AsyncCall(const UBSHcomRequest &req, UBSHcomResponse &rsp, Callback callback)
+int32_t NetStub::AsyncCall(const NetCallRequest &req, NetCallResponse &rsp, Callback callback)
 {
     LOG_INFO("AsyncCall stub.");
     uint32_t rspDataSize = 64U;

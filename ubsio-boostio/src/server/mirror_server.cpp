@@ -28,7 +28,7 @@
 #include "disk_resource_monitor.h"
 
 using namespace ock::bio;
-using namespace ock::hcom;
+
 
 static uint16_t GetLocalVNodeId()
 {

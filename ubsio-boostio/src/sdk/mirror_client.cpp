@@ -1285,7 +1285,7 @@ void MirrorClient::FillBatchGetBufferInfo(GetKeyInfo &keyInfo, uintptr_t address
     keyInfo.mrKey = 0;
     keyInfo.size = static_cast<uint32_t>(length);
     if (mMode != STANDALONE) {
-        keyInfo.mrKey = mDataMsgMemMr.GetHcomMrs()[0]->GetLKey();
+        keyInfo.mrKey = mDataMsgMemMr.GetKey();
         keyInfo.addressOffset = reinterpret_cast<uint8_t *>(address) - mDataMsgMemAddr;
     }
 }
@@ -2500,7 +2500,7 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
         req->isAlloc = isAlloc;
         mr.address = address;
         mr.size = mDataMsgMemBlockSize;
-        mr.key = mDataMsgMemMr.GetHcomMrs()[0]->GetLKey();
+        mr.key = mDataMsgMemMr.GetKey();
     } else {
         mr.address = reinterpret_cast<uintptr_t>(param.value);
         mr.size = param.length;
@@ -2759,7 +2759,7 @@ BResult MirrorClient::GetServerRemote(GetRequest &req, uint16_t dstNid, char *va
     req.isMr = 1;
     req.address = address;
     req.size = mDataMsgMemBlockSize;
-    req.mrKey = mDataMsgMemMr.GetHcomMrs()[0]->GetLKey();
+    req.mrKey = mDataMsgMemMr.GetKey();
 
     GetResponse rsp;
     ret = net::BioClientNet::Instance()->SendSync<GetRequest, GetResponse>(static_cast<BioNodeId>(dstNid),
@@ -3198,7 +3198,7 @@ BResult MirrorClient::ListRemote(uint16_t nid, ListRequest &req, std::unordered_
 
     req.address = address;
     req.size = maxSize;
-    req.mrKey = mDataMsgMemMr.GetHcomMrs()[0]->GetLKey();
+    req.mrKey = mDataMsgMemMr.GetKey();
     ListResponse rsp;
     BIO_TP_START(LISTALL_REMOTE_RSP_OVER_LIMIT, &rsp.num, 1500U);
     ret = net::BioClientNet::Instance()->SendSync<ListRequest, ListResponse>(static_cast<BioNodeId>(nid),

@@ -18,7 +18,7 @@ usage() {
     echo " 6 ./build.sh -t release --build_kv_python ON // Build UBSIO-KV Python binding and wheel"
     echo " 7 ./build.sh -t release --pkg // Copy built libraries to dist/lib"
     echo " 8 ./build.sh -t release --pkg /tmp/boostio-lib // Copy built libraries to specified directory"
-    echo " 9 ./build.sh --prepare_3rdparty // Download pinned third-party sources for offline builds"
+    echo " 9 ./build.sh --prepare_3rdparty // Download third-party sources for offline builds"
     echo "Environment: UBSIO_HCOM_ENABLE_RDMA=<ON|OFF> (default: ON; default with --pkg: OFF)"
     echo
     exit 1;
@@ -76,6 +76,9 @@ package_libs() {
         libbio_server.so \
         libbio_tracepoint.so \
         libbio_underfs.so \
+        libhcom.so \
+        libhcom.so.0 \
+        libhcom.so.0.0.1 \
         libhtracer.so \
         libock_interceptor.so \
         libock_iofwd_proxy.so \

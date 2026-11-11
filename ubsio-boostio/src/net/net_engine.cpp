@@ -13,7 +13,6 @@
 #include <iostream>
 #include <arpa/inet.h>
 #include <ifaddrs.h>
-#include <climits>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
@@ -32,7 +31,19 @@
 
 namespace ock {
 namespace bio {
-using namespace ock::hcom;
+namespace {
+std::atomic<NetEngine *> gIpcEngine{nullptr};
+std::atomic<NetEngine *> gRpcEngine{nullptr};
+constexpr const char *UNBOUND_CPU_RANGE = "4294967295-4294967295";
+NetEngine *TlsEngine(const char *name)
+{
+    if (name == nullptr) {
+        return nullptr;
+    }
+    return name == IPC_SERVICE_NAME ? gIpcEngine.load() :
+        (name == RPC_SERVICE_NAME ? gRpcEngine.load() : nullptr);
+}
+}
 
 constexpr uint16_t WKR_GRP_INDEX_CTRL = 0L;
 constexpr uint16_t WKR_GRP_INDEX_DATA = 1L;
@@ -45,6 +56,9 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
         return BIO_OK;
     }
 
+    if (!HcomApi::Instance().Load()) {
+        return BIO_ERR;
+    }
     auto netLog = NetLog::Instance();
     if (netLog == nullptr) {
         NET_LOG_ERROR("Make net log failed.");
@@ -92,12 +106,7 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
             return ret;
         }
     }
-    auto serviceLog = UBSHcomNetOutLogger::Instance();
-    if (serviceLog == nullptr) {
-        NET_LOG_ERROR("Make net service log fail.");
-        return BIO_ALLOC_FAIL;
-    }
-    serviceLog->SetExternalLogFunction(func);
+    HcomApi::Instance().ubs_hcom_set_log_handler(func);
     mStarted = true;
     return BIO_OK;
 }
@@ -152,17 +161,19 @@ void NetEngine::StopInner()
         mMrBlockPool = nullptr;
     }
 
-    if (mRpcService != nullptr) {
-        if (!mLocalMr.GetHcomMrs().empty()) {
-            mRpcService->DestroyMemoryRegion(mLocalMr);
+    if (mRpcService != 0) {
+        if (mLocalMr.IsValid()) {
+            DestroyMemoryRegion(mLocalMr);
         }
-        mRpcService->Destroy(RPC_SERVICE_NAME);
-        mRpcService = nullptr;
+        HcomApi::Instance().ubs_hcom_service_destroy(mRpcService, RPC_SERVICE_NAME.c_str());
+        gRpcEngine = nullptr;
+        mRpcService = 0;
     }
 
-    if (mIpcService != nullptr) {
-        mIpcService->Destroy(IPC_SERVICE_NAME);
-        mIpcService = nullptr;
+    if (mIpcService != 0) {
+        HcomApi::Instance().ubs_hcom_service_destroy(mIpcService, IPC_SERVICE_NAME.c_str());
+        gIpcEngine = nullptr;
+        mIpcService = 0;
     }
 
     mDataChannelMgr = nullptr;
@@ -216,8 +227,11 @@ void NetEngine::DestroyShmFdWithPid(int32_t &shmFd, uint8_t *addr, uint32_t pid,
 
 BResult NetEngine::InitCommMemAllocator()
 {
+    if (mLocalMr.IsValid() && mMrBlockPool != nullptr) {
+        return BIO_OK;
+    }
     auto result = RegisterMemoryRegion(mOptions.memorySize, mLocalMr);
-    if (result != BIO_OK || mLocalMr.GetHcomMrs().empty()) {
+    if (result != BIO_OK || !mLocalMr.IsValid()) {
         NET_LOG_ERROR("Failed to register mr by size " << mOptions.memorySize);
         return result;
     }
@@ -234,10 +248,10 @@ BResult NetEngine::InitCommMemAllocator()
         NET_LOG_ERROR("Failed to start block pool " << mOptions.memorySize << ".");
     } else {
         NET_LOG_INFO("Succeed to start comm memory pool success, size:" << mOptions.memorySize << ", key:" <<
-            mLocalMr.GetHcomMrs()[0]->GetLKey() << ".");
+            mLocalMr.GetKey() << ".");
     }
     LOG_INFO("Register common memory success, size:" << mOptions.memorySize << ", Key:"
-        << mLocalMr.GetHcomMrs()[0]->GetLKey());
+        << mLocalMr.GetKey());
     return result;
 }
 
@@ -270,7 +284,7 @@ BResult NetEngine::InitShmMemAllocator()
     mShmSize = mOptions.memorySize;
 
     result = RegisterMemoryRegion(mShareAddress, mOptions.memorySize, mLocalMr);
-    if (result != BIO_OK || mLocalMr.GetHcomMrs().empty()) {
+    if (result != BIO_OK || !mLocalMr.IsValid()) {
         close(mShmFd);
         mShmFd = -1;
         return result;
@@ -290,7 +304,7 @@ BResult NetEngine::InitShmMemAllocator()
         mShmFd = -1;
     } else {
         NET_LOG_INFO("Succeed to start share memory pool success, size:" << mOptions.memorySize << ", shmOffset:" <<
-            mShareOffset << ", key:" << mLocalMr.GetHcomMrs()[0]->GetLKey() << ".");
+            mShareOffset << ", key:" << mLocalMr.GetKey() << ".");
     }
     return result;
 }
@@ -310,19 +324,19 @@ BResult ValidateTlsCert(const NetOptions &opt)
         return BIO_ERR;
     }
     std::string checkCerPath = opt.caCerPath;
-    if (!CanonicalPath(checkCerPath)) {
+    if (!FileUtil::CanonicalPath(checkCerPath)) {
         NET_LOG_ERROR("TLS cacert path check failed ");
         return BIO_ERR;
     }
     NET_LOG_INFO("TLS cacert path check success");
     checkCerPath = opt.certificationPath;
-    if (!CanonicalPath(checkCerPath)) {
+    if (!FileUtil::CanonicalPath(checkCerPath)) {
         NET_LOG_ERROR("TLS cert path check failed ");
         return BIO_ERR;
     }
     NET_LOG_INFO("TLS cert path check success ");
     checkCerPath = opt.privateKeyPath;
-    if (!CanonicalPath(checkCerPath)) {
+    if (!FileUtil::CanonicalPath(checkCerPath)) {
         NET_LOG_ERROR("TLS privateKey path check failed ");
         return BIO_ERR;
     }
@@ -330,141 +344,194 @@ BResult ValidateTlsCert(const NetOptions &opt)
     return BIO_OK;
 }
 
-void NetEngine::SetDriverTlsCallback(const NetOptions &options, ock::hcom::UBSHcomTlsOptions &tlsOpt)
+BResult NetEngine::RegisterMemoryRegionInner(uintptr_t address, uint64_t size, MemoryRegion &mr)
 {
-    auto tlsCertificationCallback = ([&options](const std::string &name, std::string &path) {
-        path = options.certificationPath;
-        NET_LOG_INFO("Get client cert success.");
-        return true;
-    });
-    tlsOpt.cfCb = tlsCertificationCallback;
+    auto &api = HcomApi::Instance();
+    if (mr.IsValid()) {
+        return BIO_INVALID_PARAM;
+    }
+    int ret = address == 0 ? api.ubs_hcom_service_register_memory_region(mRpcService, size, &mr.handle) :
+        api.ubs_hcom_service_register_assign_memory_region(mRpcService, address, size, &mr.handle);
+    if (ret != BIO_OK) {
+        return ret;
+    }
+    ret = api.ubs_hcom_service_get_memory_region_info(mr.handle, &mr.info);
+    if (ret != BIO_OK) {
+        api.ubs_hcom_service_destroy_memory_region(mRpcService, mr.handle);
+        mr = MemoryRegion{};
+    }
+    return ret;
+}
 
-    auto tlsCaCallback = ([&options](const std::string &name, std::string &capath, std::string &crlPath,
-        UBSHcomPeerCertVerifyType &verifyPeerCert, UBSHcomTLSCertVerifyCallback &cb) {
-        capath = options.caCerPath;
-        if (!options.caCrlPath.empty()) {
-            crlPath = options.caCrlPath;
-            NET_LOG_INFO("Get cacrl cert path success.");
+int NetEngine::NewIpcChannel(ubs_hcom_channel channel, const char *ipPort, uint64_t, const char *payload)
+{
+    auto ch = MakeNetChannel(channel, true);
+    auto *engine = gIpcEngine.load();
+    return engine == nullptr ? BIO_ERR : engine->NewChannel(ipPort, ch, payload);
+}
+
+int NetEngine::NewRpcChannel(ubs_hcom_channel channel, const char *ipPort, uint64_t, const char *payload)
+{
+    auto ch = MakeNetChannel(channel, true);
+    auto *engine = gRpcEngine.load();
+    return engine == nullptr ? BIO_ERR : engine->NewChannel(ipPort, ch, payload);
+}
+
+int NetEngine::BrokenChannel(ubs_hcom_channel channel, const char *, uint64_t ctx, const char *)
+{
+    reinterpret_cast<NetEngine *>(ctx)->ChannelBroken(MakeNetChannel(channel));
+    return BIO_OK;
+}
+
+int NetEngine::ReceiveRequest(ubs_hcom_service_context handle, uint64_t ctx)
+{
+    ServiceContext context(handle);
+    return reinterpret_cast<NetEngine *>(ctx)->RequestReceived(context);
+}
+
+int NetEngine::ReceiveIpcRequest(ubs_hcom_service_context handle, uint64_t ctx)
+{
+    ServiceContext context(handle);
+    return reinterpret_cast<NetEngine *>(ctx)->RequestIPCReceived(context);
+}
+
+int NetEngine::PostedRequest(ubs_hcom_service_context handle, uint64_t ctx)
+{
+    ServiceContext context(handle);
+    return reinterpret_cast<NetEngine *>(ctx)->RequestPosted(context);
+}
+
+int NetEngine::CompletedOneSide(ubs_hcom_service_context handle, uint64_t ctx)
+{
+    ServiceContext context(handle);
+    return reinterpret_cast<NetEngine *>(ctx)->OneSideDone(context);
+}
+
+int NetEngine::TlsCertificate(const char *name, char **path)
+{
+    auto *engine = TlsEngine(name);
+    if (engine == nullptr || path == nullptr) {
+        return BIO_ERR;
+    }
+    *path = const_cast<char *>(engine->mOptions.certificationPath.c_str());
+    return BIO_OK;
+}
+
+int NetEngine::TlsCa(const char *name, char **path, char **crl, ubs_hcom_peer_cert_verify_type *type,
+    ubs_hcom_tls_cert_verify *verify)
+{
+    auto *engine = TlsEngine(name);
+    if (engine == nullptr || path == nullptr || crl == nullptr || type == nullptr || verify == nullptr) {
+        return BIO_ERR;
+    }
+    *path = const_cast<char *>(engine->mOptions.caCerPath.c_str());
+    *crl = engine->mOptions.caCrlPath.empty() ? nullptr :
+        const_cast<char *>(engine->mOptions.caCrlPath.c_str());
+    *type = C_VERIFY_BY_DEFAULT;
+    *verify = nullptr;
+    return BIO_OK;
+}
+
+void NetEngine::ErasePassword(char *password, int length)
+{
+    if (password != nullptr) {
+        // Empty passwords still own one byte for the terminating NUL.
+        size_t size = length > 0 ? static_cast<size_t>(length) : 1;
+        (void)memset_s(password, size, 0, size);
+        free(password);
+    }
+}
+
+int NetEngine::TlsPrivateKey(const char *name, char **path, char **password, int *length,
+    ubs_hcom_tls_keypass_erase *erase)
+{
+    auto *engine = TlsEngine(name);
+    if (engine == nullptr || path == nullptr || password == nullptr || length == nullptr || erase == nullptr) {
+        return BIO_ERR;
+    }
+    *path = nullptr;
+    *password = nullptr;
+    *length = 0;
+    *erase = ErasePassword;
+    const auto &options = engine->mOptions;
+    if (options.privateKeyPassword.empty()) {
+        *password = static_cast<char *>(calloc(1, 1));
+        if (*password == nullptr) {
+            return BIO_ALLOC_FAIL;
         }
-        NET_LOG_INFO("Get CA cert success.");
-        verifyPeerCert = UBSHcomPeerCertVerifyType::VERIFY_BY_DEFAULT;
-        cb = [](void *, const char *) { return 0; };
-        return true;
-    });
-    tlsOpt.caCb = tlsCaCallback;
+        *path = const_cast<char *>(options.privateKeyPath.c_str());
+        return BIO_OK;
+    }
+    std::vector<char> encrypted(KEYPASS_MAX_LEN, 0);
+    std::ifstream stream(options.privateKeyPassword);
+    if (!stream.is_open() || !stream.getline(encrypted.data(), KEYPASS_MAX_LEN)) {
+        return BIO_ERR;
+    }
+    std::vector<char> plain(KEYPASS_MAX_LEN, 0);
+    size_t plainLen = plain.size();
+    int ret = engine->mDecryptHandler(encrypted.data(), strlen(encrypted.data()), plain.data(), &plainLen);
+    if (ret != BIO_OK || plainLen > plain.size()) {
+        (void)memset_s(plain.data(), plain.size(), 0, plain.size());
+        return BIO_ERR;
+    }
+    size_t allocation = plainLen == 0 ? 1 : plainLen;
+    *password = static_cast<char *>(calloc(allocation, 1));
+    if (*password != nullptr && plainLen != 0) {
+        ret = memcpy_s(*password, allocation, plain.data(), plainLen);
+    }
+    (void)memset_s(plain.data(), plain.size(), 0, plain.size());
+    if (*password == nullptr || ret != BIO_OK) {
+        ErasePassword(*password, static_cast<int>(allocation));
+        *password = nullptr;
+        return BIO_ERR;
+    }
+    *path = const_cast<char *>(options.privateKeyPath.c_str());
+    *length = static_cast<int>(plainLen);
+    return BIO_OK;
+}
 
-    auto tlsPrivateKeyCallback = (
-            [this, &options](const std::string &name, std::string &path, void *&pwd, int &len,
-                             UBSHcomTLSEraseKeypass &erase) {
-                if (options.privateKeyPassword.empty()) {
-                    pwd = nullptr;
-                    len = 0;
-                    path = options.privateKeyPath;
-                    LOG_WARN("private key password is empty, use unencrypted key path.");
-                    return true;
-                }
-
-                std::vector<char> encryptedKeyPass(KEYPASS_MAX_LEN, 0);
-                std::ifstream fileStream(options.privateKeyPassword);
-                if (!fileStream.is_open()) {
-                    LOG_ERROR("Failed to open keyPassFile: " << options.privateKeyPassword);
-                    return false;
-                }
-
-                if (!fileStream.getline(encryptedKeyPass.data(), KEYPASS_MAX_LEN)) {
-                    LOG_ERROR("Failed to read keyPassFile");
-                    return false;
-                }
-
-                size_t actualLen = strlen(encryptedKeyPass.data());
-                std::vector<char> plainTextBuffer(KEYPASS_MAX_LEN, 0);
-                size_t plainTextLen = KEYPASS_MAX_LEN;
-                auto ret = mDecryptHandler(encryptedKeyPass.data(), actualLen, plainTextBuffer.data(), &plainTextLen);
-                if (ret != 0) {
-                    std::fill(plainTextBuffer.begin(), plainTextBuffer.end(), 0);
-                    LOG_ERROR("Decrypt failed with error: " << ret);
-                    return false;
-                }
-
-                path = options.privateKeyPath;
-                pwd = malloc(plainTextLen);
-                len = static_cast<int>(plainTextLen);
-                if (!pwd) {
-                    std::fill(plainTextBuffer.begin(), plainTextBuffer.end(), 0);
-                    LOG_ERROR("Memory allocation failed.");
-                    return false;
-                }
-
-                ret = memcpy_s(pwd, plainTextLen, plainTextBuffer.data(), plainTextLen);
-                if (ret != 0) {
-                    std::fill(plainTextBuffer.begin(), plainTextBuffer.end(), 0);
-                    free(pwd);
-                    pwd = nullptr;
-                    LOG_ERROR("Memory copy failed.");
-                    return false;
-                }
-
-                erase = [](void *pass, int len) {
-                    if (pass && len > 0) {
-                        (void)memset_s(pass, len, 0, len);
-                        free(pass);
-                        pass = nullptr;
-                    }
-                };
-
-                std::fill(plainTextBuffer.begin(), plainTextBuffer.end(), 0);
-                return true;
-            });
-    tlsOpt.pkCb = tlsPrivateKeyCallback;
+BResult NetEngine::ConfigureTls(ubs_hcom_service service, const NetOptions &options)
+{
+    if (options.enableTls && ValidateTlsCert(options) != BIO_OK) {
+        return BIO_ERR;
+    }
+    HcomApi::Instance().ubs_hcom_service_set_tls_opt(service, options.enableTls,
+        C_SERVICE_TLS_1_3, C_SERVICE_AES_GCM_128, TlsCertificate, TlsPrivateKey, TlsCa, nullptr, nullptr);
+    return BIO_OK;
 }
 
 BResult NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr)
 {
-    std::pair<uint32_t, uint32_t> workerGroupCpuIdsRange = {UINT32_MAX, UINT32_MAX};
-    mIpcService->AddWorkerGroup(NO_1, opt.handlerCount, workerGroupCpuIdsRange);
+    HcomApi::Instance().ubs_hcom_service_add_workergroup(mIpcService, 0, WKR_GRP_INDEX_DATA,
+        opt.handlerCount, UNBOUND_CPU_RANGE, 0);
 
-    UBSHcomHeartBeatOptions hbOpt;
-    hbOpt.heartBeatIdleSec = NO_5;
-    hbOpt.heartBeatProbeIntervalSec = NO_1;
-    mIpcService->SetHeartBeatOptions(hbOpt);
-    mIpcService->SetMaxSendRecvDataCount(NO_1024);
-    mIpcService->SetSendQueueSize(NO_128);
-    mIpcService->SetCompletionQueueDepth(NO_8192);
-    mIpcService->SetPollingBatchSize(NO_16);
-    mIpcService->SetQueuePrePostSize(NO_64);
-    mIpcService->SetEventPollingTimeOutUs(NO_1000);
-    mIpcService->SetMaxConnectionCount(NO_4096 * NO_1024);
+    constexpr uint16_t IPC_HEARTBEAT_PROBES = 7;
+    HcomApi::Instance().ubs_hcom_service_set_heartbeat_opt(mIpcService, NO_5, IPC_HEARTBEAT_PROBES, NO_1);
+    HcomApi::Instance().ubs_hcom_service_set_max_send_recv_data_cnt(mIpcService, NO_1024);
+    HcomApi::Instance().ubs_hcom_service_set_sq_size(mIpcService, NO_128);
+    HcomApi::Instance().ubs_hcom_service_set_cq_depth(mIpcService, NO_8192);
+    HcomApi::Instance().ubs_hcom_service_set_polling_batchsize(mIpcService, NO_16);
+    HcomApi::Instance().ubs_hcom_service_set_prepost_size(mIpcService, NO_64);
+    HcomApi::Instance().ubs_hcom_service_set_polling_timeoutus(mIpcService, NO_1000);
+    HcomApi::Instance().ubs_hcom_service_set_max_connection_cnt(mIpcService, NO_4096 * NO_1024);
     if (isOobSvr) {
         const std::string listenerUrl = "uds://" + UDS_NAME;
-        auto ret = mIpcService->Bind(listenerUrl, std::bind(&NetEngine::NewChannel, this, std::placeholders::_1,
-            std::placeholders::_2, std::placeholders::_3));
+        auto ret = HcomApi::Instance().ubs_hcom_service_bind(mIpcService, listenerUrl.c_str(), NewIpcChannel);
         if (UNLIKELY(ret != BIO_OK)) {
             NET_LOG_ERROR("Net tls callback has created.");
             return ret;
         }
     }
 
-    UBSHcomTlsOptions tlsOpt;
-    tlsOpt.enableTls = opt.enableTls;
-    if (opt.enableTls) {
-        if (ValidateTlsCert(mOptions) != BIO_OK) {
-            NET_LOG_ERROR("Failed to enable Ipc TLS service , enableTls:" << opt.enableTls << ".");
-            return BIO_ERR;
-        }
-        SetDriverTlsCallback(mOptions, tlsOpt);
-        NET_LOG_INFO("Net tls callback has created.");
+    if (ConfigureTls(mIpcService, mOptions) != BIO_OK) {
+        return BIO_ERR;
     }
-    mIpcService->SetTlsOptions(tlsOpt);
-
-    mIpcService->RegisterChannelBrokenHandler(std::bind(&NetEngine::ChannelBroken, this, std::placeholders::_1),
-                                              UBSHcomChannelBrokenPolicy::BROKEN_ALL);
-    if (reqExecutorNum > NO_32) {
-        mIpcService->RegisterRecvHandler(std::bind(&NetEngine::RequestReceived, this, std::placeholders::_1));
-    } else {
-        mIpcService->RegisterRecvHandler(std::bind(&NetEngine::RequestIPCReceived, this, std::placeholders::_1));
-    }
-    mIpcService->RegisterSendHandler(std::bind(&NetEngine::RequestPosted, this, std::placeholders::_1));
-    mIpcService->RegisterOneSideHandler(std::bind(&NetEngine::OneSideDone, this, std::placeholders::_1));
+    auto &api = HcomApi::Instance();
+    auto owner = reinterpret_cast<uint64_t>(this);
+    api.ubs_hcom_service_register_broken_handler(mIpcService, BrokenChannel, C_CHANNEL_BROKEN_ALL, owner);
+    api.ubs_hcom_service_register_handler(mIpcService, C_SERVICE_REQUEST_RECEIVED, (reqExecutorNum > NO_32 ? ReceiveRequest : ReceiveIpcRequest), owner);
+    api.ubs_hcom_service_register_handler(mIpcService, C_SERVICE_REQUEST_POSTED, PostedRequest, owner);
+    api.ubs_hcom_service_register_handler(mIpcService, C_SERVICE_READWRITE_DONE, CompletedOneSide, owner);
     return BIO_OK;
 }
 
@@ -472,7 +539,7 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
 {
     int result = BIO_ERR;
 
-    if (mIpcService != nullptr) {
+    if (mIpcService != 0) {
         NET_LOG_INFO("Net ipc service has already created.");
         return BIO_OK;
     }
@@ -481,19 +548,21 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
         mOptions = opt;
     }
 
-    UBSHcomServiceOptions options;
+    ubs_hcom_service_options options{};
     options.maxSendRecvDataSize = (NO_64 * NO_1024);
     options.workerGroupId = 0;
     options.workerGroupThreadCount = opt.handlerCount;
     options.workerThreadPriority = 0;
-    options.workerGroupMode = opt.isBusyLoop ? UBSHcomNetDriverWorkingMode::NET_BUSY_POLLING :
-                              UBSHcomNetDriverWorkingMode::NET_EVENT_POLLING;
-    mIpcService = UBSHcomService::Create(opt.protocol, IPC_SERVICE_NAME, options);
-    if (mIpcService == nullptr) {
+    options.workerGroupMode = opt.isBusyLoop ? C_SERVICE_BUSY_POLLING :
+                              C_SERVICE_EVENT_POLLING;
+    result = HcomApi::Instance().ubs_hcom_service_create(static_cast<ubs_hcom_service_type>(opt.protocol),
+        IPC_SERVICE_NAME.c_str(), options, &mIpcService);
+    if (result != BIO_OK || mIpcService == 0) {
         NET_LOG_ERROR("Failed to create ipc service instance, protocol:" << opt.protocol << ".");
         return BIO_ERR;
     }
 
+    gIpcEngine = this;
     if (opt.enableTls) {
         result = PrepareTlsDecrypter(opt);
         if (result != BIO_OK) {
@@ -504,13 +573,13 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
 
     result = AssignIpcServiceOptions(opt, isOobSvr);
     if (result != BIO_OK) {
-        NET_LOG_ERROR("Failed to assign ipc service options, result:" << UBSHcomNetErrStr(result) << ".");
+        NET_LOG_ERROR("Failed to assign ipc service options, result:" << HcomApi::Instance().ubs_hcom_err_str(result) << ".");
         return result;
     }
 
-    result = mIpcService->Start();
+    result = HcomApi::Instance().ubs_hcom_service_start(mIpcService);
     if (result != BIO_OK) {
-        NET_LOG_ERROR("Failed to start ipc service, result:" << UBSHcomNetErrStr(result) << ".");
+        NET_LOG_ERROR("Failed to start ipc service, result:" << HcomApi::Instance().ubs_hcom_err_str(result) << ".");
         return BIO_ERR;
     }
 
@@ -529,49 +598,37 @@ BResult NetEngine::AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr)
         return BIO_ERR;
     }
 
-    std::pair<uint32_t, uint32_t> workerGroupCpuIdsRange = {UINT32_MAX, UINT32_MAX};
-    mRpcService->AddWorkerGroup(1, opt.handlerCount, workerGroupCpuIdsRange);
+    HcomApi::Instance().ubs_hcom_service_add_workergroup(mRpcService, 0, WKR_GRP_INDEX_DATA,
+        opt.handlerCount, UNBOUND_CPU_RANGE, 0);
 
-    UBSHcomHeartBeatOptions hbOpt;
-    hbOpt.heartBeatIdleSec = NO_1;
-    hbOpt.heartBeatProbeTimes = NO_1;
-    hbOpt.heartBeatProbeIntervalSec = NO_1;
-    mRpcService->SetHeartBeatOptions(hbOpt);
-    mRpcService->SetMaxSendRecvDataCount(NO_1024);
-    mRpcService->SetSendQueueSize(NO_4096);
-    mRpcService->SetRecvQueueSize(NO_2048);
-    mRpcService->SetCompletionQueueDepth(NO_2048);
-    mRpcService->SetPollingBatchSize(NO_1024);
-    mRpcService->SetQueuePrePostSize(NO_1024);
-    mRpcService->SetTcpUserTimeOutSec(NO_3);
-    mRpcService->SetDeviceIpMask({ipMask});
+    HcomApi::Instance().ubs_hcom_service_set_heartbeat_opt(mRpcService, NO_1, NO_1, NO_1);
+    HcomApi::Instance().ubs_hcom_service_set_max_send_recv_data_cnt(mRpcService, NO_1024);
+    HcomApi::Instance().ubs_hcom_service_set_sq_size(mRpcService, NO_4096);
+    HcomApi::Instance().ubs_hcom_service_set_rq_size(mRpcService, NO_2048);
+    HcomApi::Instance().ubs_hcom_service_set_cq_depth(mRpcService, NO_2048);
+    HcomApi::Instance().ubs_hcom_service_set_polling_batchsize(mRpcService, NO_1024);
+    HcomApi::Instance().ubs_hcom_service_set_prepost_size(mRpcService, NO_1024);
+    HcomApi::Instance().ubs_hcom_service_set_tcp_usr_timeout(mRpcService, NO_3);
+    HcomApi::Instance().ubs_hcom_service_set_ipmask(mRpcService, ipMask.c_str());
 
     if (isOobSvr) {
         const std::string listenerUrl = "tcp://" + goodIps.at(0) + ":" + std::to_string(port);
-        auto ret = mRpcService->Bind(listenerUrl, std::bind(&NetEngine::NewChannel, this, std::placeholders::_1,
-                                                            std::placeholders::_2, std::placeholders::_3));
+        auto ret = HcomApi::Instance().ubs_hcom_service_bind(mRpcService, listenerUrl.c_str(), NewRpcChannel);
         if (UNLIKELY(ret != BIO_OK)) {
             NET_LOG_ERROR("Net tls callback has created.");
             return ret;
         }
     }
 
-    UBSHcomTlsOptions tlsOpt;
-    tlsOpt.enableTls = opt.enableTls;
-    if (opt.enableTls) {
-        if (ValidateTlsCert(mOptions) != BIO_OK) {
-            NET_LOG_ERROR("Failed to enable Ipc TLS service.");
-            return BIO_ERR;
-        }
-        SetDriverTlsCallback(mOptions, tlsOpt);
-        NET_LOG_INFO("Net tls callback has created.");
+    if (ConfigureTls(mRpcService, mOptions) != BIO_OK) {
+        return BIO_ERR;
     }
-    mRpcService->SetTlsOptions(tlsOpt);
-    mRpcService->RegisterChannelBrokenHandler(std::bind(&NetEngine::ChannelBroken, this, std::placeholders::_1),
-                                              UBSHcomChannelBrokenPolicy::BROKEN_ALL);
-    mRpcService->RegisterRecvHandler(std::bind(&NetEngine::RequestReceived, this, std::placeholders::_1));
-    mRpcService->RegisterSendHandler(std::bind(&NetEngine::RequestPosted, this, std::placeholders::_1));
-    mRpcService->RegisterOneSideHandler(std::bind(&NetEngine::OneSideDone, this, std::placeholders::_1));
+    auto &api = HcomApi::Instance();
+    auto owner = reinterpret_cast<uint64_t>(this);
+    api.ubs_hcom_service_register_broken_handler(mRpcService, BrokenChannel, C_CHANNEL_BROKEN_ALL, owner);
+    api.ubs_hcom_service_register_handler(mRpcService, C_SERVICE_REQUEST_RECEIVED, ReceiveRequest, owner);
+    api.ubs_hcom_service_register_handler(mRpcService, C_SERVICE_REQUEST_POSTED, PostedRequest, owner);
+    api.ubs_hcom_service_register_handler(mRpcService, C_SERVICE_READWRITE_DONE, CompletedOneSide, owner);
     return BIO_OK;
 }
 
@@ -579,25 +636,27 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
 {
     int result = BIO_ERR;
 
-    if (mRpcService != nullptr) {
+    if (mRpcService != 0) {
         NET_LOG_INFO("Net rpc service has already created.");
         return BIO_OK;
     }
     mOptions = opt;
     bool isOobSvr = opt.role != Role::NET_CLIENT;
-    UBSHcomServiceOptions options;
+    ubs_hcom_service_options options{};
     options.maxSendRecvDataSize = opt.netSegmentSize * NO_1024;
     options.workerGroupId = 0;
     options.workerGroupThreadCount = opt.handlerCount;
     options.workerThreadPriority = 0;
-    options.workerGroupMode = opt.isBusyLoop ? UBSHcomNetDriverWorkingMode::NET_BUSY_POLLING :
-                              UBSHcomNetDriverWorkingMode::NET_EVENT_POLLING;
-    mRpcService = UBSHcomService::Create(opt.protocol, RPC_SERVICE_NAME, options);
-    if (mRpcService == nullptr) {
+    options.workerGroupMode = opt.isBusyLoop ? C_SERVICE_BUSY_POLLING :
+                              C_SERVICE_EVENT_POLLING;
+    result = HcomApi::Instance().ubs_hcom_service_create(static_cast<ubs_hcom_service_type>(opt.protocol),
+        RPC_SERVICE_NAME.c_str(), options, &mRpcService);
+    if (result != BIO_OK || mRpcService == 0) {
         NET_LOG_ERROR("Failed to create rpc service instance, protocol:" << opt.protocol << ".");
         return BIO_ERR;
     }
 
+    gRpcEngine = this;
     if (opt.enableTls) {
         result = PrepareTlsDecrypter(opt);
         if (result != BIO_OK) {
@@ -608,19 +667,19 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
 
     result = AssignRpcServiceOptions(opt, isOobSvr);
     if (result != BIO_OK) {
-        NET_LOG_ERROR("Failed to assign rpc service options, result:" << UBSHcomNetErrStr(result) << ".");
+        NET_LOG_ERROR("Failed to assign rpc service options, result:" << HcomApi::Instance().ubs_hcom_err_str(result) << ".");
         return BIO_ERR;
     }
 
-    result = mRpcService->Start();
+    result = HcomApi::Instance().ubs_hcom_service_start(mRpcService);
     if (result != BIO_OK) {
-        NET_LOG_ERROR("Failed to start rpc service, result:" << UBSHcomNetErrStr(result) << ".");
+        NET_LOG_ERROR("Failed to start rpc service, result:" << HcomApi::Instance().ubs_hcom_err_str(result) << ".");
         return BIO_ERR;
     }
 
     result = InitMemoryAllocator();
     if (result != BIO_OK) {
-        NET_LOG_ERROR("Failed to init mr allocator, result:" << UBSHcomNetErrStr(result) << ".");
+        NET_LOG_ERROR("Failed to init mr allocator, result:" << HcomApi::Instance().ubs_hcom_err_str(result) << ".");
         return BIO_ERR;
     }
 
@@ -739,7 +798,7 @@ int32_t NetEngine::OneSideDone(const ServiceContext &ctx)
     return BIO_OK;
 }
 
-void NetEngine::FillConnectOption(ConnectInfo &info, bool isCtrl, std::string &prefix, UBSHcomConnectOptions &op)
+void NetEngine::FillConnectOption(ConnectInfo &info, bool isCtrl, std::string &prefix, ubs_hcom_service_connect_options &op)
 {
     op.linkCount = mOptions.connCount;
     if (isCtrl) {
@@ -752,21 +811,22 @@ void NetEngine::FillConnectOption(ConnectInfo &info, bool isCtrl, std::string &p
         prefix = CONN_PAYLOAD_PREFIX_DATA;
     }
     if (info.isSelfPoll) {
-        op.mode = UBSHcomClientPollingMode::SELF_POLL_BUSY;
+        op.mode = C_CLIENT_SELF_POLL_BUSY;
     }
     NetConnPayload payload(info.srcId);
-    op.payload = payload.ToPayloadStr(prefix);
+    auto text = payload.ToPayloadStr(prefix);
+    (void)memcpy_s(op.payLoad, sizeof(op.payLoad), text.c_str(), text.size() + 1);
 }
 
 BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtrlPanel, ChannelPtr &ch)
 {
-    UBSHcomService *netService = (mode == ConnectMode::CONNECT_IPC) ? mIpcService : mRpcService;
-    if (netService == nullptr) {
+    ubs_hcom_service netService = (mode == ConnectMode::CONNECT_IPC) ? mIpcService : mRpcService;
+    if (netService == 0) {
         NET_LOG_ERROR("Net service not ready.");
         return BIO_ERR;
     }
 
-    UBSHcomConnectOptions options;
+    ubs_hcom_service_connect_options options{};
     std::string prefix;
     FillConnectOption(info, isCtrlPanel, prefix, options);
     int32_t result = 0;
@@ -774,26 +834,34 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtr
         if (mode == ConnectMode::CONNECT_IPC) {
             const std::string serverUrl = "uds://" + UDS_NAME;
 #ifndef DEBUG_UT
-            result = netService->Connect(serverUrl, ch, options);
+            ubs_hcom_channel handle = 0;
+            result = HcomApi::Instance().ubs_hcom_service_connect(netService, serverUrl.c_str(), &handle, options);
+            if (result == BIO_OK) {
+                ch = MakeNetChannel(handle, true);
+            }
 #else
             result = NetStub::Connect(serverUrl, ch, options);
 #endif
         } else {
             const std::string serverUrl = "tcp://" + info.ip + ":" + std::to_string(info.port);
 #ifndef DEBUG_UT
-            result = netService->Connect(serverUrl, ch, options);
+            ubs_hcom_channel handle = 0;
+            result = HcomApi::Instance().ubs_hcom_service_connect(netService, serverUrl.c_str(), &handle, options);
+            if (result == BIO_OK) {
+                ch = MakeNetChannel(handle, true);
+            }
 #else
             result = NetStub::Connect(serverUrl, ch, options);
 #endif
         }
         if (result == 0) {
             NET_LOG_INFO("Connect to peer success, ip " << info.ip << ", port " << info.port << ", dstNid " <<
-                info.peerId.nid << ", payload " << options.payload << ".");
+                info.peerId.nid << ", payload " << options.payLoad << ".");
             break;
         }
     }
     if (result != 0) {
-        NET_LOG_ERROR("Connect to peer failed, ret:" << UBSHcomNetErrStr(result) << ", ip " << info.ip << ", port " <<
+        NET_LOG_ERROR("Connect to peer failed, ret:" << HcomApi::Instance().ubs_hcom_err_str(result) << ", ip " << info.ip << ", port " <<
             info.port << ", nid " << info.peerId.nid << ", pid " << info.peerId.pid << ".");
         return result;
     }

@@ -51,7 +51,7 @@ fi
 echo "=== 4. Running Tests ==="
 cd ${BUILD_DIR}
 \cp -r ${PROJECT_ROOT}/dist/boostio/lib/* ${BUILD_DIR}/
-export LD_LIBRARY_PATH=${BUILD_DIR}:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH="${BUILD_DIR}:${PROJECT_ROOT}/dist/3rdparty/libboundscheck/lib:${PROJECT_ROOT}/dist/3rdparty/ubs-comm/lib:${PROJECT_ROOT}/dist/3rdparty/liburing/lib:${LD_LIBRARY_PATH:-}"
 ./bio_test --gtest_output="xml:${REPORT_DIR}/report.xml"
 
 if [ "${USE_GCOV}" -eq 1 ]; then

@@ -23,12 +23,12 @@ namespace ock {
 namespace bio {
 class NetStub {
 public:
-    static int32_t Connect(const std::string &serverUrl, ock::hcom::UBSHcomChannelPtr &ch,
-                           const ock::hcom::UBSHcomConnectOptions &opt = {});
+    static int32_t Connect(const std::string &serverUrl, ChannelPtr &ch,
+                           const ubs_hcom_service_connect_options &opt = {});
 
-    static int32_t Call(const ock::hcom::UBSHcomRequest &req, ock::hcom::UBSHcomResponse &rsp);
+    static int32_t Call(const NetCallRequest &req, NetCallResponse &rsp);
 
-    static int32_t AsyncCall(const ock::hcom::UBSHcomRequest &req, ock::hcom::UBSHcomResponse &rsp, Callback callback);
+    static int32_t AsyncCall(const NetCallRequest &req, NetCallResponse &rsp, Callback callback);
 
     static int32_t Get(const NetRequest &request);
 

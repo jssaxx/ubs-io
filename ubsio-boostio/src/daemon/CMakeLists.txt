@@ -10,7 +10,6 @@ if (${DEBUG_UT} MATCHES "OFF")
 	    -pie
         -Wl,--start-group
         pthread dl
-        hcom_lib
 		bio_server
         -Wl,--end-group)
 endif()

@@ -33,7 +33,7 @@ public:
 
     inline BResult CloneCtx(ServiceContext &oldCtx)
     {
-        auto ret = ServiceContext::Clone(mContext, oldCtx, true);
+        auto ret = ServiceContext::Clone(mContext, oldCtx);
         if (UNLIKELY(ret != BIO_OK)) {
             NET_LOG_ERROR("Failed to clone service ctx for cm event");
             return BIO_ALLOC_FAIL;
