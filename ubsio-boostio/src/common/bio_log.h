@@ -14,6 +14,7 @@
 #define BOOSTIO_BIO_LOG_H
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <sstream>
@@ -70,6 +71,18 @@ namespace bio {
 #define LOG_DEBUG(msg) BIO_LOG_INTERNAL(BIOLOG_LEVEL_DEBUG, BIO_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
 #define LOG_TRACE(msg) BIO_LOG_INTERNAL(BIOLOG_LEVEL_TRACE, BIO_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
 
+// Each call site shares its one-second window across threads. Other errors can bypass the limit.
+#define BIO_LOG_LIMIT_IF(condition, logStatement)           \
+    do {                                                   \
+        static ock::bio::LogRateLimiter bioLogRateLimiter;   \
+        if (!(condition) || bioLogRateLimiter.ShouldLog()) { \
+            logStatement;                                  \
+        }                                                  \
+    } while (0)
+
+#define LOG_WARN_LIMIT(msg) BIO_LOG_LIMIT_IF(true, LOG_WARN(msg))
+#define LOG_ERROR_LIMIT(msg) BIO_LOG_LIMIT_IF(true, LOG_ERROR(msg))
+
 #define BIO_LOG_STD_ERR(msg)                                      \
     do {                                                          \
         std::ostringstream oss;                                   \
@@ -116,6 +129,22 @@ struct LoggerOptions {
     uint32_t rotationFileSizeInMB = 50;
     uint32_t rotationFileCount = 20;
     std::string path;
+};
+
+// Share one instance across threads to emit at most one log per second.
+class LogRateLimiter {
+public:
+    bool ShouldLog()
+    {
+        const int64_t now = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+        int64_t next = mNextLogUs.load(std::memory_order_relaxed);
+        return now >= next && mNextLogUs.compare_exchange_strong(next, now + 1000000,
+            std::memory_order_relaxed);
+    }
+
+private:
+    std::atomic<int64_t> mNextLogUs{0};
 };
 
 class Logger {

@@ -105,6 +105,8 @@ private:
     void PreLoadHandle();
     void PreLoadSchedule();
     void HoldClean(uint64_t realOffset, int32_t ret, bool preLoadFlag);
+    // The caller holds mLock for writing throughout the preload completion decision.
+    void HoldCleanLocked(uint64_t realOffset, int32_t ret, bool preLoadFlag);
     BResult HoldWait(uint64_t offset);
 
 private:

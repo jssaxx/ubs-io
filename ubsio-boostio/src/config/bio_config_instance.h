@@ -51,7 +51,10 @@ const auto BIO_TRACE_ENABLE = std::make_pair("ubsio.trace.enable", "true");
 
 const auto DATA_CRC_ENABLE = std::make_pair("ubsio.data.crc.enable", "false");
 
-const auto BIO_CACHE_QOS_ENABLE = std::make_pair("ubsio.cache.qos.enable", "false");
+const auto BIO_CACHE_QOS_ENABLE = std::make_pair("ubsio.cache.qos.enable", "true");
+constexpr uint32_t QOS_DEFAULT_WATER_LEVEL = 88;
+constexpr uint32_t QOS_MAX_WATER_LEVEL = 90;
+const auto BIO_CACHE_QOS_WATER_LEVEL = std::make_pair("ubsio.cache.qos.water_level", QOS_DEFAULT_WATER_LEVEL);
 
 const auto BIO_WCACHE_NEGOTIATE_DELAY = std::make_pair("ubsio.wcache.negotiate.delay", 100);
 
@@ -195,6 +198,7 @@ public:
         bool enableCrc = false;
         bool enableTrace = true;
         bool enableQos = true;
+        uint32_t qosWaterLevel = QOS_DEFAULT_WATER_LEVEL;
         bool hasDiskCache = true;
         bool enableRCache = true;
         bool enablePrometheus = false;
@@ -328,6 +332,8 @@ private:
 
     BResult AutoConfigDaemonCache(const ConfigurationPtr &conf);
 
+    BResult AutoConfigQos(const ConfigurationPtr &conf);
+
     BResult AutoConfigDaemonDisk(const ConfigurationPtr &conf);
 
     BResult AutoConfigClient(const ConfigurationPtr &conf);
@@ -351,6 +357,7 @@ private:
     DaemonConfig mDaemonConfig;
     ClientConfig mClientConfig;
     UnderFsConfig mUnderFsConfig;
+    uint64_t mQosEvictWaterLevelLimit{ NO_100 };
     bool mStandaloneMode{ false };
     bool mInited{ false };
     StandaloneDeviceInfo mStandaloneDeviceInfo;

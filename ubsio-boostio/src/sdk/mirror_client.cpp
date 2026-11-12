@@ -1142,6 +1142,7 @@ BResult MirrorClient::PutImpl(MirrorPut &param, uint16_t ptId, CmPtInfo &ptEntry
     auto ret = AllocPutOffset(ptId, ptEntry.version, param.length, param.flowId, param.flowOffset, param.flowIndex);
     BIO_TRACE_END(SDK_TRACE_PUT_ALLOC_OFF, ret);
     if (UNLIKELY(ret != BIO_OK)) {
+        mBioQos->GetQuotaPtr()->ReturnQuota(&ptEntry, param.length);
         CLIENT_LOG_WARN("Alloc put offset failed, ret:" << ret << ", ptId:" << ptId << ", flowId:" << param.flowId <<
             ", key:" << param.key << ".");
         ret = (ret == BIO_NOT_EXISTS) ? BIO_INNER_RETRY : ret; // Flow实例不存在则内部重试.
@@ -1167,6 +1168,7 @@ BResult MirrorClient::AsyncPutImpl(MirrorPut &param, uint16_t ptId, CmPtInfo &pt
     auto ret = AllocPutOffset(ptId, ptEntry.version, param.length, param.flowId, param.flowOffset, param.flowIndex);
     BIO_TRACE_END(SDK_TRACE_PUT_ALLOC_OFF, ret);
     if (UNLIKELY(ret != BIO_OK)) {
+        mBioQos->GetQuotaPtr()->ReturnQuota(&ptEntry, param.length);
         CLIENT_LOG_WARN("Alloc put offset failed, ret:" << ret << ", ptId:" << ptId << ", flowId:" << param.flowId <<
             ", key:" << param.key << ".");
         ret = (ret == BIO_NOT_EXISTS) ? BIO_INNER_RETRY : ret; // Flow实例不存在则内部重试.
@@ -2159,6 +2161,7 @@ BResult MirrorClient::AllocSpaceImpl(uint16_t ptId, CmPtInfo &ptEntry, MirrorPut
     auto ret = AllocPutOffset(ptId, ptEntry.version, param.length, param.flowId, param.flowOffset, param.flowIndex);
     BIO_TRACE_END(SDK_TRACE_PUT_ALLOC_OFF, ret);
     if (UNLIKELY(ret != BIO_OK)) {
+        mBioQos->GetQuotaPtr()->ReturnQuota(&ptEntry, param.length);
         CLIENT_LOG_WARN("Alloc put offset failed, ret:" << ret << ", ptId:" << ptId << ", ptv:" << ptEntry.version
             << ", length:" << param.length << ".");
         return ret;

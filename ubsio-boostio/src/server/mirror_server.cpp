@@ -503,7 +503,7 @@ BResult MirrorServer::AllocCacheQuota(AllocQuotaRequest &req, AllocQuotaResponse
     BResult ret = CacheOverloadCtrl::Instance().AllocQuota(holder, req.allocQuota, rsp.exceptQuota);
     BIO_TRACE_END(MIRROR_TRACE_QOS_ALLOC, ret);
     if (ret != BIO_OK) {
-        LOG_ERROR("Alloc quota failed, ret:" << ret << ", holder:" << req.nid << "-" << req.cid << ", size:" <<
+        LOG_ERROR_LIMIT("Alloc quota failed, ret:" << ret << ", holder:" << req.nid << "-" << req.cid << ", size:" <<
             req.allocQuota << ".");
     }
     return ret;

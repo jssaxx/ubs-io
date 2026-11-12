@@ -679,7 +679,9 @@ void diagnose::BioServerCommand::Destroy() noexcept
 void diagnose::BioServerCommand::HandleModifyEvictWaterLevel(uint8_t tier, uint64_t level)
 {
     auto ori = BioConfig::Instance()->ModifyConfigEvictWaterLevel(tier, level);
-    mPrintOp("config changed tier:%u EvictWaterLevel, %lu => %lu\n", tier, ori, level);
+    const auto &config = BioConfig::Instance()->GetDaemonConfig();
+    const uint64_t effective = tier == 0 ? config.wcacheMemEvictLevel : config.wcacheDiskEvictLevel;
+    mPrintOp("config changed tier:%u EvictWaterLevel, %lu => %lu (requested %lu)\n", tier, ori, effective, level);
 }
 
 void diagnose::BioServerCommand::HandleModifyMemReadWriteRatio(const std::string &ratios)
