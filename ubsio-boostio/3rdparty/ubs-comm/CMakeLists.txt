@@ -1,84 +1,68 @@
+# Use master for the initial download; reuse any existing source checkout.
+set(HCOM_BRANCH master)
 set(SOURCE_DIR ${PROJECT_3RDPARTY_SRC_DIR}/ubs-comm/ubs-comm)
-set(BUILD_DIR ${PROJECT_BUILD_PATH}/build/ubs-comm/)
+set(BUILD_DIR ${PROJECT_BUILD_PATH}/build/ubs-comm)
 set(INSTALL_DIR ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm)
 
-set(CHECK_FILE_HCOM ${INSTALL_DIR}/include/hcom/hcom.h)
-
-find_path(HCOM_SYSTEM_INCLUDE_DIR
-        NAMES hcom/hcom.h
-        PATHS /usr/include
-        NO_DEFAULT_PATH
-)
-
-find_library(HCOM_SYSTEM_SHARED_LIBRARY
-        NAMES hcom libhcom.so
-        PATHS /usr/lib64 /usr/lib
-        NO_DEFAULT_PATH
-)
-
-if (HCOM_SYSTEM_INCLUDE_DIR AND HCOM_SYSTEM_SHARED_LIBRARY)
-    message(STATUS "Found system-installed HCOM")
-    set(USE_SYSTEM_HCOM ON)
-    set(HCOM_FINAL_INCLUDE_DIR ${HCOM_SYSTEM_INCLUDE_DIR})
-    set(HCOM_FINAL_LIBRARY ${HCOM_SYSTEM_SHARED_LIBRARY})
-else ()
-    message(STATUS "HCOM not found in system. Building from source...")
-    set(USE_SYSTEM_HCOM OFF)
-endif ()
-
-if (NOT USE_SYSTEM_HCOM)
-    set(ubs_comm_SOURCE_DIR ${SOURCE_DIR})
-    if(NOT EXISTS "${SOURCE_DIR}/CMakeLists.txt")
-        include(FetchContent)
-        FetchContent_Declare(
-                ubs_comm
-                GIT_REPOSITORY https://gitcode.com/openeuler/ubs-comm.git
-                GIT_TAG tag_BeiMing-I26.0.RC1.B013
-                SOURCE_DIR ${SOURCE_DIR}
-        )
-        FetchContent_GetProperties(ubs_comm)
-        if(NOT ubs_comm_POPULATED)
-            FetchContent_Populate(ubs_comm)
-        endif()
+if(NOT EXISTS "${SOURCE_DIR}/CMakeLists.txt")
+    include(FetchContent)
+    FetchContent_Declare(ubs_comm
+        GIT_REPOSITORY https://gitcode.com/openeuler/ubs-comm.git
+        GIT_TAG ${HCOM_BRANCH}
+        SOURCE_DIR ${SOURCE_DIR})
+    FetchContent_GetProperties(ubs_comm)
+    if(NOT ubs_comm_POPULATED)
+        FetchContent_Populate(ubs_comm)
     endif()
-
-    if (CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm)")
-        set(ENABLE_KP_OPT on)
-    else()
-        set(ENABLE_KP_OPT off)
-    endif()
-
-    if(NOT EXISTS ${CHECK_FILE_HCOM})
-        file(MAKE_DIRECTORY ${BUILD_DIR})
-
-        execute_process(
-                COMMAND ${CMAKE_COMMAND}
-                -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-                -DBUILD_TESTS=off
-                -DENABLE_ARM_KP=${ENABLE_KP_OPT}
-                -DBUILD_WITH_RDMA=${UBSIO_HCOM_ENABLE_RDMA}
-                -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}
-                ${ubs_comm_SOURCE_DIR}
-                WORKING_DIRECTORY ${BUILD_DIR}
-        )
-        execute_process(COMMAND make -j8 WORKING_DIRECTORY ${BUILD_DIR})
-        execute_process(COMMAND make install WORKING_DIRECTORY ${BUILD_DIR})
-    endif()
-
-    set(HCOM_FINAL_INCLUDE_DIR "${INSTALL_DIR}/include")
-    set(HCOM_FINAL_LIBRARY "${INSTALL_DIR}/lib/libhcom_static.a")
-endif ()
-
-if(NOT TARGET hcom_lib)
-    add_library(hcom_lib STATIC IMPORTED GLOBAL)
-
-    set_target_properties(hcom_lib PROPERTIES
-            IMPORTED_LOCATION "${HCOM_FINAL_LIBRARY}"
-            INTERFACE_INCLUDE_DIRECTORIES "${HCOM_FINAL_INCLUDE_DIR}"
-    )
-
-    set(HCOM_LIBRARIES hcom_lib CACHE INTERNAL "HCOM libraries")
-    set(HCOM_INCLUDE_DIRS "${HCOM_FINAL_INCLUDE_DIR}" CACHE INTERNAL "HCOM includes")
 endif()
 
-message(STATUS "HCOM Target defined. Lib: ${HCOM_FINAL_LIBRARY}")
+# Existing checkouts and offline archives may use another compatible revision.
+# Compile BoostIO against the headers installed with that source's runtime.
+foreach(HCOM_HEADER hcom_service_c.h hcom_c.h)
+    if(NOT EXISTS "${SOURCE_DIR}/src/hcom/api/capi_v2/${HCOM_HEADER}")
+        message(FATAL_ERROR "HCOM C API header ${HCOM_HEADER} is missing. Prepare compatible HCOM sources first.")
+    endif()
+endforeach()
+
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm)")
+    set(ENABLE_KP_OPT ON)
+else()
+    set(ENABLE_KP_OPT OFF)
+endif()
+
+get_target_property(HCOM_BOUNDSCHECK_INCLUDE boundscheck_lib INTERFACE_INCLUDE_DIRECTORIES)
+find_library(HCOM_BOUNDSCHECK_LIBRARY NAMES boundscheck
+    PATHS /usr/lib64 /usr/lib ${PROJECT_3RDPARTY_BIN_DIR}/libboundscheck/lib)
+if(NOT HCOM_BOUNDSCHECK_LIBRARY)
+    message(FATAL_ERROR "HCOM requires the BoostIO boundscheck runtime")
+endif()
+file(MAKE_DIRECTORY ${BUILD_DIR})
+# Configure on every BoostIO configure so changed feature flags cannot reuse a
+# runtime built with incompatible options. The actual compilation is incremental.
+execute_process(COMMAND ${CMAKE_COMMAND}
+    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+    -DBUILD_TESTS=OFF -DBUILD_HCOM=ON -DBUILD_UBSOCKET=OFF
+    -DENABLE_ARM_KP=${ENABLE_KP_OPT} -DBUILD_WITH_RDMA=${UBSIO_HCOM_ENABLE_RDMA}
+    -DLIBBOUNDSCHECK_INCLUDE_DIR=${HCOM_BOUNDSCHECK_INCLUDE}
+    -DLIBBOUNDSCHECK_SHARED_LIBRARY=${HCOM_BOUNDSCHECK_LIBRARY}
+    -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} ${SOURCE_DIR}
+    WORKING_DIRECTORY ${BUILD_DIR} RESULT_VARIABLE HCOM_CONFIG_RESULT)
+if(NOT HCOM_CONFIG_RESULT EQUAL 0)
+    message(FATAL_ERROR "Failed to configure HCOM")
+endif()
+execute_process(COMMAND ${CMAKE_COMMAND} --build ${BUILD_DIR} --parallel 8
+    RESULT_VARIABLE HCOM_BUILD_RESULT)
+if(NOT HCOM_BUILD_RESULT EQUAL 0)
+    message(FATAL_ERROR "Failed to build HCOM")
+endif()
+execute_process(COMMAND ${CMAKE_COMMAND} --install ${BUILD_DIR}
+    RESULT_VARIABLE HCOM_INSTALL_RESULT)
+if(NOT HCOM_INSTALL_RESULT EQUAL 0)
+    message(FATAL_ERROR "Failed to install HCOM")
+endif()
+
+add_library(hcom_headers INTERFACE)
+target_include_directories(hcom_headers INTERFACE ${INSTALL_DIR}/include)
+# The runtime is loaded with dlopen, never linked into BoostIO.
+install(DIRECTORY ${INSTALL_DIR}/lib/ DESTINATION ${TARGET_INSTALL_LIB_DIR}
+    FILES_MATCHING PATTERN "libhcom.so*")

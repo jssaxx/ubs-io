@@ -17,8 +17,7 @@
 #include <functional>
 #include <utility>
 
-#include "hcom/hcom_service.h"
-#include "hcom/hcom_service_context.h"
+#include "net_hcom_types.h"
 #include "bio_err.h"
 #include "bio_types.h"
 #include "bio_ref.h"
@@ -32,15 +31,9 @@ struct NewChannelResp {
     int32_t result = 0; /* if 0, means a good client, otherwise reject */
 };
 
-using ChannelPtr = ock::hcom::UBSHcomChannelPtr;
-using ServiceContext = ock::hcom::UBSHcomServiceContext;
 using NewRequestHandler = std::function<int32_t(ServiceContext &)>;
 using NewChannelHandler = std::function<int32_t(const ChannelPtr &, const std::string &ipPort, NewChannelResp &)>;
 using ChannelBrokenHandler = std::function<void(uint32_t nodeId, uint32_t procId)>;
-using ServiceProtocol = ock::hcom::UBSHcomServiceProtocol;
-using MemoryRegion = ock::hcom::UBSHcomRegMemoryRegion;
-using NetRequest = ock::hcom::UBSHcomOneSideRequest;
-using NetCallback = ock::hcom::Callback;
 
 using CbFunc = std::function<void(void *ctx, void *resp, uint32_t len, int32_t result)>;
 struct Callback {

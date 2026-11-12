@@ -50,9 +50,10 @@ apply_patch_once() {
     local dst=$3
 
     echo "Applying ${name} patch at ${dst}"
-    if git -C "${dst}" apply -p1 --check "${patch_file}"; then
-        git -C "${dst}" apply -p1 "${patch_file}"
-    elif git -C "${dst}" apply -p1 --reverse --check "${patch_file}"; then
+    # Upstream CMake files may use CRLF while the patch uses LF.
+    if git -C "${dst}" apply --ignore-space-change --unidiff-zero -p1 --check "${patch_file}"; then
+        git -C "${dst}" apply --ignore-space-change --unidiff-zero -p1 "${patch_file}"
+    elif git -C "${dst}" apply --ignore-space-change --unidiff-zero -p1 --reverse --check "${patch_file}"; then
         echo "  ${name} patch already applied."
     else
         echo "Failed to apply ${name} patch: ${patch_file}" >&2
@@ -86,8 +87,12 @@ fetch_repo "spdlog" "https://gitcode.com/GitHub_Trending/sp/spdlog.git" \
 # to avoid fetching an unused dependency during offline source preparation.
 # fetch_repo "prometheus-cpp" "https://gitcode.com/gh_mirrors/pr/prometheus-cpp.git" \
 #     "v1.2.4" "${PROJ_DIR}/3rdparty/prometheus/prometheus"
-fetch_repo "ubs-comm" "https://gitcode.com/openeuler/ubs-comm.git" \
-    "tag_BeiMing-I26.0.RC1.B013" "${UBS_COMM_DIR}"
+if [[ -f "${UBS_COMM_DIR}/CMakeLists.txt" ]]; then
+    echo "Reusing existing ubs-comm sources at ${UBS_COMM_DIR}"
+else
+    fetch_repo "ubs-comm" "https://gitcode.com/openeuler/ubs-comm.git" \
+        "master" "${UBS_COMM_DIR}"
+fi
 
 fetch_repo "ubs-comm libboundscheck" "https://gitcode.com/openeuler/libboundscheck.git" \
     "v1.1.16" "${UBS_COMM_OFFLINE_DIR}/libboundscheck"

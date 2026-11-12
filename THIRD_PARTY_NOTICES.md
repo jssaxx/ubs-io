@@ -26,10 +26,12 @@
 | libboundscheck | 安全函数依赖；优先使用系统安装，缺失时从源码构建。 | `https://gitcode.com/openeuler/libboundscheck.git`，`v1.1.16` | 以 openEuler libboundscheck 上游声明为准，通常随 Mulan PSL v2 发布。 |
 | liburing | Linux `io_uring` 异步 I/O 依赖；优先使用系统安装，缺失时从源码构建。 | `https://gitcode.com/gh_mirrors/li/liburing.git`，`liburing-2.6` | 以上游 liburing 的 LICENSE、COPYING 声明为准。 |
 | spdlog | 日志库，作为 BoostIO 三方依赖构建。 | `https://gitcode.com/GitHub_Trending/sp/spdlog.git`，`v1.15.3` | 以上游 spdlog 许可证声明为准。 |
-| ubs-comm | UB 通信相关依赖；优先使用系统 HCOM，缺失时从源码构建。 | `https://gitcode.com/openeuler/ubs-comm.git`，`tag_BeiMing-I26.0.RC1.B013` | 以上游 ubs-comm 许可证声明为准。 |
+| ubs-comm | HCOM 通信依赖；从源码构建 HCOM 动态库（`libhcom.so.0`），通过 `dlopen`/`dlsym` 调用其 C 接口。 | `https://gitcode.com/openeuler/ubs-comm.git`；源码缺失时拉取 `master`，已有源码允许使用其他分支或提交。 | 以上游 ubs-comm 许可证声明为准。 |
 | umdk | ubs-comm 离线构建所需依赖源码。 | `https://atomgit.com/openeuler/umdk.git`，`br_openEuler_24.03_LTS_SP3` | 以上游 umdk 许可证声明为准。 |
 
 `ubsio-boostio/3rdparty/prepare_sources.sh` 会准备 libboundscheck、liburing、spdlog 和 ubs-comm，并为 ubs-comm 的离线构建额外准备 libboundscheck 和 umdk。脚本会将四个顶层依赖源码打包为 `ubsio-boostio/dist/BoostIO_3rdparty_sources.tar.gz`，供离线环境随工程代码一起带入目标环境。
+
+ubs-comm 仅在源码目录缺失时拉取当时最新的 `master` 分支。普通构建和离线源码准备都会复用已有 HCOM 源码，允许使用其他分支、指定提交或离线源码包，不会自动切换版本；更新已有源码需显式执行拉取或切换。所选源码需提供兼容的 HCOM C 接口，BoostIO 使用该份源码构建、安装的 HCOM 头文件和动态库，部署时应一并更新。
 
 ## 头文件和可选依赖
 

@@ -15,6 +15,8 @@
 
 #include <cstdio>
 #include <cstdint>
+#include <cstring>
+#include <ctime>
 #include <iostream>
 #include <sstream>
 #include <sys/time.h>
