@@ -213,15 +213,19 @@ BResult Cache::GetFromUnderFS(const Key &key, WCacheSlicePtr &slice, const size_
     BResult ret = BIO_INNER_ERR;
     std::vector<FlowAddr> addrVec = slice->GetAddrs();
     if (LIKELY(addrVec.size() == NO_1)) {
+        BIO_TRACE_START(SDK_TRACE_GET_TO_UNDERFS);
         ret = UfsHelper::Instance()->Get(key, reinterpret_cast<char *>(addrVec[0].chunkId + addrVec[0].chunkOffset),
             length, offset);
+        BIO_TRACE_END(SDK_TRACE_GET_TO_UNDERFS, ret);
         if (ret != BIO_OK) {
             LOG_ERROR("Failed to get from underFs failed, ret:" << ret << ", key:" << key << ", len:" << length << ".");
         }
     } else {
         void *value = aligned_alloc(NO_4096, length);
         ChkTrue(value != nullptr, BIO_ALLOC_FAIL, "Alloc memory aligned failed.");
+        BIO_TRACE_START(SDK_TRACE_GET_TO_UNDERFS);
         ret = UfsHelper::Instance()->Get(key, reinterpret_cast<char *>(value), length, offset);
+        BIO_TRACE_END(SDK_TRACE_GET_TO_UNDERFS, ret);
         if (ret != BIO_OK) {
             LOG_ERROR("Failed to get from underFs failed, ret:" << ret << ", key:" << key << ", len:" << length << ".");
             free(value);
@@ -240,7 +244,9 @@ BResult Cache::GetValueLengthFromUnderFS(const Key &key, uint64_t readLen, uint6
     uint64_t &realLen)
 {
     UfsHelper::ObjStat stat;
+    BIO_TRACE_START(UFS_FLOW_TRACE_STAT);
     auto ret = UfsHelper::Instance()->Stat(key, stat);
+    BIO_TRACE_END(UFS_FLOW_TRACE_STAT, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Stat key from under fs failed, ret:" << ret << ", key:" << key << ".");
         return ret;
@@ -358,8 +364,10 @@ BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr
         // 3. 从underFS读取数据.
         if (directUnderFsRead) {
             size_t readLen = 0;
+            BIO_TRACE_START(SDK_TRACE_GET_TO_UNDERFS);
             ret = UfsHelper::Instance()->GetWithRealLen(key, reinterpret_cast<char *>(memAddr),
                 slice->GetLength(), offset, readLen);
+            BIO_TRACE_END(SDK_TRACE_GET_TO_UNDERFS, ret);
             realLen = static_cast<uint64_t>(readLen);
         } else if (isFromRCache) {
             ret = GetFromUnderFS(key, wcSlicePtr, totalLen, 0);
@@ -523,7 +531,9 @@ BResult Cache::GetUnderFsDirect(const Key &key, uint64_t offset, const RCacheSli
     }
 
     char *value = reinterpret_cast<char *>(addrVec[0].chunkId + addrVec[0].chunkOffset);
+    BIO_TRACE_START(SDK_TRACE_GET_TO_UNDERFS);
     BResult ret = UfsHelper::Instance()->Get(key, value, slice->GetLength(), offset);
+    BIO_TRACE_END(SDK_TRACE_GET_TO_UNDERFS, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         return ret;
     }
@@ -568,7 +578,9 @@ BResult Cache::StatUnderFsDirect(const Key &key, CacheObjStat &cacheObjStat)
     }
 
     UfsHelper::ObjStat stat;
+    BIO_TRACE_START(UFS_FLOW_TRACE_STAT);
     BResult ret = UfsHelper::Instance()->Stat(key, stat);
+    BIO_TRACE_END(UFS_FLOW_TRACE_STAT, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Get key " << key << " stat from under fs failed, error code: " << ret);
     } else {
@@ -585,7 +597,10 @@ BResult Cache::ExistUnderFsDirect(const Key &key)
     if (!mUfsEnable) {
         return BIO_NOT_EXISTS;
     }
-    return UfsHelper::Instance()->Exist(key);
+    BIO_TRACE_START(UFS_FLOW_TRACE_EXIST);
+    BResult ret = UfsHelper::Instance()->Exist(key);
+    BIO_TRACE_END(UFS_FLOW_TRACE_EXIST, ret);
+    return ret;
 }
 
 bool Cache::Exist(uint16_t ptId, const Key &key)
@@ -612,9 +627,11 @@ BResult Cache::List(char *prefix, uint16_t ptId, bool force, std::unordered_map<
 
     if (mUfsEnable && force) {
         std::unordered_map<std::string, UfsHelper::ObjStat> underStatInfo;
+        BIO_TRACE_START(UFS_FLOW_TRACE_LIST);
         BIO_TP_START(UNDERFS_INIT_FAIL, &ret, BIO_ERR);
         ret = UfsHelper::Instance()->List(prefix, underStatInfo);
         BIO_TP_END;
+        BIO_TRACE_END(UFS_FLOW_TRACE_LIST, ret);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("UnderFS list failed, ret:" << ret << ", prefix:" << prefix << ".");
             return ret;
@@ -660,7 +677,9 @@ BResult Cache::Delete(uint16_t ptId, const Key &key)
     }
 
     if (mUfsEnable) {  // 使能underfs才去从后端删除key.
+        BIO_TRACE_START(UFS_FLOW_TRACE_DELETE);
         ret = UfsHelper::Instance()->Delete(key);
+        BIO_TRACE_END(UFS_FLOW_TRACE_DELETE, ret);
         if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
             LOG_ERROR("Under fs delete failed, ret:" << ret << ", key " << key << ".");
             return ret;

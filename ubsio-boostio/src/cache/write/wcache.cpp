@@ -444,7 +444,9 @@ BResult WCache::PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const 
     }
 
     if (mUfsEnable) {
+        BIO_TRACE_START(SDK_TRACE_PUT_TO_UNDERFS);
         ret = mUnderFs->Put(key, value, srcSlice->GetLength());
+        BIO_TRACE_END(SDK_TRACE_PUT_TO_UNDERFS, ret);
         delete[] value;
         ChkTrue(ret == BIO_OK, ret, "Failed to put slice to underfs, key:" << key << " flowId:" << mFlowId);
     } else {
@@ -1110,7 +1112,9 @@ BResult WCache::EvictToUnderFS(const char *key, WCacheSlicePtr &slice, const siz
     BResult ret = BIO_INNER_ERR;
     std::vector<FlowAddr> addrVec = slice->GetAddrs();
     if (LIKELY(addrVec.size() == 1)) {
+        BIO_TRACE_START(SDK_TRACE_PUT_TO_UNDERFS);
         ret = mUnderFs->Put(key, reinterpret_cast<char *>(addrVec[0].chunkId + addrVec[0].chunkOffset), length);
+        BIO_TRACE_END(SDK_TRACE_PUT_TO_UNDERFS, ret);
     } else {
         void *value = nullptr;
         int32_t allocRet = posix_memalign(&value, NO_4096, length);
@@ -1123,7 +1127,9 @@ BResult WCache::EvictToUnderFS(const char *key, WCacheSlicePtr &slice, const siz
 
             return ret;
         }
+        BIO_TRACE_START(SDK_TRACE_PUT_TO_UNDERFS);
         ret = mUnderFs->Put(key, reinterpret_cast<char *>(value), length);
+        BIO_TRACE_END(SDK_TRACE_PUT_TO_UNDERFS, ret);
         free(value);
     }
     if (ret != BIO_OK) {

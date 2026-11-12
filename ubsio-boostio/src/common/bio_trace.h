@@ -307,6 +307,19 @@ enum CmTracerType {
     CM_TRACE_END,
 };
 
+/*
+ * Trace points for UnderFS operations issued by the cache layer. Kept at the
+ * end of the enum chain so existing trace point numbers stay unchanged.
+ */
+enum UfsFlowTracerType {
+    UFS_FLOW_TRACE_START = CM_TRACE_END,
+    UFS_FLOW_TRACE_STAT,
+    UFS_FLOW_TRACE_EXIST,
+    UFS_FLOW_TRACE_DELETE,
+    UFS_FLOW_TRACE_LIST,
+    UFS_FLOW_TRACE_END,
+};
+
 #define BIO_TRACE_START(TP_ID) TRACE_DELAY_BEGIN(TP_ID)
 #define BIO_TRACE_END(TP_ID, RET_CODE) TRACE_DELAY_END(TP_ID, RET_CODE)
 #define BIO_TRACE_ASYNC_BEGIN(TP_ID) TRACE_ASYNC_DELAY_BEGIN(TP_ID)
