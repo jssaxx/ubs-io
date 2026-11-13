@@ -100,6 +100,7 @@ fi
 %files
 %{_libdir}/libbio_sdk.so.1
 %{_libdir}/libbio_sdk.so.1.0.0
+%{_libdir}/libhcom.so.*
 %{_libdir}/libubsio_kvc.so.1
 %{_libdir}/libubsio_kvc.so.1.0.0
 %{_libdir}/*.so
