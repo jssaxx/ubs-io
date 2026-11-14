@@ -1,0 +1,50 @@
+name: Sync All Branches from GitCode
+on:
+  schedule:
+    - cron: '*/20 * * * *' 
+  workflow_dispatch:
+
+jobs:
+  repo-sync:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Checkout self
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN }}
+
+      - name: Sync and Protect
+        run: |
+          git config --global user.name 'GitHub Action'
+          git config --global user.email 'action@github.com'
+          
+          # 1. 把当前的脚本文件临时备份到内存/外部文件夹
+          mkdir -p /tmp/workflow_backup
+          cp -r .github /tmp/workflow_backup/
+          
+          # 2. 添加并拉取 GitCode 源
+          git remote add upstream https://gitcode.com/openeuler/ubs-io.git
+          git fetch upstream
+          
+          # 3. 循环同步
+          for branch in $(git branch -r | grep 'upstream/' | grep -v 'HEAD'); do
+            branch_name=${branch#upstream/}
+            echo "Processing branch: $branch_name"
+            
+            # 强制切换到该分支（这会冲掉 .github 目录）
+            git checkout -B $branch_name $branch
+            
+            # 关键步骤：把备份的脚本强行拷回当前分支
+            rm -rf .github
+            cp -r /tmp/workflow_backup/.github .
+            
+            # 提交这个脚本变动（如果脚本没变，git 会跳过）
+            git add .github/workflows/sync.yml
+            git commit -m "Keep sync workflow" || echo "No changes to workflow"
+            
+            # 强推到 GitHub
+            git push origin $branch_name --force
+          done
