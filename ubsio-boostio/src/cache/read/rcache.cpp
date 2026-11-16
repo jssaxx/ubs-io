@@ -458,7 +458,9 @@ BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &re
     }
 
     UfsHelper::ObjStat stat;
+    BIO_TRACE_START(UFS_FLOW_TRACE_STAT);
     auto ret = UfsHelper::Instance()->Stat(key, stat);
+    BIO_TRACE_END(UFS_FLOW_TRACE_STAT, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Stat key from under fs failed, ret:" << ret << ", key:" << key << ".");
         return ret;
@@ -480,7 +482,9 @@ BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &re
         return BIO_ALLOC_FAIL;
     }
 
+    BIO_TRACE_START(SDK_TRACE_GET_TO_UNDERFS);
     ret = UfsHelper::Instance()->Get(key, value, realLen, offset);
+    BIO_TRACE_END(SDK_TRACE_GET_TO_UNDERFS, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Read data from under fs failed, ret:" << ret << ", key " << key << ", offset:" << offset <<
             ", length:" << realLen << ".");
