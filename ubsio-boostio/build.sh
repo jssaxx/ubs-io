@@ -28,12 +28,18 @@ copy_named_libs_from_dir() {
     local src_dir=$1
     local dst_dir=$2
     shift 2
-    local lib_name
+    local lib_name copy_mode
 
     [[ -d "${src_dir}" ]] || return 0
     for lib_name in "$@"; do
         [[ -e "${src_dir}/${lib_name}" || -L "${src_dir}/${lib_name}" ]] || continue
-        \cp -a "${src_dir}/${lib_name}" "${dst_dir}/"
+        copy_mode=-a
+        [[ "${lib_name}" == libhcom.so.0 ]] && copy_mode=-L
+        \cp "${copy_mode}" -T --remove-destination "${src_dir}/${lib_name}" "${dst_dir}/${lib_name}" || return 1
+        if [[ "${BUILD_TYPE}" == "release" && "${SANITIZER_FLAG}" != "ON" &&
+              "${lib_name}" == *.so* && ! -L "${dst_dir}/${lib_name}" ]]; then
+            strip --strip-debug "${dst_dir}/${lib_name}" || return 1
+        fi
     done
 }
 
@@ -58,6 +64,28 @@ validate_pkg_lib_dir() {
 package_libs() {
     local pkg_lib_dir="$1"
     local default_pkg_lib_dir="${PROJ_DIR}/dist/lib"
+    local boostio_lib_dir="${PROJ_DIR}/dist/boostio/lib"
+    local hcom_source="${boostio_lib_dir}/libhcom.so.0"
+    local -a src_dirs=("${boostio_lib_dir}" "${PROJ_DIR}/dist/3rdparty/liburing/lib"
+                       "${PROJ_DIR}/dist/3rdparty/libboundscheck/lib")
+    [[ "$BUILD_KV" == "ON" ]] && src_dirs+=("${PROJ_DIR}/../ubsio-kv/dist/lib")
+    [[ "$CLI_FLAG" == "ON" ]] && src_dirs+=("${PROJ_DIR}/dist/test_tools/lib")
+    local src_dir
+    for src_dir in "${src_dirs[@]}"; do
+        if [[ "${pkg_lib_dir}" -ef "${src_dir}" ]]; then
+            echo "Invalid pkg dir ${pkg_lib_dir}: ${src_dir} is a package source directory." >&2
+            return 1
+        fi
+    done
+    if [[ ! -f "${hcom_source}" ]] ||
+        ! LC_ALL=C readelf -hWd -- "${hcom_source}" | awk '
+            NR == 1 && $0 == "ELF Header:" { elf = 1 }
+            $1 == "Type:" && $2 == "DYN" { shared = 1 }
+            $2 == "(SONAME)" && $NF == "[libhcom.so.0]" { soname = 1 }
+            END { exit !(elf && shared && soname) }'; then
+        echo "Expected an HCOM shared library with SONAME libhcom.so.0 at ${hcom_source}" >&2
+        return 1
+    fi
 
     echo "Packaging libraries to ${pkg_lib_dir}"
     if [[ "${pkg_lib_dir}" == "${default_pkg_lib_dir}" ]]; then
@@ -65,7 +93,7 @@ package_libs() {
     fi
     mkdir -p "${pkg_lib_dir}"
 
-    copy_named_libs_from_dir "${PROJ_DIR}/dist/boostio/lib" "${pkg_lib_dir}" \
+    copy_named_libs_from_dir "${boostio_lib_dir}" "${pkg_lib_dir}" \
         libbio_common.so \
         libbio_interceptor_server.so \
         libbio_sdk.a \
@@ -76,13 +104,18 @@ package_libs() {
         libbio_server.so \
         libbio_tracepoint.so \
         libbio_underfs.so \
-        libhcom.so \
         libhcom.so.0 \
-        libhcom.so.0.0.1 \
         libhtracer.so \
         libock_interceptor.so \
         libock_iofwd_proxy.so \
-        libtracepoint.so
+        libtracepoint.so || return 1
+
+    local stale_lib
+    for stale_lib in "${pkg_lib_dir}"/libhcom.so*; do
+        if [[ "${stale_lib}" != "${pkg_lib_dir}/libhcom.so.0" ]]; then
+            rm -f -- "${stale_lib}" || return 1
+        fi
+    done
 
     copy_liburing_to_dir "${pkg_lib_dir}"
 

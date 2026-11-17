@@ -69,14 +69,14 @@ private:
 void InitializeLocalConfig(const std::string &rootPath)
 {
     BioConfig::UnderFsConfig config;
-    config.underFsType = LOCAL_SYSTEM;
+    config.underFsType = BIO_UNDERFS_LOCAL;
     config.localConfig.rootPath = rootPath;
     UnderFsConfig::Initialize(config);
 }
 
 std::shared_ptr<FileSystem> CreateLocal()
 {
-    return FileSystemFactory::CreateFileSystem(LOCAL_SYSTEM);
+    return FileSystemFactory::CreateFileSystem(BIO_UNDERFS_LOCAL);
 }
 }
 
