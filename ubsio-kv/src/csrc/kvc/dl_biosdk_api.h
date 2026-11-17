@@ -45,13 +45,16 @@ using BioBatchGetKeyDiskAddrFunc = CResult (*)(uint64_t tenantId, const char **k
                                                 const uint32_t count, KeyAddrInfo *infos);
 using BioRegisterMetaEventCallbackFunc = CResult (*)(UbsioMetaEventCallbackC callback, void *context);
 using BioShowLocalCacheResourceFunc = CResult (*)(CacheResourcesDesc *nodeDesc);
+using BioGetUnderFsTypeFunc = CResult (*)(BioUnderFsType *type);
 using BioScanKeyFunc = CResult (*)(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *count, bool *hasMore);
 using BioFreeScanKeyResultFunc = void (*)(const UbsioKvKeyInfo **items);
 
 class DlBioSdkApi {
 public:
     DlBioSdkApi() = delete;
+
     static int32_t LoadLibrary();
+
     static void CleanupLibrary();
 
     static CResult Initialize(WorkerMode mode, ClientOptionsConfig *optConf)
@@ -65,6 +68,14 @@ public:
             return RET_CACHE_NOT_READY;
         }
         return static_cast<CResult>(pBioGetLogLevel(level));
+    }
+
+    static CResult GetUnderFsType(BioUnderFsType *type)
+    {
+        if (pBioGetUnderFsType == nullptr) {
+            return RET_CACHE_NOT_READY;
+        }
+        return pBioGetUnderFsType(type);
     }
 
     static CResult CreateCache(CacheDescriptor desc)
@@ -179,6 +190,7 @@ private:
     static BioBatchGetKeyDiskAddrFunc pBioBatchGetKeyDiskAddr;
     static BioRegisterMetaEventCallbackFunc pBioRegisterMetaEventCallback;
     static BioShowLocalCacheResourceFunc pBioShowLocalCacheResource;
+    static BioGetUnderFsTypeFunc pBioGetUnderFsType;
     static BioScanKeyFunc pBioScanKey;
     static BioFreeScanKeyResultFunc pBioFreeScanKeyResult;
 };

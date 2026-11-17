@@ -46,8 +46,12 @@ namespace bio {
         BResult Initialize(BioConfig::UnderFsConfig config)
         {
             mConfig = config;
-            if (mConfig.underFsType == "none") {
+            if (mConfig.underFsType == BIO_UNDERFS_NONE) {
                 return BIO_OK;
+            }
+            const char *typeName = UnderFsTypeName(config.underFsType);
+            if (typeName == nullptr) {
+                return BIO_INVALID_PARAM;
             }
             const char *soFileName = "libbio_underfs.so";
             handler = dlopen(soFileName, RTLD_NOW);
@@ -61,7 +65,7 @@ namespace bio {
                 return BIO_UFS_IOERR;
             }
             UnderFsConfigInfo underFsConfigInfo;
-            underFsConfigInfo.underFsType = config.underFsType.c_str();
+            underFsConfigInfo.underFsType = typeName;
             underFsConfigInfo.cephConfig.cfgPath = config.cephConfig.cfgPath.c_str();
             underFsConfigInfo.cephConfig.cluster = config.cephConfig.cluster.c_str();
             underFsConfigInfo.cephConfig.user = config.cephConfig.user.c_str();
@@ -81,7 +85,7 @@ namespace bio {
 
         void Stop()
         {
-            if (mConfig.underFsType == "none") {
+            if (mConfig.underFsType == BIO_UNDERFS_NONE) {
                 return;
             }
             stopOp();

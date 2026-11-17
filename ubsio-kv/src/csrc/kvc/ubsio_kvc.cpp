@@ -103,6 +103,21 @@ UBSIO_API int32_t UbsioKvCacheInit(int32_t devId)
     return KvcOperationInit(devId);
 }
 
+UBSIO_API int32_t UbsioGetUnderFsType(UbsioUnderFsType *type)
+{
+    if (type == nullptr) {
+        return UBSIO_KVC_INVALID_PARAM;
+    }
+    BioUnderFsType value = BIO_UNDERFS_BUTT;
+    if (DlBioSdkApi::GetUnderFsType(&value) != RET_CACHE_OK ||
+        static_cast<uint32_t>(value) >= BIO_UNDERFS_BUTT) {
+        LOG_ERROR("Query initialized UnderFS type failed.");
+        return UBSIO_KVC_ERR;
+    }
+    *type = static_cast<UbsioUnderFsType>(value);
+    return UBSIO_KVC_OK;
+}
+
 UBSIO_API int32_t UbsioGetResourceInfo(UbsioResourceInfo *info)
 {
     if (UNLIKELY(info == nullptr)) {

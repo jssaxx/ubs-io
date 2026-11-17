@@ -320,3 +320,43 @@ TEST_F(KvTest, PublicApiMapsBioFailures)
     EXPECT_EQ(UbsioKvCacheGetLength("key", &length, 0), UBSIO_KVC_ERR);
 }
 }
+
+namespace {
+template<typename Tag, typename Tag::Type member>
+struct MetadataQueryAccessor {
+    friend typename Tag::Type MetadataQueryMember(Tag) { return member; }
+};
+struct MetadataQuerySymbol {
+    using Type = ock::ubsio::BioGetUnderFsTypeFunc *;
+    friend Type MetadataQueryMember(MetadataQuerySymbol);
+};
+template struct MetadataQueryAccessor<MetadataQuerySymbol, &DlBioSdkApi::pBioGetUnderFsType>;
+}
+
+extern "C" void FakeBioSetUnderFsType(BioUnderFsType type);
+
+TEST_F(KvTest, UnderFsTypeQueryRequiresRuntimeAndPreservesOutputOnFailure)
+{
+    UbsioUnderFsType type = UBSIO_UNDERFS_BUTT;
+    EXPECT_EQ(UbsioGetUnderFsType(nullptr), UBSIO_KVC_INVALID_PARAM);
+    EXPECT_EQ(UbsioGetUnderFsType(&type), UBSIO_KVC_ERR);
+    EXPECT_EQ(type, UBSIO_UNDERFS_BUTT);
+    ASSERT_EQ(DlBioSdkApi::LoadLibrary(), UBSIO_KVC_OK);
+    for (auto expected : {BIO_UNDERFS_NONE, BIO_UNDERFS_CEPH, BIO_UNDERFS_HDFS, BIO_UNDERFS_LOCAL, BIO_UNDERFS_SHARED}) {
+        FakeBioSetUnderFsType(expected);
+        ASSERT_EQ(UbsioGetUnderFsType(&type), UBSIO_KVC_OK);
+        EXPECT_EQ(type, static_cast<UbsioUnderFsType>(expected));
+    }
+    FakeBioSetResult("BioGetUnderFsType", RET_CACHE_NOT_READY);
+    EXPECT_EQ(UbsioGetUnderFsType(&type), UBSIO_KVC_ERR);
+    EXPECT_EQ(type, UBSIO_UNDERFS_SHARED);
+    FakeBioSetResult("BioGetUnderFsType", RET_CACHE_OK);
+    FakeBioSetUnderFsType(BIO_UNDERFS_BUTT);
+    EXPECT_EQ(UbsioGetUnderFsType(&type), UBSIO_KVC_ERR);
+    EXPECT_EQ(type, UBSIO_UNDERFS_SHARED);
+    const auto query = *MetadataQueryMember(MetadataQuerySymbol{});
+    *MetadataQueryMember(MetadataQuerySymbol{}) = nullptr;
+    EXPECT_EQ(UbsioGetUnderFsType(&type), UBSIO_KVC_ERR);
+    EXPECT_EQ(type, UBSIO_UNDERFS_SHARED);
+    *MetadataQueryMember(MetadataQuerySymbol{}) = query;
+}

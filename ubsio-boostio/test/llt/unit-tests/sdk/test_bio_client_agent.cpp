@@ -22,12 +22,18 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include <mockcpp/mockcpp.hpp>
+#include "bio_mock.h"
 
 #define private public
 #include "bio_client_agent.h"
 #undef private
 
 #include "bio_crc_util.h"
+#include "bio_client.h"
+#include "bio_server.h"
+#include "bio_server_c.h"
+#include "bio_c.h"
 
 using namespace ock::bio;
 using namespace ock::bio::agent;
@@ -49,6 +55,14 @@ int32_t RuntimeConfigOpStub(StandaloneRuntimeConfigResponse *rsp)
     rsp->sdkPoolSize = IO_SIZE_4K;
     rsp->dataMsgBlockSize = IO_SIZE_4K;
     return BIO_OK;
+}
+
+void *LoadWithoutUnderFsType(BioClientAgent *, const char *name)
+{
+    if (std::strcmp(name, "GetUnderFsType") == 0) {
+        return nullptr;
+    }
+    return reinterpret_cast<void *>(RuntimeConfigOpStub);
 }
 
 int32_t StandaloneAsyncGetOpStub(GetRequest *req, GetResponse *rsp)
@@ -165,4 +179,51 @@ TEST(BioClientAgentTest, standalone_async_get_local_uses_direct_get)
     EXPECT_EQ(req.isMr, 0);
     EXPECT_EQ(req.size, req.length);
     EXPECT_EQ(req.address, reinterpret_cast<uintptr_t>(value));
+}
+
+TEST(BioClientAgentTest, UnderFsTypeSymbolIsRequiredDuringOperationInitialization)
+{
+    BioClientAgent agent;
+    MOCKER_CPP(&BioClientAgent::LoadFunction, void *(*)(BioClientAgent *, const char *))
+        .stubs()
+        .will(invoke(LoadWithoutUnderFsType));
+    EXPECT_EQ(agent.InitOperation(), BIO_INNER_ERR);
+    EXPECT_EQ(agent.getUnderFsTypeOp, nullptr);
+    GlobalMockObject::verify();
+}
+
+TEST(BioClientAgentTest, UnderFsTypeRequiresReadyRuntimeAndPreservesOutputOnFailure)
+{
+    BioUnderFsType type = BIO_UNDERFS_BUTT;
+    EXPECT_EQ(BioGetUnderFsType(nullptr), RET_CACHE_EPERM);
+    auto client = BioClient::Instance();
+    auto clientAgent = agent::BioClientAgent::Instance();
+    const bool originalReady = client->Ready();
+    const auto originalMode = clientAgent->mMode;
+    const auto originalOp = clientAgent->getUnderFsTypeOp;
+    auto config = BioServer::Instance()->GetConfig();
+    auto &underFsType = const_cast<BioConfig::UnderFsConfig &>(config->GetUnderFsConfig()).underFsType;
+    const auto originalUnderFsType = underFsType;
+    client->SetStartWorker(false);
+    EXPECT_EQ(BioGetUnderFsType(&type), RET_CACHE_NOT_READY);
+    EXPECT_EQ(type, BIO_UNDERFS_BUTT);
+    client->SetStartWorker(true);
+    clientAgent->mMode = STANDALONE;
+    clientAgent->getUnderFsTypeOp = nullptr;
+    EXPECT_EQ(BioGetUnderFsType(&type), RET_CACHE_ERROR);
+    EXPECT_EQ(type, BIO_UNDERFS_BUTT);
+    clientAgent->getUnderFsTypeOp = GetUnderFsType;
+    EXPECT_EQ(GetUnderFsType(nullptr), BIO_INVALID_PARAM);
+    for (auto expected : {BIO_UNDERFS_NONE, BIO_UNDERFS_CEPH, BIO_UNDERFS_HDFS, BIO_UNDERFS_LOCAL, BIO_UNDERFS_SHARED}) {
+        underFsType = expected;
+        EXPECT_EQ(BioGetUnderFsType(&type), RET_CACHE_OK);
+        EXPECT_EQ(type, expected);
+    }
+    underFsType = BIO_UNDERFS_BUTT;
+    EXPECT_EQ(BioGetUnderFsType(&type), RET_CACHE_ERROR);
+    EXPECT_EQ(type, BIO_UNDERFS_SHARED);
+    underFsType = originalUnderFsType;
+    clientAgent->getUnderFsTypeOp = originalOp;
+    clientAgent->mMode = originalMode;
+    client->SetStartWorker(originalReady);
 }

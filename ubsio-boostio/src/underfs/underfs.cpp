@@ -93,7 +93,7 @@ int32_t UfsList(const char *prefix, ObjStatInfo **objStat, int *objNum)
 void UfsInitUnderFsConfig(UnderFsConfigInfo config)
 {
     BioConfig::UnderFsConfig bioConfig;
-    bioConfig.underFsType = config.underFsType;
+    bioConfig.underFsType = ParseUnderFsType(config.underFsType == nullptr ? "" : config.underFsType);
     bioConfig.cephConfig.cfgPath = config.cephConfig.cfgPath;
     bioConfig.cephConfig.cluster = config.cephConfig.cluster;
     bioConfig.cephConfig.user = config.cephConfig.user;

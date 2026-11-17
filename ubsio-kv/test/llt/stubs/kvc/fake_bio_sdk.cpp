@@ -24,6 +24,7 @@ struct BioStubState {
     uint16_t resourceDiskCount{2};
     uint32_t scanCount{2};
     BioLogLevel logLevel{BIO_LOG_LEVEL_INFO};
+    BioUnderFsType underFsType{BIO_UNDERFS_NONE};
     std::string diskPath{"/fake/disk0"};
     uint64_t diskOffset{0};
     uint64_t diskLength{4096};
@@ -55,6 +56,7 @@ extern "C" void FakeBioReset()
     state.resourceDiskCount = 2;
     state.scanCount = 2;
     state.logLevel = BIO_LOG_LEVEL_INFO;
+    state.underFsType = BIO_UNDERFS_NONE;
     state.diskPath = "/fake/disk0";
     state.diskOffset = 0;
     state.diskLength = 4096;
@@ -137,6 +139,30 @@ extern "C" CResult BioGetLogLevel(BioLogLevel *level)
     }
     return static_cast<CResult>(result);
 }
+
+extern "C" void FakeBioSetUnderFsType(BioUnderFsType type)
+{
+    auto &state = State();
+    std::lock_guard<std::mutex> lock(state.mutex);
+    state.underFsType = type;
+}
+
+#ifndef UBSIO_KV_UT_OMIT_UNDERFS_TYPE
+extern "C" CResult BioGetUnderFsType(BioUnderFsType *type)
+{
+    auto &state = State();
+    std::lock_guard<std::mutex> lock(state.mutex);
+    const auto result = ResultLocked(state, "BioGetUnderFsType");
+    if (result != RET_CACHE_OK) {
+        return static_cast<CResult>(result);
+    }
+    if (type == nullptr) {
+        return RET_CACHE_EPERM;
+    }
+    *type = state.underFsType;
+    return RET_CACHE_OK;
+}
+#endif
 
 extern "C" CResult BioCreateCache(CacheDescriptor)
 {

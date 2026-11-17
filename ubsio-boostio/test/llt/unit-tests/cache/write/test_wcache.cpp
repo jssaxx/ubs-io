@@ -199,6 +199,10 @@ TEST_F(TestWCache, test_meta_event_batch_flush_and_closed_batch)
 
     auto batch = std::make_shared<UbsIoMetaEventBatch>();
     ASSERT_NE(batch, nullptr);
+    auto &underFsType =
+        const_cast<BioConfig::UnderFsConfig &>(BioConfig::Instance()->GetUnderFsConfig()).underFsType;
+    const auto originalUnderFsType = underFsType;
+    underFsType = BIO_UNDERFS_NONE;
     gWCacheManager->AppendMetaEvent(UBSIO_META_RECOVER, "test_meta_event_recover", batch);
     gWCacheManager->AppendMetaEvent(UBSIO_META_DELETE, "test_meta_event_delete", batch);
     gWCacheManager->SubmitMetaEventBatch(batch);
@@ -209,6 +213,7 @@ TEST_F(TestWCache, test_meta_event_batch_flush_and_closed_batch)
 
     bool gotEvents = WaitMetaEvents(collector, 3);
     gWCacheManager->RegUbsIoMetaEventCallback(nullptr);
+    underFsType = originalUnderFsType;
     ASSERT_TRUE(gotEvents);
 
     std::lock_guard<std::mutex> lock(collector.lock);

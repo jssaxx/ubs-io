@@ -13,13 +13,13 @@ MemCache 与 UBS IO 运行在同一进程内。MemCache 自己管理 L2 DRAM Cac
 
 Master 不区分 UBS IO 内部的 DRAM FLOW 和 DISK FLOW。对 Master 来说，只需要知道某个 key 是否还存在于 UBS IO extension 中。
 
-因此，`DRAM FLOW -> DISK FLOW` 只是 UBS IO 内部迁移，不需要上报 Master。只有 key 从 UBS IO extension 的最后一层被移除时，才需要上报。
+`DRAM FLOW -> DISK FLOW` 是 UBS IO 内部迁移，不上报 Master。未启用 UnderFS 时，key 从 UBS IO extension 的最后一层被移除后上报删除事件。启用 UnderFS 时，缓存资源回收不触发删除回调。
 
 ## 目标
 
 - UBS IO 自主管理 DRAM/DISK FLOW 水位线和空间回收。
 - 对 MemCache Master 屏蔽 UBS IO 内部 tier 细节。
-- 对 UBS IO extension 最后一层淘汰进行批量上报。
+- 未启用 UnderFS 时，对 UBS IO extension 最后一层淘汰进行批量上报。
 - 复用同一条上报通道，在 UBS IO SSD recovery 后重建 Master 侧 SSD-extension 元数据。
 - 避免 runtime eviction、truncate、free 热路径被 MemCache/Master RPC 阻塞。
 - 第一版保持简单：上层 key 是唯一标识，不向上暴露 version、flow id、offset。
@@ -63,7 +63,7 @@ struct UbsIoMetaEvent {
 | Event | 来源 | Master 动作 |
 | --- | --- | --- |
 | `UBSIO_META_RECOVER` | SSD recovery 扫描到一个 live key | 在 UBS IO extension 元数据中恢复或重建该 key |
-| `UBSIO_META_DELETE` | runtime final eviction 从 UBS IO extension 移除了一个 key | 从 UBS IO extension 元数据中删除该 key |
+| `UBSIO_META_DELETE` | 未启用 UnderFS 时，缓存淘汰或故障清理从 UBS IO extension 移除了一个 key | 从 UBS IO extension 元数据中删除该 key |
 
 `DRAM FLOW -> DISK FLOW` 不产生 event，因为 key 仍然存在于 UBS IO extension 中。
 
@@ -316,38 +316,40 @@ eviction 将 data/meta copy 到 DISK FLOW
 ```text
 reader 继续使用旧 memory/disk slice
 eviction 标记 meta evicted，并调用 SetSlice(nullptr, callback)
-实际 WCacheIndex 删除、data Flow truncate/free、metadata DELETE 上报都在 callback 中执行
+WCacheIndex 删除和 data Flow truncate/free 在 slice callback 中执行
+metadata event 随后由统一回调出口按 UnderFS 配置过滤并上报
 如果有活跃 reader，callback 会延迟到最后一个 reader Release() 后执行
 ```
 
 因此，并发读或预取不会中断 eviction，也不应该让 eviction worker 同步等待读完成。旧 Flow 空间释放会延迟到 reader 全部结束。
 
-### 既有 UBS IO 行为
+### 缓存资源回收与事件分发
 
-metadata event 上报没有引入新的读/淘汰同步模型，而是沿用 UBS IO 既有行为：
+缓存迁移和资源释放使用 slice callback 管理 reader 生命周期：
 
 ```text
 DRAM FLOW -> DISK FLOW:
-    现有代码已经使用 SetSlice(diskSlice, callback)
+    使用 SetSlice(diskSlice, callback)
     旧 DRAM slice 在 callback 中释放
 
 DISK FLOW -> UnderFS/final discard:
-    现有代码已经使用 SetSlice(nullptr, callback)
+    使用 SetSlice(nullptr, callback)
     旧 DISK slice 在 callback 中释放，WCacheIndex 在 callback 中删除
 ```
 
-新增 metadata report 只是挂在同一个 callback 点：
+元数据事件通过统一回调出口分发：
 
 ```text
-旧行为:
-    callback free/truncate 旧 Flow 资源，并删除 WCacheIndex
+未启用 UnderFS:
+    缓存最后一层淘汰后，上报 UBSIO_META_DELETE
 
-新行为:
-    callback 仍然 free/truncate 旧 Flow 资源，并删除 WCacheIndex
-    callback 额外追加 UBSIO_META_DELETE
+启用 UnderFS:
+    回收 Flow 资源和 WCacheIndex 后，不回调 UBSIO_META_DELETE
+
+两种模式均上报 UBSIO_META_RECOVER
 ```
 
-因此，如果读或预取已经持有 slice，上报会和原本的资源释放一起延迟。这保持了原有生命周期保证。
+读或预取已持有 slice 时，资源释放和对应事件生成均延迟到 reader 释放引用之后。
 
 ### Final Eviction 期间的新读
 

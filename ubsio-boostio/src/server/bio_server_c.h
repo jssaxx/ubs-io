@@ -21,6 +21,22 @@
 extern "C" {
 #endif
 
+#ifndef UBSIO_META_EVENT_C_DEFINED
+#define UBSIO_META_EVENT_C_DEFINED
+typedef enum {
+    UBSIO_META_RECOVER_C = 0,
+    UBSIO_META_DELETE_C = 1,
+} UbsioMetaEventTypeC;
+
+typedef struct {
+    int32_t type;
+    const char *key;
+    uint32_t keyLen;
+} UbsioMetaEventC;
+
+typedef void (*UbsioMetaEventCallbackC)(void *context, const UbsioMetaEventC *events, uint32_t count);
+#endif
+
 // Start server with the normal cluster module chain: Net, Cache, MirrorServer, CM.
 int32_t BioServerInit();
 
@@ -41,23 +57,8 @@ bool GetPrometheusToggle();
 
 const char *GetPrometheusListenAddress(void);
 
-#ifndef UBSIO_META_EVENT_C_DEFINED
-#define UBSIO_META_EVENT_C_DEFINED
-typedef enum {
-    UBSIO_META_RECOVER_C = 0,
-    UBSIO_META_DELETE_C = 1,
-} UbsioMetaEventTypeC;
-
-typedef struct {
-    int32_t type;
-    const char *key;
-    uint32_t keyLen;
-} UbsioMetaEventC;
-
-typedef void (*UbsioMetaEventCallbackC)(void *context, const UbsioMetaEventC *events, uint32_t count);
-#endif
-
 // Register a same-process metadata event callback for embedded users such as MemCache.
+// DELETE events are reported only when UnderFS is disabled; RECOVER events are reported in either mode.
 // The events buffer and key pointers are only valid during the callback; the callee must copy keys if needed.
 int32_t UbsioRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context);
 
@@ -73,6 +74,8 @@ uint32_t GetPrometheusScrapeIntervalSec();
 // Return standalone runtime config without IPC shm negotiation.
 // The response is caller-owned and does not carry IPC shm fields.
 int32_t GetRuntimeConfig(StandaloneRuntimeConfigResponse *rsp);
+
+int32_t GetUnderFsType(BioUnderFsType *type);
 
 int32_t GetLocalNid(GetLocalNidResponse *rsp);
 

@@ -1504,7 +1504,7 @@ BResult MirrorServer::InitializeBatchGetExecutors()
 
 BResult MirrorServer::InitializeUnderFsExecutor()
 {
-    if (!BioServer::Instance()->IsStandaloneMode() || mBioConfig->GetUnderFsConfig().underFsType == "none") {
+    if (!BioServer::Instance()->IsStandaloneMode() || mBioConfig->GetUnderFsConfig().underFsType == BIO_UNDERFS_NONE) {
         return BIO_OK;
     }
     uint32_t workerNum = mBioConfig->GetDaemonConfig().underFsBatchReadWorkerNum;
@@ -2255,7 +2255,7 @@ BResult MirrorServer::DispatchUnderFsBatchExistEntries(const char **keys, bool *
 void MirrorServer::PrepareBatchExistEntries(const char **keys, ObjLocation *locations, uint32_t count, bool *results,
     std::vector<uint32_t> &missIndices)
 {
-    bool underFsEnabled = mBioConfig->GetUnderFsConfig().underFsType != "none";
+    bool underFsEnabled = mBioConfig->GetUnderFsConfig().underFsType != BIO_UNDERFS_NONE;
     if (underFsEnabled) {
         missIndices.reserve(count);
     }
@@ -3260,15 +3260,21 @@ int32_t MirrorServer::MirrorServerGetUnderFsConfig(ServiceContext &ctx, GetUnder
 
     GetUnderFsConfigResponse rsp{};
     BioConfig::UnderFsConfig config = UnderFsConfig::Instance()->GetUnderFsConfig();
+    const char *underFsType = UnderFsTypeName(config.underFsType);
+    if (underFsType == nullptr) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+    const size_t underFsTypeLength = strlen(underFsType);
 
     int32_t ret = BIO_INNER_ERR;
     do {
         // 把 destsz 设为 KEY_MAX_SIZE-1，让超长时直接报错，保证在数组的最后一个元素之后的位置写入空字符，不会导致数组越界
-        ret = memcpy_s(rsp.underFsType, KEY_MAX_SIZE - 1, config.underFsType.c_str(), config.underFsType.size());
+        ret = memcpy_s(rsp.underFsType, KEY_MAX_SIZE - 1, underFsType, underFsTypeLength);
         if (UNLIKELY(ret != BIO_OK)) {
             break;
         }
-        rsp.underFsType[config.underFsType.size()] = '\0';
+        rsp.underFsType[underFsTypeLength] = '\0';
 
         ret = memcpy_s(rsp.hdfsConfig.nameNode, KEY_MAX_SIZE - 1, config.hdfsConfig.nameNode.c_str(),
             config.hdfsConfig.nameNode.size());

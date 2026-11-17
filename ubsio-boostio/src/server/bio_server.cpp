@@ -19,6 +19,7 @@
 #include "bdm_core.h"
 #include "bdm_disk.h"
 #include "bio_config_instance.h"
+#include "bio_c.h"
 #include "bio_crc_util.h"
 #include "bio_file_util.h"
 #include "bio_functions.h"
@@ -1704,6 +1705,19 @@ int32_t GetRuntimeConfig(StandaloneRuntimeConfigResponse *rsp)
     rsp->dataMsgBlockSize = config.segment;
     auto ret = strcpy_s(rsp->listenAddress, sizeof(rsp->listenAddress), config.listenAddress.c_str());
     return ret == 0 ? BIO_OK : BIO_ERR;
+}
+
+int32_t GetUnderFsType(BioUnderFsType *type)
+{
+    if (type == nullptr) {
+        return BIO_INVALID_PARAM;
+    }
+    const auto value = BioServer::Instance()->GetConfig()->GetUnderFsConfig().underFsType;
+    if (static_cast<uint32_t>(value) >= BIO_UNDERFS_BUTT) {
+        return BIO_INNER_ERR;
+    }
+    *type = value;
+    return BIO_OK;
 }
 
 int32_t GetLocalNid(GetLocalNidResponse *rsp)

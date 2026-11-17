@@ -856,6 +856,11 @@ void WCacheManager::AppendMetaEvents(std::vector<UbsIoMetaEvent> &&events)
 
 void WCacheManager::ReportMetaEventsSync(std::vector<UbsIoMetaEvent> &&events)
 {
+    if (BioConfig::Instance()->GetUnderFsConfig().underFsType != BIO_UNDERFS_NONE) {
+        events.erase(std::remove_if(events.begin(), events.end(), [](const UbsIoMetaEvent &event) {
+            return event.type == UBSIO_META_DELETE;
+        }), events.end());
+    }
     if (events.empty()) {
         return;
     }

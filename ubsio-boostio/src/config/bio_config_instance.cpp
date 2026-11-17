@@ -127,7 +127,8 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(CM_ZK_HOST, VIpv4PortListValidator::Create(CM_ZK_HOST.first));
 
     /* load underfs config */
-    AddStrConf(UNDERFS_FILE_SYSTEM_TYPE, VStrEnum::Create(UNDERFS_FILE_SYSTEM_TYPE.first, "ceph||hdfs||local||none"));
+    AddStrConf(UNDERFS_FILE_SYSTEM_TYPE,
+        VStrEnum::Create(UNDERFS_FILE_SYSTEM_TYPE.first, "ceph||hdfs||local||shared||none"));
     AddStrConf(UNDERFS_CEPH_CFG_PATH);
     AddStrConf(UNDERFS_CEPH_CLUSTER, VStrNotNull::Create(UNDERFS_CEPH_CLUSTER.first));
     AddStrConf(UNDERFS_CEPH_USER, VStrNotNull::Create(UNDERFS_CEPH_USER.first));
@@ -159,6 +160,9 @@ BResult BioConfig::AutoConfAfterLoadFromFile(const ConfigurationPtr &conf)
     auto ret = AutoConfigNet(conf);
     ChkTrueNot(ret == BIO_OK, ret);
 
+    ret = AutoConfigUnderFs(conf);
+    ChkTrueNot(ret == BIO_OK, ret);
+
     ret = AutoConfigDaemon(conf);
     ChkTrueNot(ret == BIO_OK, ret);
 
@@ -166,9 +170,6 @@ BResult BioConfig::AutoConfAfterLoadFromFile(const ConfigurationPtr &conf)
     ChkTrueNot(ret == BIO_OK, ret);
 
     ret = AutoConfigClient(conf);
-    ChkTrueNot(ret == BIO_OK, ret);
-
-    ret = AutoConfigUnderFs(conf);
     ChkTrueNot(ret == BIO_OK, ret);
 
     return ret;
@@ -356,7 +357,7 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
     }
     mDaemonConfig.wcacheMemEvictLevel = static_cast<uint64_t>(conf->GetInt(WCACHE_EVICT_WATER_LEVEL.first));
     mDaemonConfig.wcacheDiskEvictLevel = static_cast<uint64_t>(conf->GetInt(WCACHE_DISK_EVICT_WATER_LEVEL.first));
-    bool underFsEnabled = conf->GetStr(UNDERFS_FILE_SYSTEM_TYPE.first) != "none";
+    bool underFsEnabled = mUnderFsConfig.underFsType != BIO_UNDERFS_NONE;
     if (!mDaemonConfig.hasDiskCache && !underFsEnabled && mDaemonConfig.wcacheMemEvictLevel == 0) {
         mDaemonConfig.wcacheMemEvictLevel = NO_90;
     }
@@ -522,9 +523,15 @@ BResult BioConfig::AutoConfigClient(const ConfigurationPtr &conf)
 
 BResult BioConfig::AutoConfigUnderFs(const ConfigurationPtr &conf)
 {
-    mUnderFsConfig.underFsType = conf->GetStr(UNDERFS_FILE_SYSTEM_TYPE.first);
+    const auto name = conf->GetStr(UNDERFS_FILE_SYSTEM_TYPE.first);
+    const auto type = ParseUnderFsType(name);
+    if (type == BIO_UNDERFS_BUTT) {
+        BIO_LOG_STD_ERR("Invalid UnderFS type:" << name);
+        return BIO_ERR;
+    }
+    mUnderFsConfig.underFsType = type;
     mUnderFsConfig.cephConfig.cfgPath = conf->GetStr(UNDERFS_CEPH_CFG_PATH.first);
-    if (mUnderFsConfig.underFsType == "ceph") {
+    if (mUnderFsConfig.underFsType == BIO_UNDERFS_CEPH) {
         if (!FileUtil::CanonicalPath(mUnderFsConfig.cephConfig.cfgPath)) {
             BIO_LOG_STD_ERR("Ceph config path not exist, value:" << mUnderFsConfig.cephConfig.cfgPath);
             return BIO_ERR;
@@ -535,7 +542,7 @@ BResult BioConfig::AutoConfigUnderFs(const ConfigurationPtr &conf)
     mUnderFsConfig.hdfsConfig.nameNode = conf->GetStr(UNDERFS_HDFS_NAMENODE.first);
     mUnderFsConfig.hdfsConfig.workingPath = conf->GetStr(UNDERFS_HDFS_WORKING_PATH.first);
     mUnderFsConfig.localConfig.rootPath = conf->GetStr(UNDERFS_LOCAL_ROOT_PATH.first);
-    if (mUnderFsConfig.underFsType == "local") {
+    if (mUnderFsConfig.underFsType == BIO_UNDERFS_LOCAL || mUnderFsConfig.underFsType == BIO_UNDERFS_SHARED) {
         if (!FileUtil::CanonicalPath(mUnderFsConfig.localConfig.rootPath)) {
             LOG_ERROR("Local underfs root path does not exist, value:" << mUnderFsConfig.localConfig.rootPath << ".");
             return BIO_ERR;
