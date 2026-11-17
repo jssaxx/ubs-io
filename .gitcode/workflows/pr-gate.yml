@@ -6,7 +6,11 @@ on:
       - open
       - reopen
       - update
-    branches: ['*']
+    branches:
+      - master
+      - openEuler*
+      - br_UnifiedBus
+      - develop_memStore
 
   pr_comment:
     types: [created]
@@ -15,7 +19,11 @@ on:
   pull_request_comment:
     types: [created]
     comments: ['^/retest$']
-    branches: ['*']
+    branches:
+      - master
+      - openEuler*
+      - br_UnifiedBus
+      - develop_memStore
 
 env:
   PR_ID: ${{ atomgit.event.pull_request.number }}
@@ -62,8 +70,8 @@ jobs:
         if: ${{ atomgit.event.pull_request.number != '' }}
         uses: openlibing/pr-label-action@v1.0.0
         with:
-          add_labels: ci-pipeline-running
-          remove_labels: ci-pipeline-passed,ci-pipeline-failed
+          add_labels: ci_processing
+          remove_labels: ci_failed,ci_successful
 
   issue_check:
     name: Issue check
@@ -77,21 +85,6 @@ jobs:
           ATOMGIT_TOKEN: ${{ atomgit.token }}
         run: |
           set -euo pipefail
-
-          branch_list=(
-            'master'
-            'openEuler-24.03-LTS-SP3'
-            'br_bugfix_20260330'
-            'br_BeiMing.26.0.RC1'
-          )
-
-          if printf '%s\n' "${branch_list[@]}" |
-            grep -Fxq "${TARGET_BRANCH:-}"; then
-            echo "分支 ${TARGET_BRANCH} 需要检查 Issue 关联。"
-          else
-            echo "分支 ${TARGET_BRANCH:-} 不需要检查 Issue 关联。"
-            exit 0
-          fi
 
           if ! rpm -q curl jq >/dev/null 2>&1; then
             sudo dnf install -y curl jq
@@ -273,5 +266,5 @@ jobs:
         if: ${{ steps.freshness.outputs.is_latest == 'true' }}
         uses: openlibing/pr-label-action@v1.0.0
         with:
-          add_labels: ${{ needs.mark_running.result == 'success' && needs.issue_check.result == 'success' && needs.check_sca.result == 'success' && needs.check_anti_poisoning.result == 'success' && needs.validation.result == 'success' && 'ci-pipeline-passed' || 'ci-pipeline-failed' }}
-          remove_labels: ci-pipeline-running,${{ needs.mark_running.result == 'success' && needs.issue_check.result == 'success' && needs.check_sca.result == 'success' && needs.check_anti_poisoning.result == 'success' && needs.validation.result == 'success' && 'ci-pipeline-failed' || 'ci-pipeline-passed' }}
+          add_labels: ${{ needs.mark_running.result == 'success' && needs.issue_check.result == 'success' && needs.check_sca.result == 'success' && needs.check_anti_poisoning.result == 'success' && needs.validation.result == 'success' && 'ci_successful' || 'ci_failed' }}
+          remove_labels: ci_processing,${{ needs.mark_running.result == 'success' && needs.issue_check.result == 'success' && needs.check_sca.result == 'success' && needs.check_anti_poisoning.result == 'success' && needs.validation.result == 'success' && 'ci_failed' || 'ci_successful' }}
