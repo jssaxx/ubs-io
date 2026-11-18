@@ -6,7 +6,7 @@
     //    - VSCode 会扫描 .devcontainer/ 下的配置，并根据镜像拉起容器，列表里会出现 "UBSE UT (openEuler aarch64)" (因为它在 .devcontainer/ubse/ 子目录下)
     // 4.等待容器就绪，在容器里代码默认存放在/workspace目录，运行bash build.sh ut即可运行UT。
       "name": "UBS-IO UT (openEuler aarch64)",
-      "image": "swr.cn-north-4.myhuaweicloud.com/opentile/ubs-engine:24.03-sp3-1.0.1",
+      "image": "swr.cn-north-4.myhuaweicloud.com/ubscore/soe:latest",
       "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
       "workspaceFolder": "/workspace",
       "customizations": {
