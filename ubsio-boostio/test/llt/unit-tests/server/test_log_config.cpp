@@ -165,6 +165,7 @@ TEST(TestLogConfig, underfs_config_strings_map_to_enum_before_cache_defaults)
     conf->Set(MEM_CAPACITY_SIZE_GB.first, testMemCapacityGb);
     ASSERT_EQ(conf->GetInt(MEM_CAPACITY_SIZE_GB.first), testMemCapacityGb);
     conf->Set(DISK_CONF_PATH.first, std::string());
+    conf->Set(BIO_CACHE_QOS_ENABLE.first, std::string("false"));
     conf->Set(WCACHE_EVICT_WATER_LEVEL.first, int32_t{0});
     conf->Set(UNDERFS_LOCAL_ROOT_PATH.first, std::string(directory));
     conf->Set(UNDERFS_CEPH_CFG_PATH.first, cephPath);
