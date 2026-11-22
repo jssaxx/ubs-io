@@ -19,11 +19,11 @@
 
 #include "gtest/gtest.h"
 #include "bio_file_util.h"
-#include "file_system_factory.h"
 
 #define private public
 #include "bio_config_instance.h"
 #undef private
+#include "file_system_factory.h"
 #include "underfs_config.h"
 
 using namespace ock::bio;
