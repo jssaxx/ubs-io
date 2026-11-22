@@ -139,9 +139,9 @@ TEST(TestUnderFsLocal, crud_with_aligned_and_unaligned_io)
 
     const char *replacement = "replacement-value";
     ASSERT_EQ(fileSystem->Put(unalignedKey, replacement, std::strlen(replacement)), BIO_OK);
-    char replacementRead[64] = { 0 };
-    ASSERT_EQ(fileSystem->Get(unalignedKey, replacementRead, std::strlen(replacement), 0), BIO_OK);
-    EXPECT_STREQ(replacementRead, replacement);
+    char existingRead[64] = { 0 };
+    ASSERT_EQ(fileSystem->Get(unalignedKey, existingRead, unalignedLength, 0), BIO_OK);
+    EXPECT_STREQ(existingRead, unalignedValue);
 
     EXPECT_EQ(fileSystem->Delete(alignedKey), BIO_OK);
     EXPECT_EQ(fileSystem->Exist(alignedKey), BIO_NOT_EXISTS);

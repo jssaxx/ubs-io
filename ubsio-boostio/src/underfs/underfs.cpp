@@ -34,6 +34,62 @@ int32_t UfsPut(const char *key, const char *value, const size_t len)
     return UnderFs::Instance()->Put(key, value, len);
 }
 
+int32_t UfsPutV(const char *key, const struct iovec *iov, size_t iovcnt)
+{
+    const auto type = UnderFsConfig::Instance()->GetUnderFsConfig().underFsType;
+    if (UNLIKELY(type != BIO_UNDERFS_LOCAL && type != BIO_UNDERFS_SHARED)) {
+        return BIO_INVALID_PARAM;
+    }
+    auto posix = std::dynamic_pointer_cast<LocalSystem>(UnderFs::Instance());
+    if (UNLIKELY(posix == nullptr)) {
+        return BIO_NOT_READY;
+    }
+    return posix->PutV(key, iov, iovcnt);
+}
+
+int32_t UfsSetLocalMetaEventCallback(UfsLocalMetaEventCallback callback, void *context)
+{
+    if (UNLIKELY(UnderFsConfig::Instance()->GetUnderFsConfig().underFsType != BIO_UNDERFS_LOCAL)) {
+        return BIO_INVALID_PARAM;
+    }
+    auto local = std::dynamic_pointer_cast<LocalSystem>(UnderFs::Instance());
+    if (UNLIKELY(local == nullptr)) {
+        return BIO_NOT_READY;
+    }
+    local->SetMetaEventCallback(callback, context);
+    return BIO_OK;
+}
+
+int32_t UfsScanLocalKeys(UfsLocalKeyInfo **items, uint64_t *count)
+{
+    if (UNLIKELY(items == nullptr || count == nullptr)) {
+        return BIO_INVALID_PARAM;
+    }
+    *items = nullptr;
+    *count = 0;
+    if (UNLIKELY(UnderFsConfig::Instance()->GetUnderFsConfig().underFsType != BIO_UNDERFS_LOCAL)) {
+        return BIO_INVALID_PARAM;
+    }
+    auto local = std::dynamic_pointer_cast<LocalSystem>(UnderFs::Instance());
+    if (UNLIKELY(local == nullptr)) {
+        return BIO_NOT_READY;
+    }
+    return local->ScanKeys(items, count);
+}
+
+int32_t UfsGetStorageMetrics(UfsStorageMetrics *metrics)
+{
+    if (UNLIKELY(metrics == nullptr ||
+        UnderFsConfig::Instance()->GetUnderFsConfig().underFsType != BIO_UNDERFS_LOCAL)) {
+        return BIO_INVALID_PARAM;
+    }
+    auto local = std::dynamic_pointer_cast<LocalSystem>(UnderFs::Instance());
+    if (UNLIKELY(local == nullptr)) {
+        return BIO_NOT_READY;
+    }
+    return local->GetStorageMetrics(*metrics);
+}
+
 int32_t UfsGet(const char *key, char *value, const size_t len, const uint64_t off)
 {
     return UnderFs::Instance()->Get(key, value, len, off);
@@ -101,5 +157,11 @@ void UfsInitUnderFsConfig(UnderFsConfigInfo config)
     bioConfig.hdfsConfig.nameNode = config.hdfsConfig.nameNode;
     bioConfig.hdfsConfig.workingPath = config.hdfsConfig.workingPath;
     bioConfig.localConfig.rootPath = config.localConfig.rootPath;
+    if (bioConfig.underFsType == BIO_UNDERFS_LOCAL) {
+        bioConfig.localConfig.slotIndex = config.localConfig.slotIndex;
+        bioConfig.localConfig.deviceCount = config.localConfig.deviceCount;
+        bioConfig.localConfig.evictionPolicy = ParseFileEvictionPolicy(config.localConfig.evictionPolicy);
+        bioConfig.localConfig.checkIntervalSeconds = config.localConfig.checkIntervalSeconds;
+    }
     UnderFs::InitUnderFsConfig(bioConfig);
 }

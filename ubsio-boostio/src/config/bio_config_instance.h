@@ -15,6 +15,7 @@
 
 #include "bio_config.h"
 #include "bio_err.h"
+#include "bio_file_eviction_policy.h"
 #include "bio_underfs_type.h"
 
 namespace ock {
@@ -107,7 +108,11 @@ const auto UNDERFS_CEPH_POOL = std::make_pair("ubsio.underfs.ceph.pool", "0:jfsp
 
 const auto UNDERFS_HDFS_NAMENODE = std::make_pair("ubsio.underfs.hdfs.name_node", "default:0");
 const auto UNDERFS_HDFS_WORKING_PATH = std::make_pair("ubsio.underfs.hdfs.working_path", "/hdfs");
-const auto UNDERFS_LOCAL_ROOT_PATH = std::make_pair("ubsio.underfs.local.root_path", "/mnt/a800/kv");
+const auto UNDERFS_ROOT_PATH = std::make_pair("ubsio.underfs.root_path", "/mnt/kv");
+const auto UNDERFS_EVICTION_POLICY =
+    std::make_pair("ubsio.underfs.eviction.policy", FileEvictionPolicyName(FileEvictionPolicyType::LRU));
+const auto UNDERFS_CHECK_INTERVAL =
+    std::make_pair("ubsio.underfs.eviction.check_interval_seconds", 10);
 const auto UNDERFS_BATCH_READ_WORKER_NUM = std::make_pair("ubsio.underfs.batch_read.worker_num", 8);
 
 const auto PROMETHEUS_ENABLE = std::make_pair("ubsio.prometheus.enable", "false");
@@ -228,6 +233,12 @@ public:
 
     struct LocalConfig {
         std::string rootPath;
+        // Runtime storage slot assigned by the standalone lease; direct UnderFS defaults to slot 0.
+        uint32_t slotIndex = 0;
+        // Configured ubsio.standalone.device_count, independent of lazily allocated slots.
+        uint32_t deviceCount = 1;
+        FileEvictionPolicyType evictionPolicy = FileEvictionPolicyType::LRU;
+        uint32_t checkIntervalSeconds = 10;
     };
 
     struct UnderFsConfig {

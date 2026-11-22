@@ -133,10 +133,10 @@ std::vector<ModuleDesc> BioServer::BuildStandaloneModules()
     modules.emplace_back("Diagnose", std::bind(&BioServer::BioServerDiagnoseInit, this), nullptr, nullptr, nullptr);
     modules.emplace_back("Tracer", std::bind(&BioServer::BioTraceInit, this), nullptr, nullptr,
         std::bind(&BioServer::BioTraceExit, this));
-    modules.emplace_back("UnderFs", std::bind(&BioServer::BioUnderFsInit, this), nullptr, nullptr,
-        std::bind(&BioServer::BioUnderFsExit, this));
     modules.emplace_back("StandaloneSlotLease", std::bind(&BioServer::BioStandaloneSlotLeaseInit, this),
         nullptr, nullptr, std::bind(&BioServer::BioStandaloneSlotLeaseExit, this));
+    modules.emplace_back("UnderFs", std::bind(&BioServer::BioUnderFsInit, this), nullptr, nullptr,
+        std::bind(&BioServer::BioUnderFsExit, this));
     modules.emplace_back("Bdm", std::bind(&BioServer::BioBdmInit, this), nullptr, nullptr,
         std::bind(&BioServer::BioBdmExit, this));
     modules.emplace_back("StandaloneMem", std::bind(&BioServer::BioStandaloneMemInit, this), nullptr, nullptr,
@@ -352,7 +352,24 @@ BResult BioServer::BioUnderFsInit()
         LOG_ERROR("Create underfs instance fail.");
         return BIO_ERR;
     }
-    return underFsPtr->Initialize(mConfig->GetUnderFsConfig());
+    auto config = mConfig->GetUnderFsConfig();
+    const bool localSlots = mStandaloneMode && config.underFsType == BIO_UNDERFS_LOCAL;
+    if (localSlots) {
+        ChkTrue(mStandaloneSlotLease.IsAcquired(), BIO_NOT_READY, "Local underfs storage slot is not acquired.");
+        config.localConfig.slotIndex = mStandaloneSlotLease.SlotIndex();
+        config.localConfig.deviceCount = mConfig->GetDaemonConfig().standaloneDeviceCount;
+    }
+    auto ret = underFsPtr->Initialize(config);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+    if (localSlots) {
+        ret = mStandaloneSlotLease.PublishReady();
+        if (UNLIKELY(ret != BIO_OK)) {
+            underFsPtr->Stop();
+        }
+    }
+    return ret;
 }
 
 void BioServer::BioUnderFsExit()
@@ -363,11 +380,12 @@ void BioServer::BioUnderFsExit()
 BResult BioServer::BioStandaloneSlotLeaseInit()
 {
     auto &daemonConfig = mConfig->GetDaemonConfig();
-    if (!daemonConfig.hasDiskCache) {
+    const bool localSlots = mConfig->GetUnderFsConfig().underFsType == BIO_UNDERFS_LOCAL;
+    if (!daemonConfig.hasDiskCache && !localSlots) {
         return mConfig->SelectStandaloneDiskByDeviceInfo();
     }
     ChkTrue(daemonConfig.standaloneDeviceCount > 0, BIO_INVALID_PARAM,
-        "Standalone disk cache requires ubsio.standalone.device_count in range [1," << DEVICE_SIZE << "].");
+        "Standalone storage requires ubsio.standalone.device_count in range [1," << DEVICE_SIZE << "].");
     uint32_t slotIndex = UINT32_MAX;
     auto ret = mStandaloneSlotLease.Acquire(daemonConfig.standaloneDeviceCount, slotIndex);
     ChkTrue(ret == BIO_OK, ret, "Acquire standalone slot failed, result:" << ret << ".");

@@ -71,8 +71,8 @@ int main(int argc, char *argv[])
     (void)system("sed -i 's/ubsio.mem.size_in_gb = .*/ubsio.mem.size_in_gb = 1/g' ./ubsio_old.conf");
     (void)system("sed -i 's/ubsio.cm.zk_host =.*/ubsio.cm.zk_host = 127.0.0.1:2181/g' ./ubsio_old.conf");
     (void)system("sed -i 's#ubsio.log.path = .*#ubsio.log.path = .#g' ./ubsio_old.conf");
-    (void)system("sed -i 's#ubsio.underfs.local.root_path = .*"
-        "#ubsio.underfs.local.root_path = ./underfs#g' ./ubsio_old.conf");
+    (void)system("sed -i 's#ubsio.underfs.root_path = .*"
+        "#ubsio.underfs.root_path = ./underfs#g' ./ubsio_old.conf");
     if (DiskPathInvalid()) {
         TestDisk::Stub();
         (void)system("sed -i 's/ubsio.disk.path = .*/ubsio.disk.path = test1:test2/g' ./ubsio_old.conf");

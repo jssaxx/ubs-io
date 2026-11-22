@@ -21,7 +21,7 @@
 
 namespace ock {
 namespace bio {
-constexpr size_t LOCAL_FILE_FOOTER_SIZE = 10;
+constexpr size_t LOCAL_FILE_FOOTER_SIZE = 11;
 constexpr size_t LOCAL_FILE_MAX_KEY_SIZE = 255;
 constexpr uint64_t LOCAL_FILE_MAX_VALUE_SIZE = UINT32_MAX;
 constexpr size_t LOCAL_FILE_MAX_METADATA_SIZE = LOCAL_FILE_MAX_KEY_SIZE + LOCAL_FILE_FOOTER_SIZE;

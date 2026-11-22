@@ -135,7 +135,9 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(UNDERFS_CEPH_POOL, VStrCephPool::Create(UNDERFS_CEPH_POOL.first));
     AddStrConf(UNDERFS_HDFS_NAMENODE);
     AddStrConf(UNDERFS_HDFS_WORKING_PATH);
-    AddStrConf(UNDERFS_LOCAL_ROOT_PATH);
+    AddStrConf(UNDERFS_ROOT_PATH);
+    AddStrConf(UNDERFS_EVICTION_POLICY, VStrEnum::Create(UNDERFS_EVICTION_POLICY.first, "lru"));
+    AddIntConf(UNDERFS_CHECK_INTERVAL, VIntRange::Create(UNDERFS_CHECK_INTERVAL.first, 1, 3600));
     AddIntConf(UNDERFS_BATCH_READ_WORKER_NUM,
         VIntRange::Create(UNDERFS_BATCH_READ_WORKER_NUM.first, NO_1, NO_64));
 
@@ -541,10 +543,17 @@ BResult BioConfig::AutoConfigUnderFs(const ConfigurationPtr &conf)
     mUnderFsConfig.cephConfig.user = conf->GetStr(UNDERFS_CEPH_USER.first);
     mUnderFsConfig.hdfsConfig.nameNode = conf->GetStr(UNDERFS_HDFS_NAMENODE.first);
     mUnderFsConfig.hdfsConfig.workingPath = conf->GetStr(UNDERFS_HDFS_WORKING_PATH.first);
-    mUnderFsConfig.localConfig.rootPath = conf->GetStr(UNDERFS_LOCAL_ROOT_PATH.first);
-    if (mUnderFsConfig.underFsType == BIO_UNDERFS_LOCAL || mUnderFsConfig.underFsType == BIO_UNDERFS_SHARED) {
-        if (!FileUtil::CanonicalPath(mUnderFsConfig.localConfig.rootPath)) {
-            LOG_ERROR("Local underfs root path does not exist, value:" << mUnderFsConfig.localConfig.rootPath << ".");
+    mUnderFsConfig.localConfig.rootPath = conf->GetStr(UNDERFS_ROOT_PATH.first);
+    auto &local = mUnderFsConfig.localConfig;
+    local.evictionPolicy = ParseFileEvictionPolicy(conf->GetStr(UNDERFS_EVICTION_POLICY.first).c_str());
+    local.checkIntervalSeconds = static_cast<uint32_t>(conf->GetInt(UNDERFS_CHECK_INTERVAL.first));
+    if (UNLIKELY(local.evictionPolicy != FileEvictionPolicyType::LRU)) {
+        LOG_ERROR("Invalid UnderFS eviction policy: require lru.");
+        return BIO_INVALID_PARAM;
+    }
+    if (type == BIO_UNDERFS_LOCAL || type == BIO_UNDERFS_SHARED) {
+        if (UNLIKELY(!FileUtil::CanonicalPath(mUnderFsConfig.localConfig.rootPath))) {
+            LOG_ERROR("UnderFS root path does not exist, value:" << mUnderFsConfig.localConfig.rootPath << ".");
             return BIO_ERR;
         }
     }

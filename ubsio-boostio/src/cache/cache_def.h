@@ -21,6 +21,7 @@
 #include <ctime>
 #include <vector>
 #include "bio.h"
+#include "bio_meta_event.h"
 #include "slice.h"
 
 namespace ock {
@@ -35,16 +36,6 @@ using CheckServiceState = std::function<bool()>;
 using CheckDegrade = std::function<BResult(uint16_t ptId, bool &isDegrade)>;
 using CheckLocRole = std::function<BResult(uint16_t ptId, bool &isMaster)>;
 
-enum UbsIoMetaEventType : uint8_t {
-    UBSIO_META_RECOVER = 0,
-    UBSIO_META_DELETE = 1,
-};
-
-struct UbsIoMetaEvent {
-    UbsIoMetaEventType type;
-    std::string key;
-};
-
 struct UbsIoMetaEventBatch {
     std::mutex lock;
     bool closed{ false };
@@ -52,8 +43,6 @@ struct UbsIoMetaEventBatch {
 };
 
 using UbsIoMetaEventBatchPtr = std::shared_ptr<UbsIoMetaEventBatch>;
-
-using UbsIoMetaEventCallback = std::function<void(const std::vector<UbsIoMetaEvent> &events)>;
 
 enum CacheType : uint16_t {
     WRITE_CACHE = 0,

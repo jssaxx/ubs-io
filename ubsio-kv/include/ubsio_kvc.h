@@ -123,7 +123,8 @@ int32_t UbsioGetResourceInfo(UbsioResourceInfo *info);
 /**
  * @brief Register metadata events for MemCache Master metadata synchronization.
  *
- * DELETE events are reported only when UnderFS is disabled; RECOVER events are reported in either mode.
+ * DELETE events report final cache eviction without UnderFS, or final local UnderFS file eviction.
+ * Cache migration into UnderFS does not report DELETE. Register before init to receive recovery events.
  * The events buffer and key pointers are only valid during the callback; the callee must copy keys if needed.
  * Passing nullptr unregisters the callback.
  */

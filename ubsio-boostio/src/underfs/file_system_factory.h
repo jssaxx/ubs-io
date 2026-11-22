@@ -34,9 +34,11 @@ public:
             case BIO_UNDERFS_HDFS:
                 return std::make_shared<HdfsSystem>();
             case BIO_UNDERFS_LOCAL:
+                return std::make_shared<LocalSystem>();
             case BIO_UNDERFS_SHARED:
-            default:
                 return std::make_shared<SharedSystem>();
+            default:
+                return std::make_shared<LocalSystem>();
         }
     }
 };

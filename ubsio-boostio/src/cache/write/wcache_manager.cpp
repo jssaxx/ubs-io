@@ -11,6 +11,7 @@
  */
 
 #include "wcache_manager.h"
+#include "ufs_helper.h"
 #include "flow_manager.h"
 #include <algorithm>
 #include <iterator>
@@ -207,6 +208,10 @@ void WCacheManager::Exit()
         mGlobalEvictQueues.clear();
     }
 
+    // Stop file eviction producers before draining and stopping the metadata reporter.
+    if (BioConfig::Instance()->GetUnderFsConfig().underFsType == BIO_UNDERFS_LOCAL) {
+        UfsHelper::Instance()->Stop();
+    }
     FlushMetaEvents();
     if (mMetaReportService != nullptr) {
         mMetaReportService->Stop();
