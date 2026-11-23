@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 #include <time.h>
+#include <sys/uio.h>
 #include "file_system.h"
 #include "underfs_config.h"
 
@@ -43,6 +44,22 @@ typedef struct {
     HdfsConfig hdfsConfig;
     LocalConfig localConfig;
 }UnderFsConfigInfo;
+
+typedef enum {
+    UFS_LOCAL_META_DELETE = 1,
+} UfsLocalMetaEventType;
+
+typedef struct {
+    char key[MAX_KEY_SIZE];
+    uint64_t valueLen;
+} UfsLocalKeyInfo;
+
+typedef struct {
+    uint64_t totalCapacity;
+    uint64_t usedBytes;
+} UfsStorageMetrics;
+
+typedef void (*UfsLocalMetaEventCallback)(void *context, UfsLocalMetaEventType type, const char *key);
 
 int32_t UfsInit();
 

@@ -19,6 +19,7 @@
 #include "dl_ceph_system.h"
 #include "hdfs_system.h"
 #include "local_system.h"
+#include "shared_system.h"
 #include "bio_ref.h"
 
 namespace ock {
@@ -35,7 +36,7 @@ public:
             case BIO_UNDERFS_LOCAL:
             case BIO_UNDERFS_SHARED:
             default:
-                return std::make_shared<LocalSystem>();
+                return std::make_shared<SharedSystem>();
         }
     }
 };
