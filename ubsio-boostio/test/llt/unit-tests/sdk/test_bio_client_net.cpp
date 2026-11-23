@@ -29,6 +29,18 @@ using namespace ock::bio;
 using namespace ock::bio::net;
 
 namespace {
+TEST(BioClientNetTest, PosixUnderFsResponseValidatesBothDeploymentModes)
+{
+    auto net = BioClientNet::Instance();
+    for (const char *mode : {"local", "shared"}) {
+        GetUnderFsConfigResponse rsp = {};
+        std::snprintf(rsp.underFsType, sizeof(rsp.underFsType), "%s", mode);
+        EXPECT_FALSE(net->CheckGetUnderFsConfigResp(rsp));
+        std::snprintf(rsp.localConfig.rootPath, sizeof(rsp.localConfig.rootPath), "%s", "/mnt/kv");
+        EXPECT_TRUE(net->CheckGetUnderFsConfigResp(rsp));
+    }
+}
+
 StandaloneRuntimeConfigResponse MakeRuntimeConfig()
 {
     StandaloneRuntimeConfigResponse rsp = {};

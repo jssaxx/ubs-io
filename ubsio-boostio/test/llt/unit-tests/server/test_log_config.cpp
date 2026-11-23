@@ -291,3 +291,47 @@ TEST(TestLogConfig, shared_instances_share_file_namespace)
     ASSERT_EQ(writer->Delete(key), BIO_OK);
     EXPECT_EQ(reader->Exist(key), BIO_NOT_EXISTS);
 }
+
+TEST(TestLogConfig, shared_config_uses_common_root_and_validates_path)
+{
+    char path[] = "/tmp/ubsio-shared-conf-XXXXXX";
+    ASSERT_NE(mkdtemp(path), nullptr);
+    struct Cleanup {
+        const char *path;
+        ~Cleanup() { rmdir(path); }
+    } cleanup{path};
+    auto conf = MakeLogConfiguration();
+    auto *config = static_cast<BioConfig *>(conf.Get());
+    conf->Set(UNDERFS_FILE_SYSTEM_TYPE.first, std::string("shared"));
+    conf->Set(UNDERFS_ROOT_PATH.first, std::string(path));
+    ASSERT_EQ(config->AutoConfigUnderFs(conf), BIO_OK);
+    EXPECT_EQ(config->GetUnderFsConfig().underFsType, BIO_UNDERFS_SHARED);
+    EXPECT_EQ(config->GetUnderFsConfig().localConfig.rootPath, path);
+    EXPECT_NE(std::dynamic_pointer_cast<SharedSystem>(FileSystemFactory::CreateFileSystem(BIO_UNDERFS_SHARED)),
+        nullptr);
+    conf->Set(UNDERFS_ROOT_PATH.first, std::string("/ubsio-missing-shared-root"));
+    EXPECT_EQ(config->AutoConfigUnderFs(conf), BIO_ERR);
+    conf->Set(UNDERFS_ROOT_PATH.first, std::string());
+    EXPECT_EQ(config->AutoConfigUnderFs(conf), BIO_ERR);
+}
+
+TEST(TestLogConfig, local_eviction_policy_defaults_to_lru_and_validates_selection)
+{
+    auto conf = MakeLogConfiguration();
+    auto *config = static_cast<BioConfig *>(conf.Get());
+    conf->Set(UNDERFS_FILE_SYSTEM_TYPE.first, std::string("local"));
+    conf->Set(UNDERFS_ROOT_PATH.first, std::string("/tmp"));
+    ASSERT_EQ(config->AutoConfigUnderFs(conf), BIO_OK);
+    EXPECT_EQ(config->GetUnderFsConfig().localConfig.evictionPolicy, FileEvictionPolicyType::LRU);
+    conf->Set(UNDERFS_EVICTION_POLICY.first, std::string("lru"));
+    ASSERT_EQ(config->AutoConfigUnderFs(conf), BIO_OK);
+    EXPECT_EQ(config->GetUnderFsConfig().localConfig.evictionPolicy, FileEvictionPolicyType::LRU);
+    conf->Set(UNDERFS_EVICTION_POLICY.first, std::string("unknown"));
+    EXPECT_EQ(config->AutoConfigUnderFs(conf), BIO_INVALID_PARAM);
+    conf->Set(UNDERFS_EVICTION_POLICY.first, std::string("fifo"));
+    EXPECT_EQ(config->AutoConfigUnderFs(conf), BIO_INVALID_PARAM);
+    const auto errors = conf->Validate();
+    EXPECT_TRUE(std::any_of(errors.begin(), errors.end(), [](const std::string &error) {
+        return error.find(UNDERFS_EVICTION_POLICY.first) != std::string::npos;
+    }));
+}

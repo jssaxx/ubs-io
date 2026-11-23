@@ -1115,6 +1115,13 @@ BResult WCache::EvictToUnderFS(const char *key, WCacheSlicePtr &slice, const siz
         BIO_TRACE_START(SDK_TRACE_PUT_TO_UNDERFS);
         ret = mUnderFs->Put(key, reinterpret_cast<char *>(addrVec[0].chunkId + addrVec[0].chunkOffset), length);
         BIO_TRACE_END(SDK_TRACE_PUT_TO_UNDERFS, ret);
+    } else if (mUnderFs->SupportsPutV()) {
+        std::vector<struct iovec> buffers;
+        buffers.reserve(addrVec.size());
+        for (const auto &addr : addrVec) {
+            buffers.push_back({reinterpret_cast<void *>(addr.chunkId + addr.chunkOffset), addr.chunkLen});
+        }
+        ret = mUnderFs->PutV(key, buffers.data(), buffers.size());
     } else {
         void *value = nullptr;
         int32_t allocRet = posix_memalign(&value, NO_4096, length);
