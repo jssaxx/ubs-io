@@ -36,6 +36,10 @@ typedef struct {
 
 typedef struct {
     const char *rootPath;
+    uint32_t slotIndex;
+    uint32_t deviceCount;
+    const char *evictionPolicy;
+    uint32_t checkIntervalSeconds;
 }LocalConfig;
 
 typedef struct {
@@ -67,6 +71,8 @@ void UfsStop();
 
 int32_t UfsPut(const char *key, const char *value, const size_t len);
 
+int32_t UfsPutV(const char *key, const struct iovec *iov, size_t iovcnt);
+
 int32_t UfsGet(const char *key, char *value, const size_t len, const uint64_t off);
 
 int32_t UfsGetWithRealLen(const char *key, char *value, const size_t len, const uint64_t off, size_t *realLen);
@@ -81,8 +87,14 @@ int32_t UfsList(const char *prefix, ObjStatInfo **objStat, int *objNum);
 
 void UfsInitUnderFsConfig(UnderFsConfigInfo config);
 
+int32_t UfsSetLocalMetaEventCallback(UfsLocalMetaEventCallback callback, void *context);
+
+int32_t UfsScanLocalKeys(UfsLocalKeyInfo **items, uint64_t *count);
+
+int32_t UfsGetStorageMetrics(UfsStorageMetrics *metrics);
+
 
 #ifdef __cplusplus
 }
 #endif
-#endif // BOOSTIO_UNDERFS_C_H
+#endif

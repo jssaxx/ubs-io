@@ -21,7 +21,7 @@ namespace ock {
 namespace bio {
 enum class FileEvictionPolicyType : uint32_t {
     LRU = 0,
-    INVALID = 2,
+    INVALID,
 };
 
 inline FileEvictionPolicyType ParseFileEvictionPolicy(const char *name) noexcept

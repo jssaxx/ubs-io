@@ -14,12 +14,18 @@
 #define BOOSTIO_UFS_HELPER_H
 
 #include <string>
+#include <cstdlib>
+#include <memory>
 #include <unordered_map>
 #include <functional>
+#include <mutex>
+#include <utility>
+#include <vector>
 #include <dlfcn.h>
 #include "bio_err.h"
 #include "underfs_c.h"
 #include "bio_trace.h"
+#include "bio_meta_event.h"
 
 namespace ock {
 namespace bio {
@@ -64,7 +70,7 @@ namespace bio {
                 LOG_ERROR("Failed to init operations.");
                 return BIO_UFS_IOERR;
             }
-            UnderFsConfigInfo underFsConfigInfo;
+            UnderFsConfigInfo underFsConfigInfo{};
             underFsConfigInfo.underFsType = typeName;
             underFsConfigInfo.cephConfig.cfgPath = config.cephConfig.cfgPath.c_str();
             underFsConfigInfo.cephConfig.cluster = config.cephConfig.cluster.c_str();
@@ -73,10 +79,23 @@ namespace bio {
             underFsConfigInfo.hdfsConfig.nameNode = config.hdfsConfig.nameNode.c_str();
             underFsConfigInfo.hdfsConfig.workingPath = config.hdfsConfig.workingPath.c_str();
             underFsConfigInfo.localConfig.rootPath = config.localConfig.rootPath.c_str();
+            underFsConfigInfo.localConfig.slotIndex = config.localConfig.slotIndex;
+            underFsConfigInfo.localConfig.deviceCount = config.localConfig.deviceCount;
+            underFsConfigInfo.localConfig.evictionPolicy = FileEvictionPolicyName(config.localConfig.evictionPolicy);
+            underFsConfigInfo.localConfig.checkIntervalSeconds = config.localConfig.checkIntervalSeconds;
             initUnderFsConfigOp(underFsConfigInfo);
+            if (config.underFsType == BIO_UNDERFS_LOCAL) {
+                auto result = InitLocalExtensions();
+                if (UNLIKELY(result != BIO_OK)) {
+                    return result;
+                }
+            }
             auto ret = initOp();
             if (ret != BIO_OK) {
                 LOG_ERROR("Failed to init underfs, ret:" << ret << ".");
+                if (config.underFsType == BIO_UNDERFS_LOCAL) {
+                    Stop();
+                }
                 return ret;
             }
             LOG_DEBUG("UfsHelper init success");
@@ -89,6 +108,22 @@ namespace bio {
                 return;
             }
             stopOp();
+            std::lock_guard<std::mutex> lock(mLocalMetaMutex);
+            mLocalMetaEventCallback = nullptr;
+            std::vector<UbsIoMetaEvent>().swap(mPendingLocalMetaEvents);
+        }
+
+        // Replaces the callback; queued events are delivered when a callback is registered.
+        void RegLocalMetaEventCallback(UbsIoMetaEventCallback callback) noexcept
+        {
+            std::lock_guard<std::mutex> lock(mLocalMetaMutex);
+            mLocalMetaEventCallback = std::move(callback);
+            if (mLocalMetaEventCallback != nullptr) {
+                if (!mPendingLocalMetaEvents.empty()) {
+                    mLocalMetaEventCallback(mPendingLocalMetaEvents);
+                }
+                std::vector<UbsIoMetaEvent>().swap(mPendingLocalMetaEvents);
+            }
         }
 
         BResult Put(const char *key, const char *value, const size_t len)
@@ -101,6 +136,25 @@ namespace bio {
                 return ret;
             }
             LOG_DEBUG("UfsHelper put success, key: " << key << ", len: " << len << ".");
+            return ret;
+        }
+
+        bool SupportsPutV() const noexcept
+        {
+            return mConfig.underFsType == BIO_UNDERFS_LOCAL || mConfig.underFsType == BIO_UNDERFS_SHARED;
+        }
+
+        BResult PutV(const char *key, const struct iovec *iov, size_t iovcnt) noexcept
+        {
+            if (UNLIKELY(!SupportsPutV())) {
+                return BIO_INVALID_PARAM;
+            }
+            BIO_TRACE_START(UFS_TRACE_PUT);
+            auto ret = putVOp(key, iov, iovcnt);
+            BIO_TRACE_END(UFS_TRACE_PUT, ret);
+            if (UNLIKELY(ret != BIO_OK)) {
+                LOG_ERROR("UnderFS vectored put failed, ret:" << ret << ", vectors:" << iovcnt << ".");
+            }
             return ret;
         }
 
@@ -131,6 +185,38 @@ namespace bio {
             LOG_DEBUG("UfsHelper get with real length success, key:" << key << ", len:" << len <<
                 ", realLen:" << realLen << ", offset:" << off << ".");
             return ret;
+        }
+
+        BResult GetStorageMetrics(UfsStorageMetrics &metrics) noexcept
+        {
+            if (UNLIKELY(mConfig.underFsType != BIO_UNDERFS_LOCAL)) {
+                return BIO_INVALID_PARAM;
+            }
+            if (UNLIKELY(getStorageMetricsOp == nullptr)) {
+                return BIO_NOT_READY;
+            }
+            return getStorageMetricsOp(&metrics);
+        }
+
+        BResult ScanLocalKeys(std::unordered_map<std::string, uint64_t> &items) noexcept
+        {
+            if (UNLIKELY(mConfig.underFsType != BIO_UNDERFS_LOCAL)) {
+                return BIO_INVALID_PARAM;
+            }
+            if (UNLIKELY(scanLocalKeysOp == nullptr)) {
+                return BIO_NOT_READY;
+            }
+            UfsLocalKeyInfo *snapshot = nullptr;
+            uint64_t count = 0;
+            BResult ret = scanLocalKeysOp(&snapshot, &count);
+            std::unique_ptr<UfsLocalKeyInfo, decltype(&std::free)> result(snapshot, &std::free);
+            if (UNLIKELY(ret != BIO_OK)) {
+                return ret;
+            }
+            for (uint64_t i = 0; i < count; ++i) {
+                items.emplace(snapshot[i].key, snapshot[i].valueLen);
+            }
+            return BIO_OK;
         }
 
         BResult Delete(const char *key)
@@ -197,11 +283,45 @@ namespace bio {
         DEFINE_REF_COUNT_FUNCTIONS;
 
     private:
+        BResult InitLocalExtensions() noexcept
+        {
+            if ((getStorageMetricsOp = reinterpret_cast<GetStorageMetricsFuncPtr>(
+                LoadFunction("UfsGetStorageMetrics"))) == nullptr) {
+                return BIO_NOT_READY;
+            }
+            if ((scanLocalKeysOp = reinterpret_cast<ScanLocalKeysFuncPtr>(LoadFunction("UfsScanLocalKeys"))) ==
+                nullptr) {
+                return BIO_NOT_READY;
+            }
+            using SetCallback = int32_t (*)(UfsLocalMetaEventCallback, void *);
+            auto setCallback = reinterpret_cast<SetCallback>(dlsym(handler, "UfsSetLocalMetaEventCallback"));
+            if (UNLIKELY(setCallback == nullptr)) {
+                LOG_ERROR("Local UnderFS requires metadata event support in libbio_underfs.so.");
+                return BIO_NOT_READY;
+            }
+            return setCallback(&UfsHelper::ReceiveLocalMetaEvent, this);
+        }
+
+        static void ReceiveLocalMetaEvent(void *context, UfsLocalMetaEventType type, const char *key) noexcept
+        {
+            if (UNLIKELY(type != UFS_LOCAL_META_DELETE)) {
+                return;
+            }
+            auto *self = static_cast<UfsHelper *>(context);
+            std::lock_guard<std::mutex> lock(self->mLocalMetaMutex);
+            if (self->mLocalMetaEventCallback == nullptr) {
+                self->mPendingLocalMetaEvents.push_back({UBSIO_META_DELETE, key});
+                return;
+            }
+            const std::vector<UbsIoMetaEvent> events{{UBSIO_META_DELETE, key}};
+            self->mLocalMetaEventCallback(events);
+        }
+
         void *LoadFunction(const char *name)
         {
             void *ptr = nullptr;
             ptr = dlsym(handler, name);
-            if (ptr == nullptr) {
+            if (UNLIKELY(ptr == nullptr)) {
                 LOG_ERROR("Failed to load function " << name << ".");
                 return nullptr;
             }
@@ -217,6 +337,9 @@ namespace bio {
                 return BIO_INNER_ERR;
             }
             if ((putOp = reinterpret_cast<PutFuncPtr>(LoadFunction("UfsPut"))) == nullptr) {
+                return BIO_INNER_ERR;
+            }
+            if ((putVOp = reinterpret_cast<PutVFuncPtr>(LoadFunction("UfsPutV"))) == nullptr) {
                 return BIO_INNER_ERR;
             }
             if ((getOp = reinterpret_cast<GetFuncPtr>(LoadFunction("UfsGet"))) == nullptr) {
@@ -248,6 +371,7 @@ namespace bio {
         using InitFuncPtr = int (*)();
         using StopFuncPtr = void (*)();
         using PutFuncPtr = int (*)(const char *, const char *, size_t);
+        using PutVFuncPtr = int32_t (*)(const char *, const struct iovec *, size_t);
         using GetFuncPtr = int (*)(const char *, char *, const size_t, const uint64_t);
         using GetWithRealLenFuncPtr = int (*)(const char *, char *, const size_t, const uint64_t, size_t *);
         using DeleteFuncPtr = int (*)(const char *);
@@ -255,11 +379,14 @@ namespace bio {
         using StatFuncPtr = int32_t (*)(const char *, ObjStatInfo *);
         using ListFuncPtr = int (*)(const char *, ObjStatInfo **, int *);
         using InitUnderFsConfigFuncPtr = void (*)(UnderFsConfigInfo);
+        using ScanLocalKeysFuncPtr = int32_t (*)(UfsLocalKeyInfo **, uint64_t *);
+        using GetStorageMetricsFuncPtr = int32_t (*)(UfsStorageMetrics *);
 
         void *handler = nullptr;
         InitFuncPtr initOp = nullptr;
         StopFuncPtr stopOp = nullptr;
         PutFuncPtr putOp = nullptr;
+        PutVFuncPtr putVOp = nullptr;
         GetFuncPtr getOp = nullptr;
         GetWithRealLenFuncPtr getWithRealLenOp = nullptr;
         DeleteFuncPtr deleteOp = nullptr;
@@ -267,8 +394,13 @@ namespace bio {
         StatFuncPtr statOp = nullptr;
         ListFuncPtr listOp = nullptr;
         InitUnderFsConfigFuncPtr  initUnderFsConfigOp = nullptr;
+        ScanLocalKeysFuncPtr scanLocalKeysOp = nullptr;
+        GetStorageMetricsFuncPtr getStorageMetricsOp = nullptr;
 
         BioConfig::UnderFsConfig mConfig;
+        std::mutex mLocalMetaMutex;
+        std::vector<UbsIoMetaEvent> mPendingLocalMetaEvents;
+        UbsIoMetaEventCallback mLocalMetaEventCallback{ nullptr };
 
         DEFINE_REF_COUNT_VARIABLE;
     };

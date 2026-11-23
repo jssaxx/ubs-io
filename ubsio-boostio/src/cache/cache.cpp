@@ -651,7 +651,17 @@ BResult Cache::List(char *prefix, uint16_t ptId, bool force, std::unordered_map<
 
 BResult Cache::ScanDiskKeys(std::unordered_map<std::string, uint64_t> &items)
 {
-    return mWCacheManager->ScanDiskKeys(items);
+    BResult ret = mWCacheManager->ScanDiskKeys(items);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+    if (BioConfig::Instance()->GetUnderFsConfig().underFsType == BIO_UNDERFS_LOCAL) {
+        ret = UfsHelper::Instance()->ScanLocalKeys(items);
+        if (UNLIKELY(ret != BIO_OK)) {
+            items.clear();
+        }
+    }
+    return ret;
 }
 
 BResult Cache::Delete(uint16_t ptId, const Key &key)
@@ -735,7 +745,10 @@ void Cache::RegCheckLocRole(CheckLocRole locRole)
 
 void Cache::RegUbsIoMetaEventCallback(UbsIoMetaEventCallback callback)
 {
-    mWCacheManager->RegUbsIoMetaEventCallback(std::move(callback));
+    mWCacheManager->RegUbsIoMetaEventCallback(callback);
+    if (BioConfig::Instance()->GetUnderFsConfig().underFsType == BIO_UNDERFS_LOCAL) {
+        UfsHelper::Instance()->RegLocalMetaEventCallback(std::move(callback));
+    }
 }
 
 BResult Cache::GetEvictOffset(uint64_t flowId, uint64_t &flowOffset)

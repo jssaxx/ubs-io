@@ -29,7 +29,7 @@
 using namespace ock::bio;
 
 namespace {
-class LocalUnderFsFileConfig : public BioConfig {};
+class UnderFsFileConfig : public BioConfig {};
 
 ConfigurationPtr MakeLogConfiguration()
 {
@@ -128,12 +128,12 @@ TEST(TestLogConfig, local_and_shared_underfs_use_file_backend_and_validate_root)
         auto conf = MakeLogConfiguration();
         auto *config = static_cast<BioConfig *>(conf.Get());
         conf->Set(UNDERFS_FILE_SYSTEM_TYPE.first, std::string(item.first));
-        conf->Set(UNDERFS_LOCAL_ROOT_PATH.first, std::string("/ubsio-missing-local-root"));
+        conf->Set(UNDERFS_ROOT_PATH.first, std::string("/ubsio-missing-local-root"));
         EXPECT_EQ(config->AutoConfigUnderFs(conf), BIO_ERR);
         char directoryTemplate[] = "/tmp/ubsio-local-config-XXXXXX";
         char *directory = mkdtemp(directoryTemplate);
         ASSERT_NE(directory, nullptr);
-        conf->Set(UNDERFS_LOCAL_ROOT_PATH.first, std::string(directory));
+        conf->Set(UNDERFS_ROOT_PATH.first, std::string(directory));
         EXPECT_EQ(config->AutoConfigUnderFs(conf), BIO_OK);
         EXPECT_EQ(config->GetUnderFsConfig().underFsType, item.second);
         EXPECT_EQ(config->GetUnderFsConfig().localConfig.rootPath, directory);
@@ -167,7 +167,7 @@ TEST(TestLogConfig, underfs_config_strings_map_to_enum_before_cache_defaults)
     conf->Set(DISK_CONF_PATH.first, std::string());
     conf->Set(BIO_CACHE_QOS_ENABLE.first, std::string("false"));
     conf->Set(WCACHE_EVICT_WATER_LEVEL.first, int32_t{0});
-    conf->Set(UNDERFS_LOCAL_ROOT_PATH.first, std::string(directory));
+    conf->Set(UNDERFS_ROOT_PATH.first, std::string(directory));
     conf->Set(UNDERFS_CEPH_CFG_PATH.first, cephPath);
     const std::pair<const char *, BioUnderFsType> cases[] = {
         {"none", BIO_UNDERFS_NONE}, {"ceph", BIO_UNDERFS_CEPH}, {"hdfs", BIO_UNDERFS_HDFS},
@@ -189,9 +189,9 @@ TEST(TestLogConfig, underfs_config_strings_map_to_enum_before_cache_defaults)
     EXPECT_EQ(UnderFsTypeName(BIO_UNDERFS_BUTT), nullptr);
 }
 
-TEST(TestLogConfig, local_and_shared_underfs_are_loaded_and_validated_from_config_file)
+TEST(TestLogConfig, common_underfs_options_are_loaded_and_validated_from_config_file)
 {
-    char directoryTemplate[] = "ubsio-local-conf-XXXXXX";
+    char directoryTemplate[] = "ubsio-underfs-conf-XXXXXX";
     char *directory = mkdtemp(directoryTemplate);
     ASSERT_NE(directory, nullptr);
     struct Cleanup {
@@ -202,6 +202,8 @@ TEST(TestLogConfig, local_and_shared_underfs_are_loaded_and_validated_from_confi
         }
     } cleanup{directory};
     const std::string path = std::string(directory) + "/ubsio.conf";
+    std::string canonicalRoot(directory);
+    ASSERT_TRUE(FileUtil::CanonicalPath(canonicalRoot));
     const std::pair<const char *, BioUnderFsType> cases[] = {
         {"local", BIO_UNDERFS_LOCAL}, {"shared", BIO_UNDERFS_SHARED}
     };
@@ -210,37 +212,41 @@ TEST(TestLogConfig, local_and_shared_underfs_are_loaded_and_validated_from_confi
         {
             std::ofstream file(path);
             ASSERT_TRUE(file.is_open());
-            file << UNDERFS_FILE_SYSTEM_TYPE.first << "=" << item.first << "\n"
-                 << UNDERFS_LOCAL_ROOT_PATH.first << "=" << directory << "\n";
+            file << "ubsio.underfs.file_system_type=" << item.first << "\n"
+                 << "ubsio.underfs.root_path=" << directory << "\n"
+                 << "ubsio.underfs.eviction.policy=lru\n"
+                 << "ubsio.underfs.eviction.check_interval_seconds=17\n";
         }
-        ASSERT_TRUE(Configuration::ReadConf<LocalUnderFsFileConfig>(path));
-        auto conf = Configuration::GetInstance<LocalUnderFsFileConfig>();
+        ASSERT_TRUE(Configuration::ReadConf<UnderFsFileConfig>(path));
+        auto conf = Configuration::GetInstance<UnderFsFileConfig>();
         auto *config = static_cast<BioConfig *>(conf.Get());
         const auto errors = conf->Validate();
         EXPECT_TRUE(std::none_of(errors.begin(), errors.end(), [](const std::string &error) {
-            return error.find(UNDERFS_FILE_SYSTEM_TYPE.first) != std::string::npos;
+            return error.find("ubsio.underfs.") != std::string::npos;
         }));
         ASSERT_EQ(config->AutoConfigUnderFs(conf), BIO_OK);
         EXPECT_EQ(config->GetUnderFsConfig().underFsType, item.second);
-        std::string canonicalRoot(directory);
-        ASSERT_TRUE(FileUtil::CanonicalPath(canonicalRoot));
-        EXPECT_EQ(config->GetUnderFsConfig().localConfig.rootPath, canonicalRoot);
+        const auto &fileConfig = config->GetUnderFsConfig().localConfig;
+        EXPECT_EQ(fileConfig.rootPath, canonicalRoot);
+        EXPECT_EQ(fileConfig.evictionPolicy, FileEvictionPolicyType::LRU);
+        EXPECT_EQ(fileConfig.checkIntervalSeconds, 17U);
     }
     {
         std::ofstream file(path);
         ASSERT_TRUE(file.is_open());
         file << UNDERFS_FILE_SYSTEM_TYPE.first << "=unknown\n";
     }
-    ASSERT_TRUE(Configuration::ReadConf<LocalUnderFsFileConfig>(path));
-    const auto invalidErrors = Configuration::GetInstance<LocalUnderFsFileConfig>()->Validate();
+    ASSERT_TRUE(Configuration::ReadConf<UnderFsFileConfig>(path));
+    auto conf = Configuration::GetInstance<UnderFsFileConfig>();
+    const auto invalidErrors = conf->Validate();
     EXPECT_TRUE(std::any_of(invalidErrors.begin(), invalidErrors.end(), [](const std::string &error) {
         return error.find(UNDERFS_FILE_SYSTEM_TYPE.first) != std::string::npos;
     }));
 }
 
-TEST(TestLogConfig, shared_and_local_instances_share_file_namespace)
+TEST(TestLogConfig, shared_instances_share_file_namespace)
 {
-    char directoryTemplate[] = "ubsio-local-files-XXXXXX";
+    char directoryTemplate[] = "ubsio-shared-files-XXXXXX";
     char *directory = mkdtemp(directoryTemplate);
     ASSERT_NE(directory, nullptr);
     const auto originalConfig = UnderFsConfig::Instance()->GetUnderFsConfig();
@@ -249,7 +255,7 @@ TEST(TestLogConfig, shared_and_local_instances_share_file_namespace)
     config.localConfig.rootPath = directory;
     UnderFsConfig::Initialize(config);
     auto writer = FileSystemFactory::CreateFileSystem(BIO_UNDERFS_SHARED);
-    auto reader = FileSystemFactory::CreateFileSystem(BIO_UNDERFS_LOCAL);
+    auto reader = FileSystemFactory::CreateFileSystem(BIO_UNDERFS_SHARED);
     struct Cleanup {
         BioConfig::UnderFsConfig original;
         std::string directory;
@@ -265,7 +271,7 @@ TEST(TestLogConfig, shared_and_local_instances_share_file_namespace)
     } cleanup{originalConfig, directory, writer, reader};
     ASSERT_EQ(writer->Init(), BIO_OK);
     ASSERT_EQ(reader->Init(), BIO_OK);
-    const char key[] = "local-layout-key";
+    const char key[] = "shared-layout-key";
     const char payload[] = "shared file payload";
     constexpr size_t readBufferSize = 64;
     char buffer[readBufferSize]{};
