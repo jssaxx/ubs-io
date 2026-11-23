@@ -26,6 +26,7 @@
 #include "bdm_disk.h"
 #include "mirror_server.h"
 #include "disk_resource_monitor.h"
+#include "ufs_helper.h"
 
 using namespace ock::bio;
 
@@ -3399,6 +3400,16 @@ BResult MirrorServer::CalcCacheResourceLocal(CacheResourceRequest *req, CacheRes
     rsp->rCacheDiskCapacity = desc.diskCapacity;
     rsp->rCacheMemUsedSize = desc.memUsedSize;
     rsp->rCacheDiskUsedSize = desc.diskUsedSize;
+    auto underFs = UfsHelper::Instance();
+    if (underFs->GetConfig().underFsType == BIO_UNDERFS_LOCAL) {
+        UfsStorageMetrics metrics{};
+        BResult ret = underFs->GetStorageMetrics(metrics);
+        if (UNLIKELY(ret != BIO_OK)) {
+            return ret;
+        }
+        rsp->wCacheDiskCapacity = metrics.totalCapacity;
+        rsp->wCacheDiskUsedSize = metrics.usedBytes;
+    }
     if (req->includeDiskInfo) {
         DiskResourceMonitor::Query(rsp->disks, rsp->diskNum);
     }
@@ -3553,20 +3564,10 @@ int32_t MirrorServer::MirrorServerQueryCacheResource(ServiceContext &ctx)
 {
     CacheResourceResponse rsp{};
     auto req = static_cast<CacheResourceRequest *>(ctx.MessageData());
-    rsp.nodeId = BioServer::Instance()->GetLocalNid().VNodeId();
-    CacheResDescription desc{};
-    Cache::Instance().GetCacheResources(desc, WRITE_CACHE);
-    rsp.wCacheMemCapacity = desc.memCapacity;
-    rsp.wCacheDiskCapacity = desc.diskCapacity;
-    rsp.wCacheMemUsedSize = desc.memUsedSize;
-    rsp.wCacheDiskUsedSize = desc.diskUsedSize;
-    Cache::Instance().GetCacheResources(desc, READ_CACHE);
-    rsp.rCacheMemCapacity = desc.memCapacity;
-    rsp.rCacheDiskCapacity = desc.diskCapacity;
-    rsp.rCacheMemUsedSize = desc.memUsedSize;
-    rsp.rCacheDiskUsedSize = desc.diskUsedSize;
-    if (req != nullptr && req->includeDiskInfo) {
-        DiskResourceMonitor::Query(rsp.disks, rsp.diskNum);
+    BResult ret = CalcCacheResourceLocal(req, &rsp);
+    if (UNLIKELY(ret != BIO_OK)) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
+        return BIO_OK;
     }
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(CacheResourceResponse));
     return BIO_OK;
