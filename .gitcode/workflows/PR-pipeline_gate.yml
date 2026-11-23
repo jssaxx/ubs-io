@@ -231,28 +231,52 @@ jobs:
             exit 0
           fi
 
-          runs_json="$(
-            api_get "${api_root}/api/v8/repos/${REPO_FULL_NAME}/actions/runs?workflow_name=PR-pipeline_gate&per_page=100&page=1"
-          )"
+          runs_json=""
+          latest_run_number=""
 
-          latest_run_number="$(
-            jq -r \
-              --arg pr "${PR_ID}" \
-              --arg sha "${HEAD_SHA}" '
-                [
-                  .workflow_runs[]?
-                  | select(
-                      ((.title // "") |
-                        test("(^|[^0-9])PR\\s+#?" + $pr + "([^0-9]|$)")) or
-                      (.head_sha == $sha)
-                    )
-                ]
-                | max_by(.run_number)
-                | .run_number // empty
-              ' <<<"${runs_json}"
-          )"
+          for attempt in 1 2 3 4 5; do
+            if ! runs_json="$(
+              api_get "${api_root}/api/v8/repos/${REPO_FULL_NAME}/actions/runs?workflow_name=PR-pipeline_gate&pull_request_id=${PR_ID}&per_page=100&page=1"
+            )"; then
+              echo "Failed to query runs for PR #${PR_ID}, attempt ${attempt}." >&2
+            else
+              latest_run_number="$(
+                jq -r \
+                  --arg pr "${PR_ID}" '
+                    [
+                      .workflow_runs[]?
+                      | select((.pull_request_id | tostring) == $pr)
+                      | .run_number
+                    ]
+                    | max // empty
+                  ' <<<"${runs_json}"
+              )" || latest_run_number=""
+
+              if [[ -n "${latest_run_number}" ]]; then
+                break
+              fi
+
+              echo "Run for PR #${PR_ID} is not visible yet, attempt ${attempt}." >&2
+            fi
+
+            if (( attempt < 5 )); then
+              sleep 5
+            fi
+          done
 
           if [[ -z "${latest_run_number}" ]]; then
+            if ! jq -c '{
+              total_count,
+              error_code,
+              error_message,
+              workflow_runs: [
+                .workflow_runs[]?
+                | {run_number, pull_request_id, head_sha, status, title}
+              ]
+            }' <<<"${runs_json}" >&2; then
+              printf '%s\n' "${runs_json}" >&2
+            fi
+
             echo "Unable to determine the latest run for PR #${PR_ID}." >&2
             exit 1
           fi
