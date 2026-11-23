@@ -1,4 +1,4 @@
-name: UBS-io-PR
+name: PR-pipeline_gate
 
 on:
   pull_request_target:
@@ -11,6 +11,7 @@ on:
       - openEuler*
       - br_UnifiedBus
       - develop_memStore
+      - develop
 
   pr_comment:
     types: [created]
@@ -24,6 +25,7 @@ on:
       - openEuler*
       - br_UnifiedBus
       - develop_memStore
+      - develop
 
 env:
   PR_ID: ${{ atomgit.event.pull_request.number }}
@@ -230,7 +232,7 @@ jobs:
           fi
 
           runs_json="$(
-            api_get "${api_root}/api/v8/repos/${REPO_FULL_NAME}/actions/runs?workflow_name=UBS-io-PR&per_page=100&page=1"
+            api_get "${api_root}/api/v8/repos/${REPO_FULL_NAME}/actions/runs?workflow_name=PR-pipeline_gate&per_page=100&page=1"
           )"
 
           latest_run_number="$(
