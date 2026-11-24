@@ -49,6 +49,7 @@ public:
     using BioServerExitFuncPtr = void (*)();
     using GetRuntimeConfigFuncPtr = int32_t (*)(StandaloneRuntimeConfigResponse *);
     using GetUnderFsTypeFuncPtr = int32_t (*)(BioUnderFsType *);
+    using GetConfigInfoFuncPtr = int32_t (*)(BioConfigInfo *);
     using GetBioServerCrcFlagFuncPtr = bool (*)();
     using GetBioServerCliFlagFuncPtr = bool (*)();
     using GetBioServerPromethuesToggleFuncPtr = bool (*)();
@@ -131,6 +132,8 @@ public:
     BResult GetRuntimeConfig(StandaloneRuntimeConfigResponse &rsp);
 
     BResult GetUnderFsType(BioUnderFsType *type);
+
+    BResult GetConfigInfo(BioConfigInfo &info);
 
     BResult GetLocalQuotaInfo(bool &enable, uint64_t &preloadSize);
 
@@ -272,6 +275,7 @@ private:
     BioServerExitFuncPtr exitOp = nullptr;
     GetRuntimeConfigFuncPtr getRuntimeConfigOp = nullptr;
     GetUnderFsTypeFuncPtr getUnderFsTypeOp = nullptr;
+    GetConfigInfoFuncPtr getConfigInfoOp = nullptr;
     GetBioServerCrcFlagFuncPtr getCrcFlag = nullptr;
     GetBioServerCliFlagFuncPtr getCliFlag = nullptr;
     GetBioServerPromethuesToggleFuncPtr getPrometheusToggle = nullptr;

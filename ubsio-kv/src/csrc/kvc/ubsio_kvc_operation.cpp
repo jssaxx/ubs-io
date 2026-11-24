@@ -16,7 +16,7 @@
 #include "dl_biosdk_api.h"
 #include "dl_acl_api.h"
 #include "ubsio_kvc_stream_manager.h"
-#include "ubsio_kvc_instance.h"
+#include "ubsio_nds_manager.h"
 #include "kv_operation.h"
 #include "ubsio_kvc_operation.h"
 
@@ -70,7 +70,7 @@ void KvcExit(void)
     if (g_kvOperation != nullptr) {
         g_kvOperation->ExitKvExecutor();
     }
-    KvcInstance::Instance().UnInitialize();
+    nds::NdsManager::Instance().UnInitialize();
     KvcStreamManager::DestroyAclStream();
     DlBioSdkApi::Exit();
     DlBioSdkApi::CleanupLibrary();

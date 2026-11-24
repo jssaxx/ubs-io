@@ -151,24 +151,6 @@ TEST_F(TestSharedSystem, shared_initialization_uses_only_the_root_path)
     EXPECT_FALSE(system.mEvictionThread.joinable());
 }
 
-TEST_F(TestSharedSystem, putv_preserves_raw_shared_value_layout)
-{
-    Start();
-    char first[] = "first";
-    char second[] = "second";
-    const struct iovec buffers[]{{first, 5}, {second, 6}};
-    ASSERT_EQ(system.PutV("shared-vectors", buffers, 2), BIO_OK);
-    std::string path;
-    ASSERT_EQ(system.BuildFilePath("shared-vectors", path), BIO_OK);
-    struct stat status{};
-    ASSERT_EQ(stat(path.c_str(), &status), 0);
-    EXPECT_EQ(status.st_size, 11);
-    char value[11]{};
-    ASSERT_EQ(system.Get("shared-vectors", value, sizeof(value), 0), BIO_OK);
-    EXPECT_EQ(std::string(value, sizeof(value)), "firstsecond");
-    EXPECT_EQ(system.mEvictionPolicy, nullptr);
-}
-
 TEST_F(TestSharedSystem, shared_put_uses_posix_data_without_eviction)
 {
     MockFileSystemCapacity(1);
@@ -215,16 +197,13 @@ TEST_F(TestSharedSystem, failed_write_keeps_published_raw_value)
     EXPECT_TRUE(events.empty());
 }
 
-TEST_F(TestSharedSystem, enospc_vector_write_returns_without_local_space_queries_or_retry)
+TEST_F(TestSharedSystem, enospc_write_returns_without_local_space_queries_or_retry)
 {
     Start();
     writeAttempts = 0;
     MOCKER(fstatvfs).expects(never());
-    MOCKER(pwritev).expects(once()).will(invoke(OutOfSpaceVectorWrite));
-    char first[] = "first";
-    char second[] = "second";
-    const struct iovec vectors[]{{first, 5}, {second, 6}};
-    EXPECT_EQ(system.PutV("key", vectors, 2), BIO_UFS_IOERR);
+    MOCKER(pwrite).expects(once()).will(invoke(OutOfSpaceWrite));
+    EXPECT_EQ(system.Put("key", "firstsecond", 11), BIO_UFS_IOERR);
     EXPECT_EQ(writeAttempts, 1U);
     EXPECT_EQ(Usage().reservedBytes, 0U);
     EXPECT_EQ(Usage().files, 0U);

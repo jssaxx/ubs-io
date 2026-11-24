@@ -12,6 +12,7 @@
 #include <string>
 #include <unordered_map>
 #include "bio_c.h"
+#include "bio_err.h"
 #include "stub_control.h"
 
 namespace {
@@ -25,10 +26,8 @@ struct BioStubState {
     uint32_t scanCount{2};
     BioLogLevel logLevel{BIO_LOG_LEVEL_INFO};
     BioUnderFsType underFsType{BIO_UNDERFS_NONE};
-    std::string diskPath{"/fake/disk0"};
-    uint64_t diskOffset{0};
-    uint64_t diskLength{4096};
-    int diskResult{RET_CACHE_OK};
+    WorkerMode mode{STANDALONE};
+    bool initialized{false};
 };
 
 BioStubState &State()
@@ -57,10 +56,8 @@ extern "C" void FakeBioReset()
     state.scanCount = 2;
     state.logLevel = BIO_LOG_LEVEL_INFO;
     state.underFsType = BIO_UNDERFS_NONE;
-    state.diskPath = "/fake/disk0";
-    state.diskOffset = 0;
-    state.diskLength = 4096;
-    state.diskResult = RET_CACHE_OK;
+    state.mode = STANDALONE;
+    state.initialized = false;
 }
 
 extern "C" void FakeBioSetResult(const char *name, int result)
@@ -112,21 +109,55 @@ extern "C" void FakeBioSetLogLevel(int32_t level)
     state.logLevel = static_cast<BioLogLevel>(level);
 }
 
-extern "C" void FakeBioSetDiskInfo(const char *path, uint64_t offset, uint64_t length, int result)
+extern "C" CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *)
 {
     auto &state = State();
     std::lock_guard<std::mutex> lock(state.mutex);
-    state.diskPath = path == nullptr ? "" : path;
-    state.diskOffset = offset;
-    state.diskLength = length;
-    state.diskResult = result;
+    auto ret = static_cast<CResult>(ResultLocked(state, "BioInitialize"));
+    state.initialized = ret == RET_CACHE_OK;
+    state.mode = mode;
+    return ret;
 }
 
-extern "C" CResult BioInitialize(WorkerMode, ClientOptionsConfig *)
+#ifndef UBSIO_KV_UT_OMIT_CONFIG_INFO
+extern "C" CResult BioGetConfigInfo(BioConfigInfo *info)
 {
     auto &state = State();
     std::lock_guard<std::mutex> lock(state.mutex);
-    return static_cast<CResult>(ResultLocked(state, "BioInitialize"));
+    auto ret = static_cast<CResult>(ResultLocked(state, "BioGetConfigInfo"));
+    if (ret != RET_CACHE_OK || !state.initialized) {
+        return ret != RET_CACHE_OK ? ret : RET_CACHE_NOT_READY;
+    }
+    if (info == nullptr || info->structSize < BioConfigInfoMinSize(info->fields)) {
+        return RET_CACHE_EPERM;
+    }
+    BioConfigInfo result{};
+    result.structSize = std::min<uint32_t>(info->structSize, sizeof(result));
+    result.fields = info->fields;
+    if ((result.fields & BIO_CONFIG_NDS_ENABLED) != 0) {
+        result.ndsEnabled = state.mode == STANDALONE && state.underFsType == BIO_UNDERFS_LOCAL &&
+            ResultLocked(state, "ubsio.nds.enabled") != 0;
+        if (result.ndsEnabled) {
+            result.localFileSlot = static_cast<uint8_t>(ResultLocked(state, "localFileSlot"));
+        }
+    }
+    if ((result.fields & BIO_CONFIG_UNDERFS_TYPE) != 0) {
+        result.underFsType = state.underFsType;
+    }
+    std::memcpy(info, &result, result.structSize);
+    return RET_CACHE_OK;
+}
+#endif
+
+extern "C" int32_t UfsResolveFilePath(const char *key, uint32_t slot, char *path, size_t capacity)
+{
+    auto &state = State();
+    std::lock_guard<std::mutex> lock(state.mutex);
+    if (slot != static_cast<uint32_t>(ResultLocked(state, "UfsResolveFilePath"))) {
+        return ock::bio::BIO_INVALID_PARAM;
+    }
+    const int size = std::snprintf(path, capacity, "%s", key);
+    return size >= 0 && static_cast<size_t>(size) < capacity ? ock::bio::BIO_OK : ock::bio::BIO_INVALID_PARAM;
 }
 
 extern "C" CResult BioGetLogLevel(BioLogLevel *level)
@@ -146,23 +177,6 @@ extern "C" void FakeBioSetUnderFsType(BioUnderFsType type)
     std::lock_guard<std::mutex> lock(state.mutex);
     state.underFsType = type;
 }
-
-#ifndef UBSIO_KV_UT_OMIT_UNDERFS_TYPE
-extern "C" CResult BioGetUnderFsType(BioUnderFsType *type)
-{
-    auto &state = State();
-    std::lock_guard<std::mutex> lock(state.mutex);
-    const auto result = ResultLocked(state, "BioGetUnderFsType");
-    if (result != RET_CACHE_OK) {
-        return static_cast<CResult>(result);
-    }
-    if (type == nullptr) {
-        return RET_CACHE_EPERM;
-    }
-    *type = state.underFsType;
-    return RET_CACHE_OK;
-}
-#endif
 
 extern "C" CResult BioCreateCache(CacheDescriptor)
 {
@@ -293,26 +307,6 @@ extern "C" CResult BioDelete(uint64_t, const char *, ObjLocation)
     auto &state = State();
     std::lock_guard<std::mutex> lock(state.mutex);
     return static_cast<CResult>(ResultLocked(state, "BioDelete"));
-}
-
-extern "C" CResult BioBatchGetKeyDiskAddr(uint64_t, const char **, ObjLocation *,
-                                           const uint32_t count, KeyAddrInfo *infos)
-{
-    auto &state = State();
-    std::lock_guard<std::mutex> lock(state.mutex);
-    auto result = ResultLocked(state, "BioBatchGetKeyDiskAddr");
-    if (result == RET_CACHE_OK && infos != nullptr) {
-        for (uint32_t index = 0; index < count; ++index) {
-            std::snprintf(infos[index].path, sizeof(infos[index].path), "%s", state.diskPath.c_str());
-            infos[index].offset[0] = state.diskOffset;
-            infos[index].length[0] = state.diskLength;
-            infos[index].offset[1] = state.diskOffset + state.diskLength;
-            infos[index].length[1] = state.diskLength;
-            infos[index].count = 2;
-            infos[index].result = state.diskResult;
-        }
-    }
-    return static_cast<CResult>(result);
 }
 
 extern "C" CResult BioRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)

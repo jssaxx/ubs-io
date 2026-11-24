@@ -13,125 +13,106 @@
 #ifndef UBSIO_NDS_DL_API_H
 #define UBSIO_NDS_DL_API_H
 
-#include <dlfcn.h>
+#include <cerrno>
 #include <cstdint>
-#include <cstddef>
 #include <mutex>
-#include <string>
-#include "ubsio_kvc_err.h"
+#include "ascend_nds.h"
 
 namespace ock {
 namespace ubsio {
 
-static constexpr int IO_URING_MAX_DEPTH = 4096;
-
-struct NdsFileid {
-    int fd;
-    int deviceID;
-};
-using nds_fileid_t = NdsFileid;
-
-using NdsInitFunc = int (*)(int);
-using NdsInitAsyncFunc = int (*)(int);
-using NdsUninitFunc = int (*)(void);
-using NdsOpenFunc = int (*)(const char*, int, ...);
-using NdsRegmemFunc = int (*)(nds_fileid_t, const void*, size_t);
-using NdsUnregmemFunc = int (*)(nds_fileid_t, const void*, size_t);
-using NdsReadFunc = ssize_t (*)(nds_fileid_t, void*, off_t, size_t, off_t);
-using NdsReadvBatchFunc = ssize_t (*)(nds_fileid_t, const struct iovec*, size_t, off_t, size_t);
+constexpr int NDS_MAX_IO_DEPTH = NDS_FILE_MAX_BATCH_IO;
+constexpr int NDS_DRIVER_UAPI_VERSION = 1; // XDS UAPI 0.1
 
 class NdsApi {
 public:
     NdsApi() = delete;
+
     static int32_t LoadLibrary();
+
     static void CleanupLibrary();
 
-    static inline int NdsInit(int deviceID)
+    static int DriverOpen()
     {
-        if (pNdsInit == nullptr) {
-            LOG_ERROR("nds_init not available");
-            return UBSIO_KVC_ERR;
-        }
-        return pNdsInit(deviceID);
+        return functions.driverOpen ? functions.driverOpen() : -ENOSYS;
     }
 
-    static inline int NdsInitAsync(int deviceID)
+    static int DriverClose()
     {
-        if (pNdsInitAsync == nullptr) {
-            LOG_ERROR("nds_init_async not available");
-            return UBSIO_KVC_ERR;
-        }
-        return pNdsInitAsync(deviceID);
+        return functions.driverClose ? functions.driverClose() : -ENOSYS;
     }
 
-    static inline int NdsUninit()
+    static int GetVersion(int *version)
     {
-        if (pNdsUninit == nullptr) {
-            return UBSIO_KVC_ERR;
-        }
-        return pNdsUninit();
+        return functions.getVersion ? functions.getVersion(version) : -ENOSYS;
     }
 
-    static inline int NdsOpen(const char* path, int oflag, ...)
+    static int RegisterFs(const NDSfileFsDesc_t *desc) noexcept;
+
+    static int RegisterFileHandle(NDSfileHandle_t *handle, int fd)
     {
-        if (pNdsOpen == nullptr) {
-            LOG_ERROR("nds_open not available");
-            return UBSIO_KVC_ERR;
-        }
-        return pNdsOpen(path, oflag);
+        const NDSfileDescr_t descr{NDS_FILE_HANDLE_TYPE_OPAQUE_FD, {fd}};
+        return functions.registerFileHandle ? functions.registerFileHandle(handle, &descr) : -ENOSYS;
     }
 
-    static inline int NdsRegmem(nds_fileid_t fid, const void* addr, size_t len)
+    static void DeregisterFileHandle(NDSfileHandle_t handle)
     {
-        if (pNdsRegmem == nullptr) {
-            LOG_ERROR("nds_regmem not available");
-            return UBSIO_KVC_ERR;
+        if (functions.deregisterFileHandle != nullptr) {
+            functions.deregisterFileHandle(handle);
         }
-        return pNdsRegmem(fid, addr, len);
     }
 
-    static inline int NdsUnregmem(nds_fileid_t fid, const void* addr, size_t len)
+    static int RegisterMem(void *address, size_t size)
     {
-        if (pNdsUnregmem == nullptr) {
-            LOG_ERROR("nds_unregmem not available");
-            return UBSIO_KVC_ERR;
-        }
-        return pNdsUnregmem(fid, addr, len);
+        return functions.registerMem ? functions.registerMem(address, size, 0) : -ENOSYS;
     }
 
-    static inline ssize_t NdsRead(nds_fileid_t fid, void* buf, off_t buf_offset, size_t nbyte, off_t f_offset)
+    static int UnregisterMem(void *address)
     {
-        if (pNdsRead == nullptr) {
-            LOG_ERROR("nds_read not available");
-            return -1;
-        }
-        return pNdsRead(fid, buf, buf_offset, nbyte, f_offset);
+        return functions.unregisterMem ? functions.unregisterMem(address) : -ENOSYS;
     }
 
-    static inline ssize_t NdsReadvBatch(nds_fileid_t fid, const struct iovec* iovs, size_t iov_cnt, off_t f_offset, size_t ring_id = 0)
+    static int SetUpBatch(NDSfileBatchHandle_t *batch, unsigned nr)
     {
-        if (pNdsReadvBatch == nullptr) {
-            LOG_ERROR("nds_readv_batch not available");
-            return -1;
-        }
-        return pNdsReadvBatch(fid, iovs, iov_cnt, f_offset, ring_id);
+        return functions.setUpBatch ? functions.setUpBatch(batch, nr) : -ENOSYS;
     }
+
+    static int DestroyBatch(NDSfileBatchHandle_t batch)
+    {
+        return functions.destroyBatch ? functions.destroyBatch(batch) : -ENOSYS;
+    }
+
+    static int SubmitBatch(NDSfileBatchHandle_t batch, unsigned nr,
+                           const NDSfileIOParams_t *params, unsigned flags)
+    {
+        return functions.submitBatch ? functions.submitBatch(batch, nr, params, flags) : -ENOSYS;
+    }
+
+    static int GetBatchEvents(NDSfileBatchHandle_t batch, unsigned minNr, unsigned nr,
+                              NDSfileIOEvents_t *events, struct timespec *timeout) noexcept;
 
 private:
+    struct Functions {
+        decltype(&ndsFileDriverOpen) driverOpen{};
+        decltype(&ndsFileDriverClose) driverClose{};
+        decltype(&ndsFileGetVersion) getVersion{};
+        decltype(&ndsFileRegisterFs) registerFs{};
+        decltype(&ndsFileHandleRegister) registerFileHandle{};
+        decltype(&ndsFileHandleDeregister) deregisterFileHandle{};
+        decltype(&ndsFileBufRegister) registerMem{};
+        decltype(&ndsFileBufDeregister) unregisterMem{};
+        decltype(&ndsFileBatchIOSetUp) setUpBatch{};
+        decltype(&ndsFileBatchIODestroy) destroyBatch{};
+        decltype(&ndsFileBatchIOSubmit) submitBatch{};
+        decltype(&ndsFileBatchIOGetStatus) getStatus{};
+    };
+
     static std::mutex gMutex;
-    static bool gLoaded;
-    static void *ndsHandle;
-    static NdsInitFunc pNdsInit;
-    static NdsInitAsyncFunc pNdsInitAsync;
-    static NdsUninitFunc pNdsUninit;
-    static NdsOpenFunc pNdsOpen;
-    static NdsRegmemFunc pNdsRegmem;
-    static NdsUnregmemFunc pNdsUnregmem;
-    static NdsReadFunc pNdsRead;
-    static NdsReadvBatchFunc pNdsReadvBatch;
+    static void *libraryHandle;
+    static Functions functions;
 };
 
-}  // namespace ubsio
-}  // namespace ock
+} // namespace ubsio
+} // namespace ock
 
 #endif // UBSIO_NDS_DL_API_H

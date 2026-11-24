@@ -49,6 +49,7 @@ const auto CM_ZK_HOST = std::make_pair("ubsio.cm.zk_host", "127.0.0.1:2181");
 const auto CM_NODE_REGISTER_TIMEOUT = std::make_pair("ubsio.cm.register_timeout_sec", 30);
 const auto CM_NODE_REGISTER_PERM_TIMEOUT = std::make_pair("ubsio.cm.register_perm_timeout_sec", 60);
 
+const auto NDS_ENABLED = std::make_pair("ubsio.nds.enabled", "false");
 const auto BIO_TRACE_ENABLE = std::make_pair("ubsio.trace.enable", "true");
 
 const auto DATA_CRC_ENABLE = std::make_pair("ubsio.data.crc.enable", "false");
@@ -189,6 +190,7 @@ public:
         uint32_t bdmSyncWorkerNum = 16;
         uint32_t standaloneDeviceCount = 1;
         bool standaloneForceNewDisk = false;
+        bool ndsEnabled = false;
         uint32_t workScene = 0;
         uint32_t workIoAlignSize = 1;
         uint32_t workIoTimeOut = 60;
@@ -294,6 +296,8 @@ public:
     {
         return mUnderFsConfig;
     }
+
+    BResult GetConfigInfo(BioConfigInfo &info, uint32_t localFileSlotIndex);
 
     void SetStandaloneDeviceInfo(uint32_t deviceId);
 

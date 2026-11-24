@@ -25,17 +25,13 @@ protected:
         FakeBioReset();
         FakeAclReset();
         FakeNdsReset();
-        unsetenv("UBSIO_BIO_DISKS");
         unsetenv("UBSIO_USE_IO_URING");
-        unsetenv("UBSIO_NDS_READ_THREAD");
     }
 
     void TearDown() override
     {
         ResetRuntime();
-        unsetenv("UBSIO_BIO_DISKS");
         unsetenv("UBSIO_USE_IO_URING");
-        unsetenv("UBSIO_NDS_READ_THREAD");
     }
 
     static void ResetRuntime()

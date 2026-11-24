@@ -25,10 +25,16 @@ constexpr size_t LOCAL_FILE_FOOTER_SIZE = 11;
 constexpr size_t LOCAL_FILE_MAX_KEY_SIZE = 255;
 constexpr uint64_t LOCAL_FILE_MAX_VALUE_SIZE = UINT32_MAX;
 constexpr size_t LOCAL_FILE_MAX_METADATA_SIZE = LOCAL_FILE_MAX_KEY_SIZE + LOCAL_FILE_FOOTER_SIZE;
+constexpr size_t LOCAL_FILE_IO_ALIGNMENT = 512;
 
 class LocalFilePack {
 public:
     LocalFilePack() = delete;
+
+    static size_t AlignedWriteSize(size_t fileSize) noexcept
+    {
+        return (fileSize + LOCAL_FILE_IO_ALIGNMENT - 1) / LOCAL_FILE_IO_ALIGNMENT * LOCAL_FILE_IO_ALIGNMENT;
+    }
 
     static BResult Serialize(const char *key, uint64_t valueSize, char *metadata, size_t &metadataSize) noexcept;
 

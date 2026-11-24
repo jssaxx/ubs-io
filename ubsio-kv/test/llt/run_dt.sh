@@ -64,6 +64,7 @@ ASCEND_HOME_PATH="${BUILD_DIR}/incomplete_ascend" \
 ./kv_loader_test --gtest_output="xml:${REPORT_DIR}/loader-report.xml"
 
 ./kv_test --gtest_output="xml:${REPORT_DIR}/report.xml"
+./kv_nds_lifecycle_test
 
 if [[ "${USE_GCOV}" -eq 1 ]]; then
     echo "=== 4. Summarize GCC coverage ==="

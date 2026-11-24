@@ -31,6 +31,8 @@ namespace ock {
 namespace bio {
 class LocalSystem : public FileSystem {
 public:
+    BResult ResolvePath(const char *key, uint32_t slot, char *path, size_t capacity) noexcept;
+
     virtual ~LocalSystem() noexcept;
 
     BResult Init() noexcept override;
@@ -39,7 +41,7 @@ public:
 
     BResult Put(const char *key, const char *value, const size_t len) noexcept override;
 
-    virtual BResult PutV(const char *key, const struct iovec *iov, size_t iovcnt) noexcept;
+    BResult Put(const char *key, char *buffer, size_t len, size_t capacity) noexcept;
 
     BResult Get(const char *key, char *value, const size_t len, const uint64_t off) noexcept override;
 
@@ -65,12 +67,10 @@ protected:
 
     void StopFileSystem() noexcept;
 
-    static BResult ValidateWriteBuffers(const struct iovec *iov, size_t iovcnt, size_t &len) noexcept;
     // The caller owns cleanup of a created temporary file until publication succeeds.
     // outOfSpace reports ENOSPC independently of subsequent close, trace and logging calls.
-    BResult WriteTemporaryValue(const std::string &hashHex, const struct iovec *iov, size_t iovcnt,
-        const char *metadata, size_t metadataSize, std::string &temporaryPath,
-        std::string &finalPath, bool &outOfSpace) const noexcept;
+    BResult WriteTemporaryValue(const std::string &hashHex, const char *value, size_t fileSize, size_t alignedSize,
+        std::string &temporaryPath, std::string &finalPath, bool &outOfSpace) const noexcept;
 
     BResult PublishFile(const std::string &temporaryPath, const std::string &finalPath,
         bool &outOfSpace) const noexcept;
@@ -89,9 +89,9 @@ protected:
     BResult HandleOpenError(const char *operation, int32_t errorCode) const noexcept;
 
 private:
-    void StopLocalSystem() noexcept;
+    BResult PutValue(const char *key, const char *value, size_t len, char *buffer, size_t capacity) noexcept;
 
-    BResult PutValue(const char *key, const struct iovec *iov, size_t iovcnt) noexcept;
+    void StopLocalSystem() noexcept;
 
     BResult InitializeEviction() noexcept;
 
@@ -126,6 +126,8 @@ private:
 
     std::string BuildLeafPath(const std::string &hashHex) const noexcept;
 
+    static std::string BuildLeafPath(const std::string &root, const std::string &hashHex);
+
     std::string BuildFilePath(const std::string &leafPath, const std::string &hashHex) const noexcept;
 
     std::string BuildTemporaryPath(const std::string &leafPath, const std::string &hashHex) const noexcept;
@@ -141,12 +143,6 @@ private:
 
     BResult EnsureDirectory(const std::string &path, bool &outOfSpace) const noexcept;
 
-    BResult WriteAll(int32_t fd, const char *value, size_t len, uint64_t offset,
-        bool &outOfSpace) const noexcept;
-
-    BResult WriteAllV(int32_t fd, const struct iovec *iov, size_t iovcnt,
-        const char *metadata, size_t metadataSize, bool &outOfSpace) const noexcept;
-
     BResult ReadAvailable(int32_t fd, char *value, size_t len, uint64_t off, size_t &realLen,
         bool useDirectIo) const noexcept;
 
@@ -158,6 +154,7 @@ protected:
     ReadWriteLock mLifecycleLock;
 
 private:
+    std::string mStorageRoot;
     std::string mRootPath;
     void *mCryptoHandle{ nullptr };
     Sha256Function mSha256{ nullptr };

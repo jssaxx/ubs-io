@@ -42,30 +42,22 @@ void SharedSystem::Stop() noexcept
 
 BResult SharedSystem::Put(const char *key, const char *value, const size_t len) noexcept
 {
-    struct iovec buffer{const_cast<char *>(value), len};
-    return PutV(key, &buffer, 1);
-}
-
-BResult SharedSystem::PutV(const char *key, const struct iovec *iov, size_t iovcnt) noexcept
-{
     ReadLocker<ReadWriteLock> lifecycle(&mLifecycleLock);
     if (UNLIKELY(!mInited)) {
         return BIO_NOT_READY;
     }
-    size_t len = 0;
-    BResult ret = ValidateWriteBuffers(iov, iovcnt, len);
-    if (UNLIKELY(ret != BIO_OK)) {
-        return ret;
+    if (UNLIKELY((value == nullptr && len != 0) || len > IO_MAX_LEN)) {
+        return BIO_INVALID_PARAM;
     }
     std::string hashHex;
-    ret = BuildHash(key, hashHex);
+    BResult ret = BuildHash(key, hashHex);
     if (UNLIKELY(ret != BIO_OK)) {
         return ret;
     }
     std::string temporaryPath;
     std::string finalPath;
     bool outOfSpace = false;
-    ret = WriteTemporaryValue(hashHex, iov, iovcnt, nullptr, 0, temporaryPath, finalPath, outOfSpace);
+    ret = WriteTemporaryValue(hashHex, value, len, 0, temporaryPath, finalPath, outOfSpace);
     if (UNLIKELY(ret != BIO_OK)) {
         if (!temporaryPath.empty()) {
             CleanupTemporaryFile(temporaryPath);

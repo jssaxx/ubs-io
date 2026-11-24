@@ -29,22 +29,14 @@ void UfsStop()
     UnderFs::Instance()->Stop();
 }
 
-int32_t UfsPut(const char *key, const char *value, const size_t len)
+int32_t UfsPut(const char *key, char *value, size_t len, size_t capacity)
 {
-    return UnderFs::Instance()->Put(key, value, len);
-}
-
-int32_t UfsPutV(const char *key, const struct iovec *iov, size_t iovcnt)
-{
-    const auto type = UnderFsConfig::Instance()->GetUnderFsConfig().underFsType;
-    if (UNLIKELY(type != BIO_UNDERFS_LOCAL && type != BIO_UNDERFS_SHARED)) {
-        return BIO_INVALID_PARAM;
+    auto fs = UnderFs::Instance();
+    if (capacity != 0 && UnderFsConfig::Instance()->GetUnderFsConfig().underFsType == BIO_UNDERFS_LOCAL) {
+        auto *local = dynamic_cast<LocalSystem *>(fs.get());
+        return local == nullptr ? BIO_NOT_READY : local->Put(key, value, len, capacity);
     }
-    auto posix = std::dynamic_pointer_cast<LocalSystem>(UnderFs::Instance());
-    if (UNLIKELY(posix == nullptr)) {
-        return BIO_NOT_READY;
-    }
-    return posix->PutV(key, iov, iovcnt);
+    return fs->Put(key, value, len);
 }
 
 int32_t UfsSetLocalMetaEventCallback(UfsLocalMetaEventCallback callback, void *context)
@@ -58,6 +50,15 @@ int32_t UfsSetLocalMetaEventCallback(UfsLocalMetaEventCallback callback, void *c
     }
     local->SetMetaEventCallback(callback, context);
     return BIO_OK;
+}
+
+int32_t UfsResolveFilePath(const char *key, uint32_t slot, char *path, size_t capacity)
+{
+    if (UnderFsConfig::Instance()->GetUnderFsConfig().underFsType != BIO_UNDERFS_LOCAL) {
+        return BIO_INVALID_PARAM;
+    }
+    auto local = std::dynamic_pointer_cast<LocalSystem>(UnderFs::Instance());
+    return local ? local->ResolvePath(key, slot, path, capacity) : BIO_NOT_READY;
 }
 
 int32_t UfsScanLocalKeys(UfsLocalKeyInfo **items, uint64_t *count)

@@ -89,6 +89,7 @@ void BioConfig::LoadDefaultConf()
 
     AddIntConf(BIO_WCACHE_NEGOTIATE_DELAY, VIntRange::Create(BIO_WCACHE_NEGOTIATE_DELAY.first, NO_50, NO_1000));
     AddStrConf(DATA_CRC_ENABLE, VStrBoolRange::Create(DATA_CRC_ENABLE.first));
+    AddStrConf(NDS_ENABLED, VStrBoolRange::Create(NDS_ENABLED.first));
     AddStrConf(BIO_TRACE_ENABLE, VStrBoolRange::Create(BIO_TRACE_ENABLE.first));
     AddStrConf(BIO_CACHE_QOS_ENABLE, VStrBoolRange::Create(BIO_CACHE_QOS_ENABLE.first));
     AddIntConf(BIO_CACHE_QOS_WATER_LEVEL, VIntRange::Create(BIO_CACHE_QOS_WATER_LEVEL.first, NO_1, NO_100));
@@ -341,6 +342,7 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
     mDaemonConfig.segment = static_cast<uint32_t>(conf->GetInt(SEGMENT_SIZE_MB.first) * MB_SIZE);
     mDaemonConfig.sdkPoolSize = static_cast<uint64_t>(conf->GetInt(SDK_MEM_CAPACITY_SIZE_MB.first) * MB_SIZE);
     mDaemonConfig.standaloneDeviceCount = static_cast<uint32_t>(conf->GetInt(STANDALONE_DEVICE_COUNT.first));
+    mDaemonConfig.ndsEnabled = conf->GetStr(NDS_ENABLED.first) == "true";
     mDaemonConfig.standaloneForceNewDisk = conf->GetStr(STANDALONE_FORCE_NEW_DISK.first) == "true";
     mDaemonConfig.negotiateDelay = static_cast<uint32_t>(conf->GetInt(BIO_WCACHE_NEGOTIATE_DELAY.first) * NO_1000);
     mDaemonConfig.memCap = static_cast<uint64_t>(conf->GetInt(MEM_CAPACITY_SIZE_GB.first) * GB_SIZE);
@@ -960,6 +962,31 @@ void BioConfig::AppendDaemonDisk(const std::string &diskPath, int64_t diskCapaci
     mDaemonConfig.diskList.emplace_back(diskPath);
     mDaemonConfig.diskCaps.emplace_back(diskCapacity);
     mDaemonConfig.diskPhysicalCaps.emplace_back(physicalCapacity);
+}
+
+BResult BioConfig::GetConfigInfo(BioConfigInfo &info, uint32_t localFileSlotIndex)
+{
+    if (info.structSize < BioConfigInfoMinSize(info.fields) || info.fields == 0 ||
+        (info.fields & ~BIO_CONFIG_SUPPORTED_FIELDS) != 0) {
+        return BIO_INVALID_PARAM;
+    }
+    BioConfigInfo result{};
+    result.structSize = std::min<uint32_t>(info.structSize, sizeof(result));
+    result.fields = info.fields;
+    if ((info.fields & BIO_CONFIG_NDS_ENABLED) != 0) {
+        result.ndsEnabled = mStandaloneMode && mDaemonConfig.ndsEnabled && !mDaemonConfig.hasDiskCache &&
+            mUnderFsConfig.underFsType == BIO_UNDERFS_LOCAL;
+        if (result.ndsEnabled && localFileSlotIndex < DEVICE_SIZE) {
+            result.localFileSlot = static_cast<uint8_t>(localFileSlotIndex + 1);
+        }
+    }
+    if ((info.fields & BIO_CONFIG_UNDERFS_TYPE) != 0) {
+        result.underFsType = static_cast<uint32_t>(mUnderFsConfig.underFsType);
+        if (result.underFsType >= BIO_UNDERFS_BUTT) {
+            return BIO_INNER_ERR;
+        }
+    }
+    return memcpy_s(&info, info.structSize, &result, result.structSize) == EOK ? BIO_OK : BIO_INNER_ERR;
 }
 
 void BioConfig::DumpToLog()

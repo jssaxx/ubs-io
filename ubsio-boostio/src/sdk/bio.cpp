@@ -790,6 +790,18 @@ CResult BioGetUnderFsType(BioUnderFsType *type)
     return RET_CACHE_OK;
 }
 
+CResult BioGetConfigInfo(BioConfigInfo *info)
+{
+    if (info == nullptr || info->structSize < BioConfigInfoMinSize(info->fields) || info->fields == 0 ||
+        (info->fields & ~BIO_CONFIG_SUPPORTED_FIELDS) != 0) {
+        return RET_CACHE_EPERM;
+    }
+    if (gClient == nullptr || !gClient->Ready()) {
+        return RET_CACHE_NOT_READY;
+    }
+    return ToCResult(agent::BioClientAgent::Instance()->GetConfigInfo(*info));
+}
+
 CResult BioRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)
 {
     auto agentPtr = ock::bio::agent::BioClientAgent::Instance();

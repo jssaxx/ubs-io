@@ -95,12 +95,6 @@ TEST_F(KvTest, BioSdkStubLoadsAndCoversAllDelegates)
 
     EXPECT_EQ(DlBioSdkApi::Delete(1, "a", location), RET_CACHE_OK);
 
-    FakeBioSetDiskInfo("/fake/disk0", 16, 32, RET_CACHE_OK);
-    KeyAddrInfo infos[2]{};
-    EXPECT_EQ(DlBioSdkApi::BatchGetKeyDiskAddr(1, keys, locations, 2, infos), RET_CACHE_OK);
-    EXPECT_STREQ(infos[0].path, "/fake/disk0");
-    EXPECT_EQ(infos[0].offset[0], 16U);
-
     uint32_t callbackCalls = 0;
     EXPECT_EQ(DlBioSdkApi::RegisterMetaEventCallback(MetaCallback, &callbackCalls), RET_CACHE_OK);
     EXPECT_EQ(callbackCalls, 1U);
@@ -207,37 +201,20 @@ TEST_F(KvTest, AclStubCoversUnavailableLoadAndDelegates)
 
 TEST_F(KvTest, NdsStubCoversUnavailableAndDelegates)
 {
-    nds_fileid_t fileId{1, 0};
-    char buffer[16]{};
-    struct ::iovec vector{buffer, sizeof(buffer)};
-
-    EXPECT_EQ(NdsApi::NdsInit(0), UBSIO_KVC_ERR);
-    EXPECT_EQ(NdsApi::NdsInitAsync(0), UBSIO_KVC_ERR);
-    EXPECT_EQ(NdsApi::NdsUninit(), UBSIO_KVC_ERR);
-    EXPECT_EQ(NdsApi::NdsOpen("x", 0), UBSIO_KVC_ERR);
-    EXPECT_EQ(NdsApi::NdsRegmem(fileId, buffer, sizeof(buffer)), UBSIO_KVC_ERR);
-    EXPECT_EQ(NdsApi::NdsUnregmem(fileId, buffer, sizeof(buffer)), UBSIO_KVC_ERR);
-    EXPECT_EQ(NdsApi::NdsRead(fileId, buffer, 0, sizeof(buffer), 0), -1);
-    EXPECT_EQ(NdsApi::NdsReadvBatch(fileId, &vector, 1, 0), -1);
-
+    NDSfileBatchHandle_t ctx = nullptr;
+    int version = 0;
+    EXPECT_EQ(NdsApi::DriverOpen(), -ENOSYS);
+    EXPECT_EQ(NdsApi::SetUpBatch(&ctx, 1), -ENOSYS);
+    EXPECT_EQ(NdsApi::DriverClose(), -ENOSYS);
     ASSERT_EQ(NdsApi::LoadLibrary(), UBSIO_KVC_OK);
     EXPECT_EQ(NdsApi::LoadLibrary(), UBSIO_KVC_OK);
-    EXPECT_EQ(NdsApi::NdsInit(0), 0);
-    EXPECT_EQ(NdsApi::NdsInitAsync(0), 0);
-    int fd = NdsApi::NdsOpen("/fake/disk0", 0);
-    ASSERT_GE(fd, 0);
-    fileId.fd = fd;
-    EXPECT_EQ(NdsApi::NdsRegmem(fileId, buffer, sizeof(buffer)), 0);
-    EXPECT_EQ(NdsApi::NdsRead(fileId, buffer, 0, sizeof(buffer), 0),
-              static_cast<ssize_t>(sizeof(buffer)));
-    EXPECT_EQ(buffer[0], 'N');
-    EXPECT_EQ(NdsApi::NdsReadvBatch(fileId, &vector, 1, 0),
-              static_cast<ssize_t>(sizeof(buffer)));
-    EXPECT_EQ(buffer[0], 'R');
-    EXPECT_EQ(NdsApi::NdsUnregmem(fileId, buffer, sizeof(buffer)), 0);
-    EXPECT_EQ(NdsApi::NdsUninit(), 0);
-    close(fd);
-
+    EXPECT_EQ(NdsApi::DriverOpen(), 0);
+    EXPECT_EQ(NdsApi::GetVersion(&version), 0);
+    EXPECT_EQ(version, NDS_DRIVER_UAPI_VERSION);
+    ASSERT_EQ(NdsApi::SetUpBatch(&ctx, 1), 0);
+    ASSERT_NE(ctx, nullptr);
+    EXPECT_EQ(NdsApi::DestroyBatch(ctx), 0);
+    EXPECT_EQ(NdsApi::DriverClose(), 0);
     NdsApi::CleanupLibrary();
     NdsApi::CleanupLibrary();
 }

@@ -1738,6 +1738,14 @@ int32_t GetUnderFsType(BioUnderFsType *type)
     return BIO_OK;
 }
 
+int32_t GetConfigInfo(BioConfigInfo *info)
+{
+    if (info == nullptr) {
+        return BIO_INVALID_PARAM;
+    }
+    return BioServer::Instance()->GetConfigInfo(*info);
+}
+
 int32_t GetLocalNid(GetLocalNidResponse *rsp)
 {
     CmNodeId localNid = BioServer::Instance()->GetLocalNid();

@@ -13,6 +13,7 @@
 #include "wcache.h"
 
 #include <atomic>
+#include <cstring>
 #include <utility>
 #include "unistd.h"
 #include "bio_monotonic.h"
@@ -25,6 +26,7 @@
 #include "bio_config_instance.h"
 #include "bio_crc_util.h"
 #include "bio_server.h"
+#include "local_file_pack.h"
 
 namespace ock {
 namespace bio {
@@ -433,25 +435,23 @@ BResult WCache::PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const 
     auto ret = memCache->Write(key, srcSlice, sliceReader, destSliceRef);
     ChkTrueNot(destSliceRef != nullptr, BIO_INNER_ERR);
 
-    auto *value = new (std::nothrow) char[srcSlice->GetLength()];
-    ChkTrueNot(value != nullptr, BIO_ALLOC_FAIL);
-
-    ret = mSliceOperator.Copy(destSliceRef->GetSlice().Get(), value, srcSlice->GetLength());
-    if (UNLIKELY(ret != BIO_OK)) {
-        delete[] value;
-        LOG_ERROR("Failed to copy slice to value, key:" << key << " flowId:" << mFlowId);
-        return ret;
-    }
-
-    if (mUfsEnable) {
-        BIO_TRACE_START(SDK_TRACE_PUT_TO_UNDERFS);
-        ret = mUnderFs->Put(key, value, srcSlice->GetLength());
-        BIO_TRACE_END(SDK_TRACE_PUT_TO_UNDERFS, ret);
-        delete[] value;
-        ChkTrue(ret == BIO_OK, ret, "Failed to put slice to underfs, key:" << key << " flowId:" << mFlowId);
+    const auto length = srcSlice->GetLength();
+    if (mUnderFs->GetConfig().underFsType == BIO_UNDERFS_LOCAL) {
+        ret = PutLocalUnderFS(key, destSliceRef->GetSlice(), length);
     } else {
-        delete[] value;
+        const std::unique_ptr<char[]> value(new (std::nothrow) char[length]);
+        ChkTrueNot(value != nullptr, BIO_ALLOC_FAIL);
+
+        ret = mSliceOperator.Copy(destSliceRef->GetSlice().Get(), value.get(), length);
+        ChkTrue(ret == BIO_OK, ret, "Failed to copy slice to value, key:" << key << " flowId:" << mFlowId);
+
+        if (mUfsEnable) {
+            BIO_TRACE_START(SDK_TRACE_PUT_TO_UNDERFS);
+            ret = mUnderFs->Put(key, value.get(), length);
+            BIO_TRACE_END(SDK_TRACE_PUT_TO_UNDERFS, ret);
+        }
     }
+    ChkTrue(ret == BIO_OK, ret, "Failed to put slice to underfs, key:" << key << " flowId:" << mFlowId);
 
     ret = memCache->Evict(destSliceRef->GetSlice());
     ChkTrue(ret == BIO_OK, ret, "Failed to evict, key:" << key << " flowId:" << mFlowId);
@@ -1107,21 +1107,43 @@ BResult WCache::EvictFromMemToUnderFs(WCacheSliceRefPtr sliceRef, const UbsIoMet
     return BIO_OK;
 }
 
+BResult WCache::PutLocalUnderFS(const char *key, const WCacheSlicePtr &slice, size_t length)
+{
+    const size_t keySize = key == nullptr ? 0 : strnlen(key, LOCAL_FILE_MAX_KEY_SIZE + 1);
+    ChkTrue(keySize != 0 && keySize <= LOCAL_FILE_MAX_KEY_SIZE && length <= LOCAL_FILE_MAX_VALUE_SIZE,
+        BIO_INVALID_PARAM, "Invalid LocalFS key or value size, keySize:" << keySize << ", length:" << length << ".");
+
+    const size_t capacity = LocalFilePack::AlignedWriteSize(length + keySize + LOCAL_FILE_FOOTER_SIZE);
+    void *memory = nullptr;
+    const int32_t allocRet = posix_memalign(&memory, LOCAL_FILE_IO_ALIGNMENT, capacity);
+    ChkTrue(allocRet == 0, BIO_ALLOC_FAIL,
+        "Alloc LocalFS write buffer failed, ret:" << allocRet << ", capacity:" << capacity << ".");
+    const std::unique_ptr<void, decltype(&free)> buffer(memory, free);
+    auto *value = static_cast<char *>(memory);
+    if (length != 0) {
+        const BResult ret = mSliceOperator.Copy(slice.Get(), value, length);
+        ChkTrue(ret == BIO_OK, ret, "Failed to copy slice to LocalFS buffer, ret:" << ret << ".");
+    }
+    BIO_TRACE_START(SDK_TRACE_PUT_TO_UNDERFS);
+    const BResult ret = mUnderFs->Put(key, value, length, capacity);
+    BIO_TRACE_END(SDK_TRACE_PUT_TO_UNDERFS, ret);
+    return ret;
+}
+
 BResult WCache::EvictToUnderFS(const char *key, WCacheSlicePtr &slice, const size_t length)
 {
+    if (mUnderFs->GetConfig().underFsType == BIO_UNDERFS_LOCAL) {
+        const BResult ret = PutLocalUnderFS(key, slice, length);
+        ChkTrue(ret == BIO_OK, ret,
+            "Failed to put data slice to LocalFS, ret:" << ret << ", key:" << key << ", length:" << length << ".");
+        return BIO_OK;
+    }
     BResult ret = BIO_INNER_ERR;
     std::vector<FlowAddr> addrVec = slice->GetAddrs();
     if (LIKELY(addrVec.size() == 1)) {
         BIO_TRACE_START(SDK_TRACE_PUT_TO_UNDERFS);
         ret = mUnderFs->Put(key, reinterpret_cast<char *>(addrVec[0].chunkId + addrVec[0].chunkOffset), length);
         BIO_TRACE_END(SDK_TRACE_PUT_TO_UNDERFS, ret);
-    } else if (mUnderFs->SupportsPutV()) {
-        std::vector<struct iovec> buffers;
-        buffers.reserve(addrVec.size());
-        for (const auto &addr : addrVec) {
-            buffers.push_back({reinterpret_cast<void *>(addr.chunkId + addr.chunkOffset), addr.chunkLen});
-        }
-        ret = mUnderFs->PutV(key, buffers.data(), buffers.size());
     } else {
         void *value = nullptr;
         int32_t allocRet = posix_memalign(&value, NO_4096, length);

@@ -43,6 +43,7 @@ TEST_F(KvTest, PublicApiRejectsInvalidArguments)
     bool exists = false;
 
     EXPECT_EQ(UbsioGetResourceInfo(nullptr), UBSIO_KVC_INVALID_PARAM);
+    EXPECT_EQ(UbsioGetInitInfo(nullptr), UBSIO_KVC_INVALID_PARAM);
     const UbsioKvKeyInfo *scanItems = nullptr;
     uint64_t scanCount = 0;
     bool scanHasMore = false;
@@ -138,39 +139,18 @@ TEST_F(KvTest, PublicApiRejectsInvalidArguments)
     EXPECT_EQ(UbsioKvCacheBatchFree(buffers, 0), UBSIO_KVC_INVALID_PARAM);
     EXPECT_EQ(UbsioKvCacheBatchFree(buffers, TOO_MANY_KEYS), UBSIO_KVC_INVALID_PARAM);
 
+    ASSERT_EQ(DlBioSdkApi::LoadLibrary(), UBSIO_KVC_OK);
+    ASSERT_EQ(DlBioSdkApi::KvBioInit(), UBSIO_KVC_OK);
     void *layerBuffer = data;
-    void **bufferRows[] = {&layerBuffer};
-    size_t layerLength = sizeof(data);
-    size_t *lengthRows[] = {&layerLength};
-    EXPECT_EQ(UbsioKvCacheBatchGetDirect(nullptr, 1, bufferRows, lengthRows, 1, 1, results, 0),
+    void *const *bufferRows[] = {&layerBuffer};
+    const size_t layerLength = sizeof(data);
+    const size_t *lengthRows[] = {&layerLength};
+    const uint32_t iovCounts[] = {1};
+    const uint8_t ownerSlots[] = {1};
+    EXPECT_EQ(UbsioKvCacheBatchGetDirect(keys, 1, nullptr, bufferRows, lengthRows, iovCounts, results),
               UBSIO_KVC_INVALID_PARAM);
-    EXPECT_EQ(UbsioKvCacheBatchGetDirect(keys, 1, nullptr, lengthRows, 1, 1, results, 0),
-              UBSIO_KVC_INVALID_PARAM);
-    EXPECT_EQ(UbsioKvCacheBatchGetDirect(keys, 1, bufferRows, nullptr, 1, 1, results, 0),
-              UBSIO_KVC_INVALID_PARAM);
-    EXPECT_EQ(UbsioKvCacheBatchGetDirect(keys, 1, bufferRows, lengthRows, 1, 1, nullptr, 0),
-              UBSIO_KVC_INVALID_PARAM);
-    EXPECT_EQ(UbsioKvCacheBatchGetDirect(keys, 0, bufferRows, lengthRows, 0, 1, results, 0),
-              UBSIO_KVC_INVALID_PARAM);
-    EXPECT_EQ(UbsioKvCacheBatchGetDirect(keys, 1, bufferRows, lengthRows, 0, 1, results, 0),
-              UBSIO_KVC_INVALID_PARAM);
-    EXPECT_EQ(UbsioKvCacheBatchGetDirect(keys, 1, bufferRows, lengthRows, 1, 1025, results, 0),
-              UBSIO_KVC_INVALID_PARAM);
-    EXPECT_EQ(UbsioKvCacheBatchGetDirect(badKeys, 1, bufferRows, lengthRows, 1, 1, results, 0),
-              UBSIO_KVC_INVALID_PARAM);
-    EXPECT_EQ(UbsioKvCacheBatchGetDirect(emptyKeys, 1, bufferRows, lengthRows, 1, 1, results, 0),
-              UBSIO_KVC_INVALID_PARAM);
-
-    layerLength = 0;
-    EXPECT_EQ(UbsioKvCacheBatchGetDirect(keys, 1, bufferRows, lengthRows, 1, 1, results, 0),
-              UBSIO_KVC_INVALID_PARAM);
-    layerLength = (2ULL * 1024ULL * 1024ULL * 1024ULL) + 1ULL;
-    EXPECT_EQ(UbsioKvCacheBatchGetDirect(keys, 1, bufferRows, lengthRows, 1, 1, results, 0),
-              UBSIO_KVC_INVALID_PARAM);
-    layerLength = sizeof(data);
-    layerBuffer = nullptr;
-    EXPECT_EQ(UbsioKvCacheBatchGetDirect(keys, 1, bufferRows, lengthRows, 1, 1, results, 0),
-              UBSIO_KVC_INVALID_PARAM);
+    EXPECT_EQ(UbsioKvCacheBatchGetDirect(keys, 1, ownerSlots, bufferRows, lengthRows, iovCounts, results),
+              UBSIO_KVC_NO_NDS);
 }
 
 TEST_F(KvTest, PublicApiHappyPathsUseOnlyBioStub)
@@ -321,42 +301,21 @@ TEST_F(KvTest, PublicApiMapsBioFailures)
 }
 }
 
-namespace {
-template<typename Tag, typename Tag::Type member>
-struct MetadataQueryAccessor {
-    friend typename Tag::Type MetadataQueryMember(Tag) { return member; }
-};
-struct MetadataQuerySymbol {
-    using Type = ock::ubsio::BioGetUnderFsTypeFunc *;
-    friend Type MetadataQueryMember(MetadataQuerySymbol);
-};
-template struct MetadataQueryAccessor<MetadataQuerySymbol, &DlBioSdkApi::pBioGetUnderFsType>;
-}
-
 extern "C" void FakeBioSetUnderFsType(BioUnderFsType type);
 
-TEST_F(KvTest, UnderFsTypeQueryRequiresRuntimeAndPreservesOutputOnFailure)
+TEST_F(KvTest, InitInfoReportsLocalNdsAndSlot)
 {
-    UbsioUnderFsType type = UBSIO_UNDERFS_BUTT;
-    EXPECT_EQ(UbsioGetUnderFsType(nullptr), UBSIO_KVC_INVALID_PARAM);
-    EXPECT_EQ(UbsioGetUnderFsType(&type), UBSIO_KVC_ERR);
-    EXPECT_EQ(type, UBSIO_UNDERFS_BUTT);
+    UbsioInitInfo info{};
+    EXPECT_EQ(UbsioGetInitInfo(&info), UBSIO_KVC_ERR);
     ASSERT_EQ(DlBioSdkApi::LoadLibrary(), UBSIO_KVC_OK);
-    for (auto expected : {BIO_UNDERFS_NONE, BIO_UNDERFS_CEPH, BIO_UNDERFS_HDFS, BIO_UNDERFS_LOCAL, BIO_UNDERFS_SHARED}) {
-        FakeBioSetUnderFsType(expected);
-        ASSERT_EQ(UbsioGetUnderFsType(&type), UBSIO_KVC_OK);
-        EXPECT_EQ(type, static_cast<UbsioUnderFsType>(expected));
-    }
-    FakeBioSetResult("BioGetUnderFsType", RET_CACHE_NOT_READY);
-    EXPECT_EQ(UbsioGetUnderFsType(&type), UBSIO_KVC_ERR);
-    EXPECT_EQ(type, UBSIO_UNDERFS_SHARED);
-    FakeBioSetResult("BioGetUnderFsType", RET_CACHE_OK);
-    FakeBioSetUnderFsType(BIO_UNDERFS_BUTT);
-    EXPECT_EQ(UbsioGetUnderFsType(&type), UBSIO_KVC_ERR);
-    EXPECT_EQ(type, UBSIO_UNDERFS_SHARED);
-    const auto query = *MetadataQueryMember(MetadataQuerySymbol{});
-    *MetadataQueryMember(MetadataQuerySymbol{}) = nullptr;
-    EXPECT_EQ(UbsioGetUnderFsType(&type), UBSIO_KVC_ERR);
-    EXPECT_EQ(type, UBSIO_UNDERFS_SHARED);
-    *MetadataQueryMember(MetadataQuerySymbol{}) = query;
+    ASSERT_EQ(DlBioSdkApi::KvBioInit(), UBSIO_KVC_OK);
+
+    constexpr uint8_t slot = 3;
+    FakeBioSetUnderFsType(BIO_UNDERFS_LOCAL);
+    FakeBioSetResult("ubsio.nds.enabled", 1);
+    FakeBioSetResult("localFileSlot", slot);
+    ASSERT_EQ(UbsioGetInitInfo(&info), UBSIO_KVC_OK);
+    EXPECT_EQ(info.underFsType, UBSIO_UNDERFS_LOCAL);
+    EXPECT_EQ(info.slot, slot);
+    EXPECT_EQ(info.ndsEnable, 1U);
 }

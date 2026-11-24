@@ -81,7 +81,7 @@ BResult LocalFilePack::Serialize(const char *key, uint64_t valueSize, char *meta
             ", maxKeySize:" << LOCAL_FILE_MAX_KEY_SIZE << ".");
         return BIO_INVALID_PARAM;
     }
-    const auto keyCopyResult = memcpy_s(metadata, LOCAL_FILE_MAX_METADATA_SIZE, key, keySize);
+    const auto keyCopyResult = memcpy_s(metadata, keySize, key, keySize);
     if (UNLIKELY(keyCopyResult != EOK)) {
         LOG_ERROR("Serialize local file metadata failed to copy key, keySize:" << keySize <<
             ", ret:" << keyCopyResult << ".");

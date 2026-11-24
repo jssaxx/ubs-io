@@ -25,8 +25,6 @@ public:
 
     BResult Put(const char *key, const char *value, const size_t len) noexcept override;
 
-    BResult PutV(const char *key, const struct iovec *iov, size_t iovcnt) noexcept override;
-
     BResult Delete(const char *key) noexcept override;
 
     BResult Stat(const char *key, ObjStat &objStat) noexcept override;

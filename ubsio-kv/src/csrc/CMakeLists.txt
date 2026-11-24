@@ -13,6 +13,8 @@ target_include_directories(ubsio_kvc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/utils
     ${PROJECT_SOURCE_DIR}/include
     ${UBSIO_BOOSTIO_INCLUDE_DIR}
+    ${UBSIO_ASCEND_NDS_INCLUDE_DIR}
+    ${PROJECT_SOURCE_DIR}/../ubsio-boostio/src/common
 )
 
 target_link_libraries(ubsio_kvc
@@ -25,6 +27,7 @@ set_target_properties(ubsio_kvc PROPERTIES
     SOVERSION 1
     OUTPUT_NAME ubsio_kvc
 )
+
 if (UBSIO_ENABLE_ORIGIN_RUNPATH)
     set_target_properties(ubsio_kvc PROPERTIES
         BUILD_RPATH "$ORIGIN"

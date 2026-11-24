@@ -25,6 +25,7 @@ target_include_directories(kv_loader_test PRIVATE
     ${PROJECT_SOURCE_DIR}/src/csrc/nds
     ${PROJECT_SOURCE_DIR}/src/csrc/utils
     ${UBSIO_BOOSTIO_INCLUDE_DIR}
+    ${UBSIO_ASCEND_NDS_INCLUDE_DIR}
 )
 
 target_link_libraries(kv_loader_test PRIVATE

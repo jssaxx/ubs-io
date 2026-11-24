@@ -257,6 +257,11 @@ public:
         return mConfig;
     }
 
+    BResult GetConfigInfo(BioConfigInfo &info)
+    {
+        return mConfig == nullptr ? BIO_NOT_READY : mConfig->GetConfigInfo(info, mStandaloneSlotLease.SlotIndex());
+    }
+
     inline CmNodeId GetLocalNid()
     {
         return mLocalNid;

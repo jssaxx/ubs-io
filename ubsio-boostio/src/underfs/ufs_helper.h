@@ -126,35 +126,16 @@ namespace bio {
             }
         }
 
-        BResult Put(const char *key, const char *value, const size_t len)
+        BResult Put(const char *key, char *value, size_t len, size_t capacity = 0)
         {
             BIO_TRACE_START(UFS_TRACE_PUT);
-            auto ret = putOp(key, value, len);
+            auto ret = putOp(key, value, len, capacity);
             BIO_TRACE_END(UFS_TRACE_PUT, ret);
             if (UNLIKELY(ret != BIO_OK)) {
                 LOG_ERROR("UfsHelper put failed, ret: " << ret << ", key: " << key << ", len: " << len << ".");
                 return ret;
             }
             LOG_DEBUG("UfsHelper put success, key: " << key << ", len: " << len << ".");
-            return ret;
-        }
-
-        bool SupportsPutV() const noexcept
-        {
-            return mConfig.underFsType == BIO_UNDERFS_LOCAL || mConfig.underFsType == BIO_UNDERFS_SHARED;
-        }
-
-        BResult PutV(const char *key, const struct iovec *iov, size_t iovcnt) noexcept
-        {
-            if (UNLIKELY(!SupportsPutV())) {
-                return BIO_INVALID_PARAM;
-            }
-            BIO_TRACE_START(UFS_TRACE_PUT);
-            auto ret = putVOp(key, iov, iovcnt);
-            BIO_TRACE_END(UFS_TRACE_PUT, ret);
-            if (UNLIKELY(ret != BIO_OK)) {
-                LOG_ERROR("UnderFS vectored put failed, ret:" << ret << ", vectors:" << iovcnt << ".");
-            }
             return ret;
         }
 
@@ -339,9 +320,6 @@ namespace bio {
             if ((putOp = reinterpret_cast<PutFuncPtr>(LoadFunction("UfsPut"))) == nullptr) {
                 return BIO_INNER_ERR;
             }
-            if ((putVOp = reinterpret_cast<PutVFuncPtr>(LoadFunction("UfsPutV"))) == nullptr) {
-                return BIO_INNER_ERR;
-            }
             if ((getOp = reinterpret_cast<GetFuncPtr>(LoadFunction("UfsGet"))) == nullptr) {
                 return BIO_INNER_ERR;
             }
@@ -370,8 +348,7 @@ namespace bio {
 
         using InitFuncPtr = int (*)();
         using StopFuncPtr = void (*)();
-        using PutFuncPtr = int (*)(const char *, const char *, size_t);
-        using PutVFuncPtr = int32_t (*)(const char *, const struct iovec *, size_t);
+        using PutFuncPtr = decltype(&UfsPut);
         using GetFuncPtr = int (*)(const char *, char *, const size_t, const uint64_t);
         using GetWithRealLenFuncPtr = int (*)(const char *, char *, const size_t, const uint64_t, size_t *);
         using DeleteFuncPtr = int (*)(const char *);
@@ -386,7 +363,6 @@ namespace bio {
         InitFuncPtr initOp = nullptr;
         StopFuncPtr stopOp = nullptr;
         PutFuncPtr putOp = nullptr;
-        PutVFuncPtr putVOp = nullptr;
         GetFuncPtr getOp = nullptr;
         GetWithRealLenFuncPtr getWithRealLenOp = nullptr;
         DeleteFuncPtr deleteOp = nullptr;

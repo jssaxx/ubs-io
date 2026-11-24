@@ -101,11 +101,11 @@ extern std::thread::id writeThread;
 extern ReadGate *readGate;
 extern ReadGate *spaceGate;
 
-ssize_t ObserveWrite(int fd, const struct iovec *iov, int iovcnt, off_t offset) noexcept;
+ssize_t ObserveWrite(int fd, const void *value, size_t len, off_t offset) noexcept;
 
 ssize_t BlockingRead(int fd, void *value, size_t len, off_t offset);
 
-ssize_t OutOfSpaceVectorWrite(int, const struct iovec *, int, off_t) noexcept;
+ssize_t OutOfSpaceWrite(int, const void *, size_t, off_t) noexcept;
 
 int ProbeFileSystemCapacity(int, struct statvfs *space) noexcept;
 

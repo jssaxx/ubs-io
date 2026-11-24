@@ -104,6 +104,14 @@ BResult BioClientAgent::GetUnderFsType(BioUnderFsType *type)
     return static_cast<BResult>(getUnderFsTypeOp(type));
 }
 
+BResult BioClientAgent::GetConfigInfo(BioConfigInfo &info)
+{
+    if (!IsDirectMode() || getConfigInfoOp == nullptr) {
+        return BIO_NOT_READY;
+    }
+    return static_cast<BResult>(getConfigInfoOp(&info));
+}
+
 void BioClientAgent::Exit()
 {
     if (IsDirectMode() && exitOp != nullptr) {
@@ -128,6 +136,7 @@ void BioClientAgent::ResetLoadedOperations()
     exitOp = nullptr;
     getRuntimeConfigOp = nullptr;
     getUnderFsTypeOp = nullptr;
+    getConfigInfoOp = nullptr;
     getCrcFlag = nullptr;
     getCliFlag = nullptr;
     getPrometheusToggle = nullptr;
@@ -192,6 +201,9 @@ BResult BioClientAgent::InitOperation()
         return BIO_INNER_ERR;
     }
     if ((getUnderFsTypeOp = reinterpret_cast<GetUnderFsTypeFuncPtr>(LoadFunction("GetUnderFsType"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
+    if ((getConfigInfoOp = reinterpret_cast<GetConfigInfoFuncPtr>(LoadFunction("GetConfigInfo"))) == nullptr) {
         return BIO_INNER_ERR;
     }
     if ((getCrcFlag = reinterpret_cast<GetBioServerCrcFlagFuncPtr>(LoadFunction("GetCrcFlag"))) == nullptr) {

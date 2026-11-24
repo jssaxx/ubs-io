@@ -29,6 +29,7 @@ set(SRC_DIR ${PROJECT_SOURCE_DIR}/src)
 set(OUTPUT_PATH ${PROJECT_SOURCE_DIR}/dist)
 set(BUILD_PATH ${PROJECT_BINARY_DIR}/)
 set(UBSIO_BOOSTIO_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/../ubsio-boostio/src/sdk" CACHE PATH "ubsio-boostio bio_c.h include directory")
+set(UBSIO_ASCEND_NDS_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/../ubsio-nds/include")
 
 if (NOT EXISTS "${UBSIO_BOOSTIO_INCLUDE_DIR}/bio_c.h")
     message(FATAL_ERROR "bio_c.h not found in ${UBSIO_BOOSTIO_INCLUDE_DIR}. "

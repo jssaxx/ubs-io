@@ -244,31 +244,25 @@ int32_t UbsioKvCacheBatchGet(const char **keys,
 
 ## `UbsioKvCacheBatchGetDirect`
 
-作用：批量读取多段目标 buffer 形式的数据，适用于一个 key 对应多段输出 buffer 的场景。
+作用：批量将 LocalFS 中的 KV Cache 数据读入 HBM。
 
 ```c
-int32_t UbsioKvCacheBatchGetDirect(const char **keys,
-                                   uint32_t keysCount,
-                                   void ***bufs,
-                                   size_t **lengths,
-                                   uint32_t lengthsRows,
-                                   uint32_t lengthsCols,
-                                   int *results,
-                                   uint32_t flags);
+int32_t UbsioKvCacheBatchGetDirect(const char *const *keys, uint32_t keysCount, const uint8_t *ownerSlots,
+                                 void *const *const *buffers, const size_t *const *lengths,
+                                 const uint32_t *iovCounts, int *results);
 ```
 
 | 参数 | 类型/取值范围 | 参数说明 |
 | --- | --- | --- |
-| `keys` | `const char **`；数组长度为 `keysCount` | key 数组，每个 key 长度 `1-255`。 |
-| `keysCount` | `uint32_t`；`1-16384` | 批量读取的 key 数量。 |
-| `bufs` | `void ***`；二维 buffer 地址数组 | 出参，按 `keysCount x lengthsCols` 组织每个 key 的多段目标 buffer。 |
-| `lengths` | `size_t **`；二维长度数组 | 每段目标 buffer 的长度，单位为字节。 |
-| `lengthsRows` | `uint32_t`；建议等于 `keysCount` | `lengths` 的行数。 |
-| `lengthsCols` | `uint32_t`；`> 0` | 每个 key 对应的 buffer 段数。 |
-| `results` | `int *`；数组长度为 `keysCount` | 出参，逐项返回读取结果，`0` 表示对应 key 读取成功。 |
-| `flags` | `uint32_t`；当前建议 `0` | 保留字段。 |
+| `keys` | `const char *const *` | 待读取的 key 数组，每个 key 长度为 1–255 字节。 |
+| `keysCount` | `uint32_t`，范围为 1–16384 | 批量读取的 key 数量。 |
+| `ownerSlots` | `const uint8_t *`，每项范围为 1–16 | 每个 key 的写入方 slot。 |
+| `buffers` | `void *const *const *` | 每个 key 的目标 HBM 缓冲区地址数组，须在接口返回前保持有效。 |
+| `lengths` | `const size_t *const *` | 各缓冲区的读取字节数，与 `buffers` 逐项对应。每个 key 从文件起始位置读取这一组长度之和。 |
+| `iovCounts` | `const uint32_t *` | 每个 key 对应的缓冲区数量。 |
+| `results` | `int *` | 出参，逐 key 返回 BoostIO `CResult`。 |
 
-返回值：`0` 表示接口调用成功；单个 key 的结果以 `results` 为准。
+返回值：`0` 表示批量调用成功，单个 key 的结果以 `results` 为准。非 `0` 表示调用失败。
 
 ## `UbsioKvCacheExist`
 

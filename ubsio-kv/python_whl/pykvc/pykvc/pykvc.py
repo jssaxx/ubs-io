@@ -229,14 +229,13 @@ def nds_unregmem(addr, length) -> int:
     return NdsUnregmem(addr, length)
 
 
-def nds_read(key: str, buffers: list[int], sizes: list[int]) -> int:
-    """
-    UnRegister NDS memory.
-    :return: 0 for success
-            -1 for failed
-    """
-    return NdsRead(key, buffers, sizes)
+def nds_read(key: str, owner_slot: int, buffers: list[int], sizes: list[int]) -> int:
+    """Read a LocalFS key into HBM and return its BoostIO result."""
+    return NdsRead(key, owner_slot, buffers, sizes)
 
 
-def nds_batch_read(keys: list[str], buffers: list[list[int]], sizes: list[list[int]]) -> list[int]:
-    return NdsBatchRead(keys, buffers, sizes)
+def nds_batch_read(
+    keys: list[str], owner_slots: list[int], buffers: list[list[int]], sizes: list[list[int]]
+) -> list[int]:
+    """Read LocalFS keys into HBM and return one BoostIO result per key."""
+    return NdsBatchRead(keys, owner_slots, buffers, sizes)
