@@ -1,0 +1,6 @@
+ASCEND_NDS_1 {
+    global:
+        ndsFile*;
+    local:
+        *;
+};

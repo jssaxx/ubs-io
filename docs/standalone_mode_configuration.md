@@ -214,8 +214,7 @@ ubsio.wcache.evict_water_level = 85
 
 <a name="ubsio-underfs-file-system-type"></a>
 
-`ubsio.underfs.file_system_type` 指定 UnderFS 访问后端。初始化后的类型通过
-[`UbsioGetUnderFsType`](ubsio-kv/api_reference.md#ubsiogetunderfstype) 查询。
+`ubsio.underfs.file_system_type` 指定 UnderFS 访问后端。
 
 | 配置值 | 后端用途 | Memcache 元数据管理模式 |
 | --- | --- | --- |
@@ -230,15 +229,12 @@ local 文件保存完整 key 和长度尾部，shared 文件只存原始 value�
 跨 rank 共用同一批文件时选择 `shared`。
 `shared` 需要部署方确保所有参与存储查询和回温的 rank 访问同一共享存储命名空间；类型配置不会自动创建或检查共享挂载。
 
-与 Memcache 集成时，LocalService 在 UBS IO 初始化成功后调用
-[`UbsioGetUnderFsType`](ubsio-kv/api_reference.md#ubsiogetunderfstype) 获取文件系统类型枚举，将 `UBSIO_UNDERFS_SHARED` 判为分离，
-其余有效类型默认聚合，并在注册和重连时向 MetaService 上报分离标志。
+与 MemCache 集成时，LocalService 在 UBS IO 初始化成功后调用
+[`UbsioGetInitInfo`](ubsio-kv/api_reference.md#ubsiogetinitinfo) 获取文件系统类型、slot 和 NDS 状态。
+文件系统类型为 `UBSIO_UNDERFS_SHARED` 时使用分离模式，其余类型及查询失败时使用聚合模式。
+LocalService 在注册和重连时向 MetaService 上报分离标志。
 MetaService 由首次成功的存储注册确定模式，在当前 MetaManager 生命周期内保持固定；未启用存储的客户端
-不参与模式确定，模式不一致的存储 rank 返回 `MMC_INVALID_PARAM` 并拒绝注册。
-
-启用存储时，LocalService 使用提供 `UbsioGetUnderFsType` 的 UBSIO-KV，以及配套的 BoostIO SDK 和 server；各组件使用枚举指针形式的查询接口。
-文件系统类型查询失败或接口不可用时，LocalService 使用默认的 `UBSIO_UNDERFS_NONE` 继续初始化。
-仅 `UBSIO_UNDERFS_SHARED` 启用分离模式，其余返回值均使用聚合模式。MetaService 和 LocalService 使用同版本的注册协议。
+不参与模式确定，模式不一致的存储 rank 返回 `MMC_INVALID_PARAM` 并拒绝注册。MetaService 和 LocalService 使用同版本的注册协议。
 
 ### `ubsio.underfs.root_path`
 

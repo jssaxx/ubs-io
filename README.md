@@ -79,6 +79,15 @@ UBS IO 的性能收益来自 KV Cache 层级容量扩展和本地访问路径收
 
 ## 🚀快速入门
 
+- 统一构建（Linux）：`bash scripts/build.sh` 默认构建 BoostIO、KV、NDS；产物汇总到 `output/lib` 与 `output/bin`。例如：
+
+  ```bash
+  bash scripts/build.sh
+  bash scripts/build.sh --components kv
+  bash scripts/build.sh -t debug --components boostio,nds
+  ```
+
+  BoostIO 默认构建 CLI，CLI 库和程序分别汇总到 `output/lib` 和 `output/bin`。NDS 构建使用 openEuler 内核仓的 `openEuler-26.09` 分支，将 `libascend_nds.so`、`libnds.so` 及其版本文件汇总到 `output/lib`。使用 `--nds-bench ON` 可同时构建 NDS benchmark。[NDS 构建与运行](ubsio-nds/README.md)
 - [安装使用](docs/ubsio-boostio/inference_three_level_pooling_deployment_guide.md#部署库包)
 - [配置文件](docs/ubsio-boostio/inference_three_level_pooling_deployment_guide.md#配置文件)
 - [样例执行](examples/ubsio-kv/README.md)
