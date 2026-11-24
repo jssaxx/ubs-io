@@ -4,7 +4,9 @@
  * ubs-io is licensed under the Mulan PSL v2.
  */
 
-extern "C" int nds_init(int)
+#include "ascend_nds.h"
+
+int ndsFileDriverOpen(void)
 {
     return 0;
 }

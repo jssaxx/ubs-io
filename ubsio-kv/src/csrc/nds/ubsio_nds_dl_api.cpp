@@ -10,12 +10,7 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <cstdint>
-#include <cstdio>
-#include <string>
 #include <dlfcn.h>
-#include <iostream>
-#include <cstring>
 #include "ubsio_kvc_log.h"
 #include "ubsio_kvc_def.h"
 #include "ubsio_nds_dl_api.h"
@@ -23,85 +18,85 @@
 namespace ock {
 namespace ubsio {
 
-bool NdsApi::gLoaded = false;
 std::mutex NdsApi::gMutex;
-void *NdsApi::ndsHandle = nullptr;
-static std::string g_ndsLibName = "libnds_file.so";
-
-NdsInitFunc NdsApi::pNdsInit = nullptr;
-NdsInitAsyncFunc NdsApi::pNdsInitAsync = nullptr;
-NdsUninitFunc NdsApi::pNdsUninit = nullptr;
-NdsOpenFunc NdsApi::pNdsOpen = nullptr;
-NdsRegmemFunc NdsApi::pNdsRegmem = nullptr;
-NdsUnregmemFunc NdsApi::pNdsUnregmem = nullptr;
-NdsReadFunc NdsApi::pNdsRead = nullptr;
-NdsReadvBatchFunc NdsApi::pNdsReadvBatch = nullptr;
-
+void *NdsApi::libraryHandle = nullptr;
+NdsApi::Functions NdsApi::functions{};
 
 int32_t NdsApi::LoadLibrary()
 {
     std::lock_guard<std::mutex> guard(gMutex);
-    if (gLoaded) {
-        return 0;
+    if (libraryHandle != nullptr) {
+        return UBSIO_KVC_OK;
     }
 
-    const char* libPaths[] = {
-        "libnds_file.so",
-        "/usr/lib64/libnds_file.so",
-        "/usr/lib/libnds_file.so"
+    const char *libPaths[] = {
+        "libascend_nds.so",
+        "/usr/lib64/libascend_nds.so",
+        "/usr/lib/libascend_nds.so",
     };
 
-    void* handle = nullptr;
-    for (const char* path : libPaths) {
-        handle = dlopen(path, RTLD_LAZY | RTLD_GLOBAL);
+    void *handle = nullptr;
+    for (const char *path : libPaths) {
+        handle = dlopen(path, RTLD_LAZY | RTLD_LOCAL);
         if (handle != nullptr) {
-            LOG_INFO("Successfully loaded libnds_file.so from: " << path);
+            LOG_INFO("Successfully loaded libascend_nds.so from: " << path);
             break;
         }
     }
-
     if (handle == nullptr) {
-        LOG_ERROR("Failed to open libnds_file.so, error: " << dlerror());
+        LOG_ERROR("Failed to open libascend_nds.so, error: " << dlerror());
         return UBSIO_KVC_ERR;
     }
 
-    DL_LOAD_SYM(pNdsInit, NdsInitFunc, handle, "nds_init");
-    DL_LOAD_SYM(pNdsInitAsync, NdsInitAsyncFunc, handle, "nds_init_async");
-    DL_LOAD_SYM(pNdsUninit, NdsUninitFunc, handle, "nds_uninit");
-    DL_LOAD_SYM(pNdsOpen, NdsOpenFunc, handle, "nds_open");
-    DL_LOAD_SYM(pNdsRegmem, NdsRegmemFunc, handle, "nds_regmem");
-    DL_LOAD_SYM(pNdsUnregmem, NdsUnregmemFunc, handle, "nds_unregmem");
-    DL_LOAD_SYM(pNdsRead, NdsReadFunc, handle, "nds_read");
-    DL_LOAD_SYM(pNdsReadvBatch, NdsReadvBatchFunc, handle, "nds_readv_batch");
+    Functions api{};
+    DL_LOAD_SYM(api.driverOpen, decltype(api.driverOpen), handle, "ndsFileDriverOpen");
+    DL_LOAD_SYM(api.driverClose, decltype(api.driverClose), handle, "ndsFileDriverClose");
+    DL_LOAD_SYM(api.getVersion, decltype(api.getVersion), handle, "ndsFileGetVersion");
+    DL_LOAD_SYM(api.registerFs, decltype(api.registerFs), handle, "ndsFileRegisterFs");
+    DL_LOAD_SYM(api.registerFileHandle, decltype(api.registerFileHandle), handle, "ndsFileHandleRegister");
+    DL_LOAD_SYM(api.deregisterFileHandle, decltype(api.deregisterFileHandle), handle, "ndsFileHandleDeregister");
+    DL_LOAD_SYM(api.registerMem, decltype(api.registerMem), handle, "ndsFileBufRegister");
+    DL_LOAD_SYM(api.unregisterMem, decltype(api.unregisterMem), handle, "ndsFileBufDeregister");
+    DL_LOAD_SYM(api.setUpBatch, decltype(api.setUpBatch), handle, "ndsFileBatchIOSetUp");
+    DL_LOAD_SYM(api.destroyBatch, decltype(api.destroyBatch), handle, "ndsFileBatchIODestroy");
+    api.submitBatch = reinterpret_cast<decltype(api.submitBatch)>(
+        dlvsym(handle, "ndsFileBatchIOSubmit", "ASCEND_NDS_1"));
+    if (api.submitBatch == nullptr) {
+        LOG_ERROR("libascend_nds.so is missing ndsFileBatchIOSubmit with ABI ASCEND_NDS_1: " << dlerror());
+        dlclose(handle);
+        return UBSIO_KVC_ERR;
+    }
+    DL_LOAD_SYM(api.getStatus, decltype(api.getStatus), handle, "ndsFileBatchIOGetStatus");
 
-    ndsHandle = handle;
-    gLoaded = true;
-    return 0;
+    functions = api;
+    libraryHandle = handle;
+    return UBSIO_KVC_OK;
 }
 
 void NdsApi::CleanupLibrary()
 {
     std::lock_guard<std::mutex> guard(gMutex);
-    if (!gLoaded) {
-        return;
+    if (libraryHandle != nullptr) {
+        functions = {};
+        dlclose(libraryHandle);
+        libraryHandle = nullptr;
     }
-
-    pNdsInit = nullptr;
-    pNdsInitAsync = nullptr;
-    pNdsUninit = nullptr;
-    pNdsOpen = nullptr;
-    pNdsRegmem = nullptr;
-    pNdsUnregmem = nullptr;
-    pNdsRead = nullptr;
-    pNdsReadvBatch = nullptr;
-
-    if (ndsHandle != nullptr) {
-        dlclose(ndsHandle);
-        ndsHandle = nullptr;
-    }
-
-    gLoaded = false;
 }
 
-}  // namespace ubsio
-}  // namespace ock
+int NdsApi::RegisterFs(const NDSfileFsDesc_t *desc) noexcept
+{
+    return functions.registerFs ? functions.registerFs(desc) : -ENOSYS;
+}
+
+int NdsApi::GetBatchEvents(NDSfileBatchHandle_t batch, unsigned minNr, unsigned nr,
+                           NDSfileIOEvents_t *events, struct timespec *timeout) noexcept
+{
+    if (functions.getStatus == nullptr) {
+        return -ENOSYS;
+    }
+    const int ret = functions.getStatus(batch, minNr, &nr, events, timeout);
+    return ret == 0 ? static_cast<int>(nr) : ret;
+}
+
+} // namespace ubsio
+} // namespace ock

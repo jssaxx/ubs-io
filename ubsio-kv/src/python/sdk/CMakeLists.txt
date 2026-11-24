@@ -33,6 +33,7 @@ target_include_directories(c2python_sdk PRIVATE
     ${SRC_DIR}/csrc/utils
     ${PROJECT_SOURCE_DIR}/include
     ${UBSIO_BOOSTIO_INCLUDE_DIR}
+    ${UBSIO_ASCEND_NDS_INCLUDE_DIR}
 )
 
 target_link_libraries(c2python_sdk PRIVATE
@@ -42,3 +43,10 @@ target_link_libraries(c2python_sdk PRIVATE
     ${Python3_LIBRARIES}
     -Wl,--end-group
 )
+
+if (UBSIO_ENABLE_ORIGIN_RUNPATH)
+    set_target_properties(c2python_sdk PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "$ORIGIN"
+    )
+endif()

@@ -48,6 +48,30 @@ TEST(TestLogConfig, default_log_path_is_backward_compatible)
     EXPECT_EQ(config->GetDaemonConfig().logPath, "/var/log/ubsio");
 }
 
+TEST(TestBoostIoConfigInfo, ReportsLocalNdsAndSlot)
+{
+    constexpr uint32_t localSlotIndex = 2;
+    auto conf = MakeLogConfiguration();
+    auto *config = static_cast<BioConfig *>(conf.Get());
+    config->Set(MEM_CAPACITY_SIZE_GB.first, 0);
+    config->Set(NDS_ENABLED.first, std::string("true"));
+    ASSERT_EQ(config->AutoConfigDaemonCache(conf), BIO_OK);
+    config->SetStandaloneMode(true);
+    config->mUnderFsConfig.underFsType = BIO_UNDERFS_LOCAL;
+
+    BioConfigInfo info{};
+    info.structSize = sizeof(info);
+    info.fields = BIO_CONFIG_UNDERFS_TYPE | BIO_CONFIG_NDS_ENABLED;
+    ASSERT_EQ(config->GetConfigInfo(info, localSlotIndex), BIO_OK);
+    EXPECT_EQ(info.underFsType, BIO_UNDERFS_LOCAL);
+    EXPECT_EQ(info.ndsEnabled, 1U);
+    EXPECT_EQ(info.localFileSlot, localSlotIndex + 1);
+
+    config->mUnderFsConfig.underFsType = BIO_UNDERFS_SHARED;
+    ASSERT_EQ(config->GetConfigInfo(info, localSlotIndex), BIO_OK);
+    EXPECT_EQ(info.ndsEnabled, 0U);
+}
+
 TEST(TestLogConfig, custom_log_path_is_loaded)
 {
     auto conf = MakeLogConfiguration();

@@ -19,13 +19,13 @@ using namespace local_system_test;
 
 namespace {
 
-ssize_t OutOfSpaceOnceVectorWrite(int fd, const struct iovec *iov, int iovcnt, off_t offset) noexcept
+ssize_t OutOfSpaceOnceWrite(int fd, const void *value, size_t len, off_t offset) noexcept
 {
     if (++writeAttempts == 1) {
         errno = ENOSPC;
         return -1;
     }
-    return ObserveWrite(fd, iov, iovcnt, offset);
+    return ObserveWrite(fd, value, len, offset);
 }
 
 int CloseAndClobberErrno(int fd) noexcept
@@ -588,7 +588,7 @@ TEST_F(TestLocalEviction, physical_space_shortage_reclaims_only_the_current_writ
     spaceOwner = &system;
     MOCKER(fstatvfs).stubs().will(invoke(SimulatedFileSystemSpace));
     writeAttempts = 0;
-    MOCKER(pwritev).stubs().will(invoke(OutOfSpaceOnceVectorWrite));
+    MOCKER(pwrite).stubs().will(invoke(OutOfSpaceOnceWrite));
     fileSystemSpaceQueries = 0;
     ASSERT_EQ(system.Put("incoming", value.data(), value.size()), BIO_OK);
     EXPECT_EQ(fileSystemSpaceQueries, 2U);
@@ -677,7 +677,7 @@ TEST_F(TestLocalEviction, enospc_retries_once_without_double_reserving_or_using_
     Start();
     writeAttempts = 0;
     fileSystemSpaceQueries = 0;
-    MOCKER(pwritev).stubs().will(invoke(OutOfSpaceOnceVectorWrite));
+    MOCKER(pwrite).stubs().will(invoke(OutOfSpaceOnceWrite));
     MOCKER(close).stubs().will(invoke(CloseAndClobberErrno));
     ASSERT_EQ(system.Put("key", "value", 5), BIO_OK);
     EXPECT_EQ(writeAttempts, 2U);
@@ -697,7 +697,7 @@ TEST_F(TestLocalEviction, repeated_enospc_is_bounded_and_removes_both_temporary_
     writeAttempts = 0;
     unlinkAttempts = 0;
     fileSystemSpaceQueries = 0;
-    MOCKER(pwritev).stubs().will(invoke(OutOfSpaceVectorWrite));
+    MOCKER(pwrite).stubs().will(invoke(OutOfSpaceWrite));
     MOCKER(unlink).stubs().will(invoke(ObserveTemporaryCleanup));
     EXPECT_EQ(system.Put("key", "value", 5), BIO_UFS_IOERR);
     EXPECT_EQ(writeAttempts, 2U);
@@ -713,7 +713,7 @@ TEST_F(TestLocalEviction, failed_enospc_cleanup_does_not_start_space_reclamation
 {
     Start();
     writeAttempts = 0;
-    MOCKER(pwritev).stubs().will(invoke(OutOfSpaceVectorWrite));
+    MOCKER(pwrite).stubs().will(invoke(OutOfSpaceWrite));
     MOCKER(unlink).stubs().will(invoke(FailTemporaryCleanup));
     MOCKER(fstatvfs).expects(never());
     EXPECT_EQ(system.Put("key", "value", 5), BIO_UFS_IOERR);
@@ -758,7 +758,7 @@ TEST_F(TestLocalEviction, enospc_during_directory_creation_reclaims_before_retry
 TEST_F(TestLocalEviction, failed_space_query_rolls_back_the_inserted_key)
 {
     Start();
-    MOCKER(pwritev).stubs().will(invoke(OutOfSpaceVectorWrite));
+    MOCKER(pwrite).stubs().will(invoke(OutOfSpaceWrite));
     MOCKER(fstatvfs).stubs().will(returnValue(-1));
     EXPECT_EQ(system.Put("key", "value", 5), BIO_UFS_IOERR);
     EXPECT_EQ(Usage().files, 0U);
@@ -777,7 +777,7 @@ TEST_F(TestLocalEviction, insufficient_physical_space_preserves_referenced_files
     FileReference reader;
     ASSERT_EQ(system.mEvictionPolicy->Lookup("key", record, reader), BIO_OK);
     mockFileSystemAvailableBytes = 0;
-    MOCKER(pwritev).stubs().will(invoke(OutOfSpaceVectorWrite));
+    MOCKER(pwrite).stubs().will(invoke(OutOfSpaceWrite));
     EXPECT_EQ(system.Put("incoming", "value", 5), BIO_UFS_IOERR);
     EXPECT_EQ(Usage().usedBytes, FileBytes("key", 5));
     EXPECT_EQ(Usage().reservedBytes, 0U);
@@ -793,7 +793,7 @@ TEST_F(TestLocalEviction, write_rechecks_physical_space_after_unlink_before_retr
     Start();
     ASSERT_EQ(system.Put("old", "value", 5), BIO_OK);
     mockFileSystemAvailableBytes = 0;
-    MOCKER(pwritev).stubs().will(invoke(OutOfSpaceVectorWrite));
+    MOCKER(pwrite).stubs().will(invoke(OutOfSpaceWrite));
     fileSystemSpaceQueries = 0;
     EXPECT_EQ(system.Put("incoming", "x", 1), BIO_UFS_IOERR);
     EXPECT_EQ(fileSystemSpaceQueries, 2U);

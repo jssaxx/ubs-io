@@ -13,38 +13,25 @@
 #ifndef UBSIO_NDS_MANAGER_H
 #define UBSIO_NDS_MANAGER_H
 
-#include <string>
+#include <atomic>
 #include <memory>
 #include <vector>
-#include <unordered_map>
-#include "bio_c.h"
+#include <unordered_set>
+#include "ubsio_kvc.h"
+#include <mutex>
+#include <shared_mutex>
 #include "ubsio_kvc_err.h"
-#include "ubsio_kvc_execution.h"
 #include "ubsio_nds_dl_api.h"
 
 namespace ock {
 namespace ubsio {
 namespace nds {
 
-struct TaskInfo {
-    std::string path;
-    void *buffer;
-    uint64_t size;
-    off_t bufferOffset;
-    off_t fileOffset;
-};
-
-struct TaskResults {
-    uint32_t total{ 0UL };
-    std::atomic<uint32_t> succeed{ 0UL };
-    std::atomic<uint32_t> failed{ 0UL };
-
-    void WaitFinish()
-    {
-        while (total > (succeed.load(std::memory_order_relaxed) + failed.load(std::memory_order_relaxed))) {
-            std::this_thread::yield();
-        }
-    }
+struct LocalFileRead {
+    void *const *buffers;
+    const size_t *lengths;
+    uint32_t iovCount;
+    uint64_t valueLen;
 };
 
 class NdsManager {
@@ -59,13 +46,8 @@ public:
 
     KvcError UnRegisterMemory(const void *addr, size_t length) noexcept;
 
-    KvcError DirectRead(const std::string &key,
-                        const std::vector<uintptr_t> &buffers,
-                        const std::vector<size_t> &sizes) noexcept;
-
-    KvcError BatchDirectRead(const std::vector<std::string> &keys,
-                             const std::vector<std::vector<uintptr_t>> &buffers,
-                             const std::vector<std::vector<size_t>> &sizes) noexcept;
+    void ReadLocalFiles(const LocalFileRead *items, const int *fds, const uint64_t *devices,
+                        size_t count, int *results);
 
 public:
     NdsManager(const NdsManager&) = delete;
@@ -74,14 +56,23 @@ public:
     NdsManager& operator=(NdsManager&&) = delete;
 
 private:
-    ssize_t SingleRead(const KeyAddrInfo &addrInfo,
-                       const std::vector<uintptr_t> &buffers,
-                       const std::vector<size_t> &sizes,
-                       TaskResults &taskResults) noexcept;
+    struct IoContextSlot {
+        NDSfileBatchHandle_t ctx{ nullptr };
+        bool busy{ false };
+    };
 
-    ssize_t IOURingSingleRead(const KeyAddrInfo &addrInfo,
-                              const std::vector<uintptr_t> &buffers,
-                              const std::vector<size_t> &sizes) noexcept;
+    struct MemoryRange {
+        uintptr_t addr;
+        size_t size;
+    };
+
+    KvcError InitializeIoContextPool(size_t count) noexcept;
+    void DestroyIoContextPool() noexcept;
+    IoContextSlot *AcquireIoContext() noexcept;
+    void ReleaseIoContext(IoContextSlot *slot) noexcept;
+    void RebuildIoContext(IoContextSlot *slot) noexcept;
+
+    void SubmitReads(std::vector<NDSfileIOParams_t> &requests, int *results);
 
 private:
     NdsManager() = default;
@@ -90,10 +81,16 @@ private:
 private:
     int deviceId{};
     bool ndsInit{ false };
-    bool ndsNormal{ false };
-    bool useIOURing{ false };
-    std::unordered_map<std::string, nds_fileid_t> diskFdMap;
-    ExecutorServicePtr ndsReadPool{ nullptr };
+    bool ndsLoaded{ false };
+    std::atomic<bool> readsEnabled{ false };
+    bool skipMemRegister{ false };
+    std::mutex topologyMutex;
+    std::unordered_set<uint64_t> registeredDevices;
+    std::vector<std::unique_ptr<IoContextSlot>> ioContextPool;
+    std::mutex ioContextPoolMutex;
+    // Readers keep the group and topology alive through completion.
+    std::shared_mutex memoryMutex;
+    std::vector<MemoryRange> registeredRanges;
 };
 
 }

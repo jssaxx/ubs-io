@@ -41,13 +41,12 @@ using BioBatchGetFunc = CResult (*)(uint64_t tenantId, const char **keys, const 
 using BioBatchExistFunc = CResult (*)(uint64_t tenantId, const char *key[], ObjLocation location[], uint32_t count, bool result[]);
 using BioBatchFreeFunc = CResult (*)(uint64_t tenantId, uintptr_t *valueAddrs, const uint32_t count);
 using BioDeleteFunc = CResult (*)(uint64_t tenantId, const char *key, ObjLocation location);
-using BioBatchGetKeyDiskAddrFunc = CResult (*)(uint64_t tenantId, const char **keys, ObjLocation *locations,
-                                                const uint32_t count, KeyAddrInfo *infos);
 using BioRegisterMetaEventCallbackFunc = CResult (*)(UbsioMetaEventCallbackC callback, void *context);
 using BioShowLocalCacheResourceFunc = CResult (*)(CacheResourcesDesc *nodeDesc);
-using BioGetUnderFsTypeFunc = CResult (*)(BioUnderFsType *type);
+using BioGetConfigInfoFunc = CResult (*)(BioConfigInfo *info);
 using BioScanKeyFunc = CResult (*)(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *count, bool *hasMore);
 using BioFreeScanKeyResultFunc = void (*)(const UbsioKvKeyInfo **items);
+using UfsResolveFilePathFunc = int32_t (*)(const char *key, uint32_t slot, char *path, size_t capacity);
 
 class DlBioSdkApi {
 public:
@@ -70,12 +69,14 @@ public:
         return static_cast<CResult>(pBioGetLogLevel(level));
     }
 
-    static CResult GetUnderFsType(BioUnderFsType *type)
+    static CResult GetConfigInfo(BioConfigInfo *info)
     {
-        if (pBioGetUnderFsType == nullptr) {
-            return RET_CACHE_NOT_READY;
-        }
-        return pBioGetUnderFsType(type);
+        return pBioGetConfigInfo == nullptr ? RET_CACHE_NOT_READY : pBioGetConfigInfo(info);
+    }
+
+    static UfsResolveFilePathFunc GetFilePathResolver()
+    {
+        return pUfsResolveFilePath;
     }
 
     static CResult CreateCache(CacheDescriptor desc)
@@ -132,21 +133,11 @@ public:
         return static_cast<CResult>(pBioDelete(tenantId, key, location));
     }
 
-    static void Exit(void)
-    {
-        std::lock_guard<std::mutex> guard(gMutex);
-        if (pBioExit != nullptr) {
-            pBioExit();
-        }
-    }
+    static void Exit();
 
     static int32_t KvBioInit();
 
-    static CResult BatchGetKeyDiskAddr(uint64_t tenantId, const char **keys, ObjLocation *locations,
-                                       const uint32_t count, KeyAddrInfo *infos)
-    {
-        return static_cast<CResult>(pBioBatchGetKeyDiskAddr(tenantId, keys, locations, count, infos));
-    }
+    static int32_t KvBioInit(int32_t devId);
 
     static CResult RegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)
     {
@@ -169,9 +160,14 @@ public:
     }
 
 private:
+    static void LoadFilePathResolver();
+
+    static void UnloadFilePathResolver();
+
     static std::mutex gMutex;
     static bool gLoaded;
     static void *bioSdkHandle;
+    static void *underFsHandle;
     static const std::string gBioSdkLibName;
 
     static BioExitFunc pBioExit;
@@ -187,12 +183,12 @@ private:
     static BioBatchExistFunc pBioBatchExist;
     static BioBatchFreeFunc pBioBatchGetFree;
     static BioDeleteFunc pBioDelete;
-    static BioBatchGetKeyDiskAddrFunc pBioBatchGetKeyDiskAddr;
     static BioRegisterMetaEventCallbackFunc pBioRegisterMetaEventCallback;
     static BioShowLocalCacheResourceFunc pBioShowLocalCacheResource;
-    static BioGetUnderFsTypeFunc pBioGetUnderFsType;
+    static BioGetConfigInfoFunc pBioGetConfigInfo;
     static BioScanKeyFunc pBioScanKey;
     static BioFreeScanKeyResultFunc pBioFreeScanKeyResult;
+    static UfsResolveFilePathFunc pUfsResolveFilePath;
 };
 
 }  // namespace ubsio

@@ -265,6 +265,8 @@ private:
     void EvictToRCache(const WCacheSlicePtr &srcSlice, const Key &key, WCacheSlicePtr &slice, bool &isRCache);
     BResult EvictToUnderFS(const char *key, WCacheSlicePtr &slice, const size_t length);
 
+    BResult PutLocalUnderFS(const char *key, const WCacheSlicePtr &slice, size_t length);
+
     bool EvictMemSatisfiedCond();
     bool EvictDiskSatisfiedCond();
 

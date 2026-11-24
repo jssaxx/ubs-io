@@ -7,7 +7,6 @@
 
 #include <stdint.h>
 #include <time.h>
-#include <sys/uio.h>
 #include "file_system.h"
 #include "underfs_config.h"
 
@@ -69,9 +68,7 @@ int32_t UfsInit();
 
 void UfsStop();
 
-int32_t UfsPut(const char *key, const char *value, const size_t len);
-
-int32_t UfsPutV(const char *key, const struct iovec *iov, size_t iovcnt);
+int32_t UfsPut(const char *key, char *value, size_t len, size_t capacity);
 
 int32_t UfsGet(const char *key, char *value, const size_t len, const uint64_t off);
 
@@ -88,6 +85,8 @@ int32_t UfsList(const char *prefix, ObjStatInfo **objStat, int *objNum);
 void UfsInitUnderFsConfig(UnderFsConfigInfo config);
 
 int32_t UfsSetLocalMetaEventCallback(UfsLocalMetaEventCallback callback, void *context);
+
+int32_t UfsResolveFilePath(const char *key, uint32_t slot, char *path, size_t capacity);
 
 int32_t UfsScanLocalKeys(UfsLocalKeyInfo **items, uint64_t *count);
 

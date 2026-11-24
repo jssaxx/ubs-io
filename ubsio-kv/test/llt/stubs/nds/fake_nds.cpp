@@ -1,135 +1,165 @@
-/*
- * Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
- *
- * ubs-io is licensed under the Mulan PSL v2.
- */
-
-#include <cstring>
+/* Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+ * ubs-io is licensed under the Mulan PSL v2. */
+#include <algorithm>
+#include <cerrno>
+#include <deque>
 #include <mutex>
 #include <string>
-#include <sys/uio.h>
-#include <unistd.h>
 #include <unordered_map>
-#include "ubsio_kvc_log.h"
-#include "ubsio_nds_dl_api.h"
+#include <vector>
+#include <unistd.h>
+extern "C" {
+#include "nds_api.h"
+}
 #include "stub_control.h"
 
-namespace {
-struct NdsStubState {
-    std::mutex mutex;
-    std::unordered_map<std::string, long long> results;
-    std::unordered_map<std::string, int> calls;
+struct nds_io_ctx {
+    size_t capacity;
+    std::deque<nds_io_event> events;
 };
 
-NdsStubState &State()
+namespace {
+struct MemoryRange {
+    uintptr_t addr;
+    uint64_t size;
+
+    bool Contains(const nds_io_vec &iov) const
+    {
+        return iov.buf_addr >= addr && iov.buf_len <= size && iov.buf_addr - addr <= size - iov.buf_len;
+    }
+};
+
+std::mutex stateMutex;
+std::unordered_map<std::string, long long> results;
+std::unordered_map<std::string, int> calls;
+std::vector<MemoryRange> registeredMemory;
+
+long long Result(const char *name, long long fallback = 0)
 {
-    static NdsStubState state;
-    return state;
+    std::lock_guard<std::mutex> lock(stateMutex);
+    ++calls[name];
+    auto found = results.find(name);
+    return found == results.end() ? fallback : found->second;
 }
 
-long long ResultLocked(NdsStubState &state, const char *name, long long defaultValue)
+bool IsRegistered(const nds_io_cb &request)
 {
-    ++state.calls[name];
-    auto found = state.results.find(name);
-    return found == state.results.end() ? defaultValue : found->second;
+    std::lock_guard<std::mutex> lock(stateMutex);
+    return std::any_of(registeredMemory.begin(), registeredMemory.end(), [&](const MemoryRange &range) {
+        return std::all_of(request.iov, request.iov + request.iov_cnt, [&](const nds_io_vec &iov) {
+            return range.Contains(iov);
+        });
+    });
 }
-}
+} // namespace
 
 extern "C" void FakeNdsReset()
 {
-    auto &state = State();
-    std::lock_guard<std::mutex> lock(state.mutex);
-    state.results.clear();
-    state.calls.clear();
+    std::lock_guard<std::mutex> lock(stateMutex);
+    results.clear();
+    calls.clear();
 }
 
 extern "C" void FakeNdsSetResult(const char *name, long long result)
 {
-    auto &state = State();
-    std::lock_guard<std::mutex> lock(state.mutex);
-    state.results[name] = result;
+    std::lock_guard<std::mutex> lock(stateMutex);
+    results[name] = result;
 }
 
 extern "C" int FakeNdsGetCallCount(const char *name)
 {
-    auto &state = State();
-    std::lock_guard<std::mutex> lock(state.mutex);
-    return state.calls[name];
+    std::lock_guard<std::mutex> lock(stateMutex);
+    return calls[name];
 }
 
-extern "C" int nds_init(int)
+extern "C" int nds_init(nds_init_param *param)
 {
-    auto &state = State();
-    std::lock_guard<std::mutex> lock(state.mutex);
-    return static_cast<int>(ResultLocked(state, "nds_init", 0));
+    param->version = 1;
+    return Result("nds_init");
 }
 
-extern "C" int nds_init_async(int)
+extern "C" int nds_exit()
 {
-    auto &state = State();
-    std::lock_guard<std::mutex> lock(state.mutex);
-    return static_cast<int>(ResultLocked(state, "nds_init_async", 0));
+    const int ret = Result("nds_exit");
+    std::lock_guard<std::mutex> lock(stateMutex);
+    registeredMemory.clear();
+    return ret;
 }
 
-extern "C" int nds_uninit()
+extern "C" int nds_register_fs(const nds_fs_desc *) { return Result("nds_register_fs"); }
+extern "C" int nds_unregister_fs(const nds_fs_desc *) { return Result("nds_unregister_fs"); }
+
+extern "C" int nds_register_mem(void *addr, uint64_t size, int)
 {
-    auto &state = State();
-    std::lock_guard<std::mutex> lock(state.mutex);
-    return static_cast<int>(ResultLocked(state, "nds_uninit", 0));
+    (void)Result("nds_register_mem");
+    std::lock_guard<std::mutex> lock(stateMutex);
+    registeredMemory.push_back({reinterpret_cast<uintptr_t>(addr), size});
+    return 0;
 }
 
-extern "C" int nds_open(const char *, int, ...)
+extern "C" int nds_unregister_mem(void *addr, uint64_t size, int)
 {
-    auto &state = State();
-    std::lock_guard<std::mutex> lock(state.mutex);
-    auto result = ResultLocked(state, "nds_open", 0);
-    if (result < 0) {
-        return static_cast<int>(result);
+    std::lock_guard<std::mutex> lock(stateMutex);
+    const auto entry = std::find_if(registeredMemory.begin(), registeredMemory.end(), [addr, size](const MemoryRange &r) {
+        return r.addr == reinterpret_cast<uintptr_t>(addr) && r.size == size;
+    });
+    if (entry == registeredMemory.end()) {
+        return -ENOENT;
     }
-    return dup(STDERR_FILENO);
+    registeredMemory.erase(entry);
+    return 0;
 }
 
-extern "C" int nds_regmem(ock::ubsio::nds_fileid_t, const void *, size_t)
+extern "C" int nds_io_new_ctx(const nds_io_ctx_param *param, nds_io_ctx **ctx)
 {
-    auto &state = State();
-    std::lock_guard<std::mutex> lock(state.mutex);
-    return static_cast<int>(ResultLocked(state, "nds_regmem", 0));
+    *ctx = new nds_io_ctx{param->max_io_cnt, {}};
+    return Result("nds_io_new_ctx");
 }
 
-extern "C" int nds_unregmem(ock::ubsio::nds_fileid_t, const void *, size_t)
+extern "C" int nds_io_destroy_ctx(nds_io_ctx *ctx)
 {
-    auto &state = State();
-    std::lock_guard<std::mutex> lock(state.mutex);
-    return static_cast<int>(ResultLocked(state, "nds_unregmem", 0));
+    delete ctx;
+    return Result("nds_io_destroy_ctx");
 }
 
-extern "C" ssize_t nds_read(ock::ubsio::nds_fileid_t, void *buffer, off_t bufferOffset,
-                             size_t size, off_t)
+extern "C" int nds_io_submit(nds_io_ctx *ctx, int nr, const nds_io_cb *cbs)
 {
-    auto &state = State();
-    std::lock_guard<std::mutex> lock(state.mutex);
-    auto result = ResultLocked(state, "nds_read", static_cast<long long>(size));
-    if (result >= 0 && buffer != nullptr) {
-        std::memset(static_cast<char *>(buffer) + bufferOffset, 'N',
-                    static_cast<size_t>(result));
+    (void)Result("nds_io_submit");
+    if (static_cast<size_t>(nr) + ctx->events.size() > ctx->capacity) {
+        return -EINVAL;
     }
-    return static_cast<ssize_t>(result);
-}
-
-extern "C" ssize_t nds_readv_batch(ock::ubsio::nds_fileid_t, const struct iovec *vectors,
-                                    size_t count, off_t, size_t)
-{
-    auto &state = State();
-    std::lock_guard<std::mutex> lock(state.mutex);
-    size_t total = 0;
-    for (size_t index = 0; index < count; ++index) {
-        total += vectors[index].iov_len;
-    }
-    auto result = ResultLocked(state, "nds_readv_batch", static_cast<long long>(total));
-    if (result >= 0) {
-        for (size_t index = 0; index < count; ++index) {
-            std::memset(vectors[index].iov_base, 'R', vectors[index].iov_len);
+    for (int i = 0; i < nr; ++i) {
+        const auto &request = cbs[i];
+        const bool registered = (request.rw_flags & NDS_IO_F_REGISTERED_MEM) != 0;
+        if (registered && !IsRegistered(request)) {
+            return i == 0 ? -ERANGE : i;
         }
+        (void)Result(registered ? "nds_submit_registered" : "nds_submit_unregistered");
+        nds_io_event event{};
+        event.user_data = request.user_data;
+        uint64_t offset = request.offset;
+        for (uint32_t j = 0; j < request.iov_cnt; ++j) {
+            const auto &iov = request.iov[j];
+            const auto bytes = pread(request.obj.fd, reinterpret_cast<void *>(iov.buf_addr), iov.buf_len, offset);
+            if (bytes != static_cast<ssize_t>(iov.buf_len)) {
+                event.res = -EIO;
+                break;
+            }
+            offset += iov.buf_len;
+        }
+        ctx->events.push_back(event);
     }
-    return static_cast<ssize_t>(result);
+    return nr;
+}
+
+extern "C" int nds_io_getevents(nds_io_ctx *ctx, int minNr, int nr, nds_io_event *events, timespec *)
+{
+    if (minNr != 1 || nr > static_cast<int>(ctx->events.size())) {
+        return -EINVAL;
+    }
+    for (int i = 0; i < nr; ++i) {
+        events[i] = ctx->events.front();
+        ctx->events.pop_front();
+    }
+    return nr;
 }

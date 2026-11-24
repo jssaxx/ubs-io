@@ -23,6 +23,7 @@
 #include "dl_biosdk_api.h"
 #include "ubsio_kvc_operation.h"
 #include "ubsio_kvc_instance.h"
+#include "ubsio_nds_manager.h"
 #include "ubsio_kvc.h"
 
 using namespace ock::ubsio;
@@ -30,8 +31,6 @@ using namespace ock::ubsio;
 namespace {
 constexpr int MAX_KEY_LENGTH = 255;
 constexpr int MAX_BATCH_OP_COUNT = 16 << 10; // 16K
-constexpr int MAX_KV_LAYER_NUM = 2 * 512; // k layer + v layer
-constexpr int64_t MAX_KV_LAYER_LENGTH = 2 * 1024 * 1024 * 1024LL; // 2G
 constexpr uint64_t DEFAULT_TENANT_ID = 1;
 
 bool IsBatchKeyValid(const char *key)
@@ -95,27 +94,23 @@ UBSIO_API int32_t UbsioKvCacheInit(int32_t devId)
         LOG_ERROR("Invalid device id: " << devId);
         return UBSIO_KVC_INVALID_PARAM;
     }
-    int32_t ret = KvcInstance::Instance().Initialize(devId);
-    if (UNLIKELY(ret != UBSIO_KVC_OK)) {
-        LOG_ERROR("init kvc instance failed, device id: " << devId << ", ret: " << ret);
-        return UBSIO_KVC_ERR;
+    const auto ret = KvcOperationInit(devId);
+    if (ret != UBSIO_KVC_OK) {
+        return ret;
     }
-    return KvcOperationInit(devId);
+    auto ndsRet = nds::NdsManager::Instance().Initialize(devId);
+    if (ndsRet != UBSIO_KVC_OK && ndsRet != UBSIO_KVC_NO_NDS) {
+        LOG_WARN("NdsManager init failed (NDS disabled), ret:" << ndsRet);
+    }
+    return UBSIO_KVC_OK;
 }
 
-UBSIO_API int32_t UbsioGetUnderFsType(UbsioUnderFsType *type)
+UBSIO_API int32_t UbsioGetInitInfo(UbsioInitInfo *info)
 {
-    if (type == nullptr) {
+    if (info == nullptr) {
         return UBSIO_KVC_INVALID_PARAM;
     }
-    BioUnderFsType value = BIO_UNDERFS_BUTT;
-    if (DlBioSdkApi::GetUnderFsType(&value) != RET_CACHE_OK ||
-        static_cast<uint32_t>(value) >= BIO_UNDERFS_BUTT) {
-        LOG_ERROR("Query initialized UnderFS type failed.");
-        return UBSIO_KVC_ERR;
-    }
-    *type = static_cast<UbsioUnderFsType>(value);
-    return UBSIO_KVC_OK;
+    return KvcInstance::GetInitInfo(*info);
 }
 
 UBSIO_API int32_t UbsioGetResourceInfo(UbsioResourceInfo *info)
@@ -218,6 +213,36 @@ UBSIO_API void UbsioKvCacheFreeScanKeyResult(const UbsioKvKeyInfo **items)
 UBSIO_API void UbsioKvCacheExit(void) 
 { 
     KvcExit();
+}
+
+static int32_t LocalFileRegistrationResult(int32_t result)
+{
+    if (result == UBSIO_KVC_NO_NDS) {
+        UbsioInitInfo info{};
+        if (KvcInstance::GetInitInfo(info) == UBSIO_KVC_OK && info.slot != 0) {
+            // The file fallback only needs the caller's valid HBM destination.
+            return UBSIO_KVC_OK;
+        }
+    }
+    return result;
+}
+
+UBSIO_API int32_t UbsioKvCacheRegisterMem(void *addr, size_t length)
+{
+    if (UNLIKELY(addr == nullptr || length == 0)) {
+        LOG_ERROR("UbsioKvCacheRegisterMem invalid param, addr:" << addr << ", length:" << length);
+        return UBSIO_KVC_INVALID_PARAM;
+    }
+    return LocalFileRegistrationResult(nds::NdsManager::Instance().RegisterMemory(addr, length));
+}
+
+UBSIO_API int32_t UbsioKvCacheUnregisterMem(void *addr, size_t length)
+{
+    if (UNLIKELY(addr == nullptr)) {
+        LOG_ERROR("UbsioKvCacheUnregisterMem invalid param, addr:" << addr);
+        return UBSIO_KVC_INVALID_PARAM;
+    }
+    return LocalFileRegistrationResult(nds::NdsManager::Instance().UnRegisterMemory(addr, length));
 }
 
 UBSIO_API int32_t UbsioKvCachePut(const char *key, void *buf, size_t length, uint32_t flags)
@@ -468,57 +493,15 @@ UBSIO_API int32_t UbsioKvCacheBatchStat(const char **keys, uint32_t keysCount, U
     return UBSIO_KVC_OK;
 }
 
-int32_t UbsioKvCacheBatchGetDirect(const char **keys,
-                                   uint32_t keysCount,
-                                   void ***bufs,
-                                   size_t **lengths,
-                                   uint32_t lengthsRows,
-                                   uint32_t lengthsCols,
-                                   int *results,
-                                   uint32_t flags)
+UBSIO_API int32_t UbsioKvCacheBatchGetDirect(const char *const *keys, uint32_t keysCount, const uint8_t *ownerSlots,
+                                 void *const *const *buffers, const size_t *const *lengths,
+                                 const uint32_t *iovCounts, int *results)
 {
-    if (UNLIKELY(keys == nullptr || bufs == nullptr || lengths == nullptr || results == nullptr)) {
-        LOG_ERROR("Invalid params, keysCount: " << keysCount);
+    if (!keys || !ownerSlots || !buffers || !lengths || !iovCounts || !results ||
+        keysCount == 0 || keysCount > MAX_BATCH_OP_COUNT) {
         return UBSIO_KVC_INVALID_PARAM;
     }
-    if (UNLIKELY(keysCount > MAX_BATCH_OP_COUNT || keysCount < 1 || lengthsRows != keysCount || lengthsCols > MAX_KV_LAYER_NUM)) {
-        LOG_ERROR("Invalid params, keysCount: " << keysCount);
-        return UBSIO_KVC_INVALID_PARAM;
-    }
-
-    std::vector<std::string> keyVector(keysCount);
-    std::vector<int> batchResult(keysCount, UBSIO_KVC_ERR);
-    std::vector<std::vector<size_t>> lengthsVector(keysCount);
-    std::vector<std::vector<uintptr_t>> npuAddrsVector(keysCount);
-    for (uint32_t i = 0; i < keysCount; ++i) {
-        if (UNLIKELY(keys[i] == nullptr)) {
-            LOG_ERROR("Get invalid key nullptr on idx [" << i << "]");
-            return UBSIO_KVC_INVALID_PARAM;
-        }
-        if (UNLIKELY(strlen(keys[i]) > MAX_KEY_LENGTH || strlen(keys[i]) < 1)) {
-            LOG_ERROR("Get invalid key length[" << i << "]");
-            return UBSIO_KVC_INVALID_PARAM;
-        }
-        std::vector<size_t> layerLengths(lengthsCols);
-        std::vector<uintptr_t> layerAddrs(lengthsCols);
-        for (uint32_t j = 0; j < lengthsCols; ++j) {
-            if (UNLIKELY(lengths[i][j] == 0 || lengths[i][j] > MAX_KV_LAYER_LENGTH)) {
-                LOG_ERROR("Get invalid lengths[" << i << "][" << j << "], length " << lengths[i][j]);
-                return UBSIO_KVC_INVALID_PARAM;
-            }
-            if (UNLIKELY(bufs[i][j] == nullptr)) {
-                LOG_ERROR("Get invalid npuAddrs[" << i << "][" << j << "]");
-                return UBSIO_KVC_INVALID_PARAM;
-            }
-            layerLengths[j] = lengths[i][j];
-            layerAddrs[j] = reinterpret_cast<uintptr_t>(bufs[i][j]);
-        }
-        keyVector[i] = keys[i];
-        lengthsVector[i] = layerLengths;
-        npuAddrsVector[i] = layerAddrs;
-    }
-
-    return KvcInstance::Instance().Read(keyVector, npuAddrsVector, lengthsVector, results);
+    return KvcInstance::ReadLocalFiles(keys, keysCount, ownerSlots, buffers, lengths, iovCounts, results);
 }
 
 UBSIO_API int32_t UbsioKvCacheBatchExist(const char **keys, uint32_t keysCount, bool *results, uint32_t flags)

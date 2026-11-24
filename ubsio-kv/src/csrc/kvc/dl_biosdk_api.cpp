@@ -20,6 +20,17 @@
 #include "ubsio_kvc_def.h"
 #include "dl_biosdk_api.h"
 
+namespace {
+constexpr int32_t KVC_NO_DEVICE_ID = -1;
+constexpr uint32_t DEFAULT_STANDALONE_DEVICE_ID = 0;
+
+uint32_t GetStandaloneDeviceId(int32_t devId)
+{
+    return devId == KVC_NO_DEVICE_ID ? DEFAULT_STANDALONE_DEVICE_ID : static_cast<uint32_t>(devId);
+}
+
+}
+
 namespace ock {
 namespace ubsio {
 
@@ -64,6 +75,7 @@ void SyncKvcLogLevel()
 bool DlBioSdkApi::gLoaded = false;
 std::mutex DlBioSdkApi::gMutex;
 void *DlBioSdkApi::bioSdkHandle = nullptr;
+void *DlBioSdkApi::underFsHandle = nullptr;
 const std::string DlBioSdkApi::gBioSdkLibName = "libbio_sdk.so";
 
 BioExitFunc DlBioSdkApi::pBioExit = nullptr;
@@ -79,12 +91,12 @@ BioBatchGetFunc DlBioSdkApi::pBioBatchGet = nullptr;
 BioBatchExistFunc DlBioSdkApi::pBioBatchExist = nullptr;
 BioBatchFreeFunc DlBioSdkApi::pBioBatchGetFree = nullptr;
 BioDeleteFunc DlBioSdkApi::pBioDelete = nullptr;
-BioBatchGetKeyDiskAddrFunc DlBioSdkApi::pBioBatchGetKeyDiskAddr = nullptr;
 BioRegisterMetaEventCallbackFunc DlBioSdkApi::pBioRegisterMetaEventCallback = nullptr;
 BioShowLocalCacheResourceFunc DlBioSdkApi::pBioShowLocalCacheResource = nullptr;
-BioGetUnderFsTypeFunc DlBioSdkApi::pBioGetUnderFsType = nullptr;
+BioGetConfigInfoFunc DlBioSdkApi::pBioGetConfigInfo = nullptr;
 BioScanKeyFunc DlBioSdkApi::pBioScanKey = nullptr;
 BioFreeScanKeyResultFunc DlBioSdkApi::pBioFreeScanKeyResult = nullptr;
+UfsResolveFilePathFunc DlBioSdkApi::pUfsResolveFilePath = nullptr;
 
 int32_t DlBioSdkApi::LoadLibrary()
 {
@@ -104,7 +116,7 @@ int32_t DlBioSdkApi::LoadLibrary()
     DL_LOAD_SYM(pBioExit, BioExitFunc, bioSdkHandle, "BioExit");
     DL_LOAD_SYM(pBioInitialize, BioInitFunc, bioSdkHandle, "BioInitialize");
     pBioGetLogLevel = reinterpret_cast<BioGetLogLevelFunc>(dlsym(bioSdkHandle, "BioGetLogLevel"));
-    DL_LOAD_SYM(pBioGetUnderFsType, BioGetUnderFsTypeFunc, bioSdkHandle, "BioGetUnderFsType");
+    DL_LOAD_SYM(pBioGetConfigInfo, BioGetConfigInfoFunc, bioSdkHandle, "BioGetConfigInfo");
     DL_LOAD_SYM(pBioGet, BioGetFunc, bioSdkHandle, "BioGet");
     DL_LOAD_SYM(pBioPut, BioPutFunc, bioSdkHandle, "BioPut");
     DL_LOAD_SYM(pBioStat, BioStatFunc, bioSdkHandle, "BioStat");
@@ -115,7 +127,6 @@ int32_t DlBioSdkApi::LoadLibrary()
     DL_LOAD_SYM(pBioBatchExist, BioBatchExistFunc, bioSdkHandle, "BioBatchExist");
     DL_LOAD_SYM(pBioBatchGetFree, BioBatchFreeFunc, bioSdkHandle, "BioBatchGetFree");
     DL_LOAD_SYM(pBioDelete, BioDeleteFunc, bioSdkHandle, "BioDelete");
-    DL_LOAD_SYM(pBioBatchGetKeyDiskAddr, BioBatchGetKeyDiskAddrFunc, bioSdkHandle, "BioBatchGetKeyDiskAddr");
     DL_LOAD_SYM(pBioRegisterMetaEventCallback, BioRegisterMetaEventCallbackFunc, bioSdkHandle,
         "BioRegisterMetaEventCallback");
     DL_LOAD_SYM(pBioShowLocalCacheResource, BioShowLocalCacheResourceFunc, bioSdkHandle,
@@ -134,10 +145,11 @@ void DlBioSdkApi::CleanupLibrary()
         return;
     }
 
+    UnloadFilePathResolver();
     pBioExit = nullptr;
     pBioInitialize = nullptr;
     pBioGetLogLevel = nullptr;
-    pBioGetUnderFsType = nullptr;
+    pBioGetConfigInfo = nullptr;
     pBioGet = nullptr;
     pBioPut = nullptr;
     pBioStat = nullptr;
@@ -148,7 +160,6 @@ void DlBioSdkApi::CleanupLibrary()
     pBioBatchExist = nullptr;
     pBioBatchGetFree = nullptr;
     pBioDelete = nullptr;
-    pBioBatchGetKeyDiskAddr = nullptr;
     pBioRegisterMetaEventCallback = nullptr;
     pBioShowLocalCacheResource = nullptr;
     pBioScanKey = nullptr;
@@ -159,6 +170,53 @@ void DlBioSdkApi::CleanupLibrary()
         bioSdkHandle = nullptr;
     }
     gLoaded = false;
+}
+
+void DlBioSdkApi::LoadFilePathResolver()
+{
+    std::lock_guard<std::mutex> guard(gMutex);
+    if (underFsHandle != nullptr) {
+        return;
+    }
+
+    BioConfigInfo info{};
+    info.structSize = sizeof(info);
+    info.fields = BIO_CONFIG_NDS_ENABLED;
+    if (GetConfigInfo(&info) != RET_CACHE_OK || info.ndsEnabled == 0 || info.localFileSlot == 0) {
+        return;
+    }
+
+    void *handle = dlopen("libbio_underfs.so", RTLD_NOW | RTLD_NOLOAD);
+    if (handle == nullptr) {
+        LOG_WARN("LocalFS path resolver unavailable, failed to get UnderFS handle: " << dlerror());
+        return;
+    }
+    const auto resolver = reinterpret_cast<UfsResolveFilePathFunc>(dlsym(handle, "UfsResolveFilePath"));
+    if (resolver == nullptr) {
+        LOG_WARN("LocalFS path resolver unavailable, failed to load UfsResolveFilePath: " << dlerror());
+        dlclose(handle);
+        return;
+    }
+    underFsHandle = handle;
+    pUfsResolveFilePath = resolver;
+}
+
+void DlBioSdkApi::UnloadFilePathResolver()
+{
+    pUfsResolveFilePath = nullptr;
+    if (underFsHandle != nullptr) {
+        dlclose(underFsHandle);
+        underFsHandle = nullptr;
+    }
+}
+
+void DlBioSdkApi::Exit()
+{
+    std::lock_guard<std::mutex> guard(gMutex);
+    UnloadFilePathResolver();
+    if (pBioExit != nullptr) {
+        pBioExit();
+    }
 }
 
 int32_t DlBioSdkApi::KvBioInit()
@@ -185,14 +243,14 @@ int32_t DlBioSdkApi::KvBioInit()
     ret = CreateCache({ tenantId, affinity, strategy });
     if (ret == RET_CACHE_EXISTS) {
         LOG_INFO("boostio cache already exist");
-        return 0;
-    }
-    if (ret != 0) {
+    } else if (ret != RET_CACHE_OK) {
         LOG_ERROR("boostio createcache failed, ret: " << ret);
         return -1;
+    } else {
+        LOG_INFO("boostio createcache success.");
     }
-    LOG_INFO("boostio createcache success.");
 
+    LoadFilePathResolver();
     return 0;
 }
 

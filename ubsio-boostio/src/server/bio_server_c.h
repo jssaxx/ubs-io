@@ -77,6 +77,8 @@ int32_t GetRuntimeConfig(StandaloneRuntimeConfigResponse *rsp);
 
 int32_t GetUnderFsType(BioUnderFsType *type);
 
+int32_t GetConfigInfo(BioConfigInfo *info);
+
 int32_t GetLocalNid(GetLocalNidResponse *rsp);
 
 int32_t GetQuotaInfo(QueryQuotaRequest *req, QueryQuotaResponse *rsp);

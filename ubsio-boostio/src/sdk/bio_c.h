@@ -14,6 +14,7 @@
 #define BIO_C_H
 
 #include <stdint.h>
+#include <stddef.h>
 #include <stdbool.h>
 #include <time.h>
 #include <limits.h>
@@ -97,6 +98,24 @@ typedef enum {
 #define DISK_RESOURCE_MAX_NUM (16)
 #define DISK_RESOURCE_PATH_MAX_SIZE (256)
 #define CHUNK_ADDR_MAX_SIZE (2)
+
+#define BIO_CONFIG_UNDERFS_TYPE (1U << 0)
+#define BIO_CONFIG_NDS_ENABLED (1U << 2)
+#define BIO_CONFIG_SUPPORTED_FIELDS (BIO_CONFIG_UNDERFS_TYPE | BIO_CONFIG_NDS_ENABLED)
+
+typedef struct {
+    uint32_t structSize;
+    uint32_t fields;
+    uint32_t underFsType;
+    uint32_t ndsEnabled;
+    uint8_t localFileSlot;
+} BioConfigInfo;
+
+static inline uint32_t BioConfigInfoMinSize(uint32_t fields)
+{
+    return (fields & BIO_CONFIG_NDS_ENABLED) ? offsetof(BioConfigInfo, localFileSlot) :
+        offsetof(BioConfigInfo, ndsEnabled);
+}
 
 #ifndef UBSIO_KV_KEY_INFO_C_DEFINED
 #define UBSIO_KV_KEY_INFO_C_DEFINED
@@ -265,6 +284,15 @@ CResult BioGetLogLevel(BioLogLevel *level);
  * @return Zero on success; nonzero if the runtime or query interface is unavailable, or the pointer is invalid.
  */
 CResult BioGetUnderFsType(BioUnderFsType *type);
+
+/**
+ * Query selected fields from the initialized local BoostIO configuration.
+ * Set structSize to sizeof(BioConfigInfo) and fields to a BIO_CONFIG_* mask.
+ * BIO_CONFIG_NDS_ENABLED returns effective NDS support and the assigned localFileSlot (1-16, or 0 if unavailable).
+ * Unselected fields are zeroed on success.
+ * The caller's output is unchanged on failure.
+ */
+CResult BioGetConfigInfo(BioConfigInfo *info);
 
 /**
  * @brief Register a same-process UBS IO metadata event callback.

@@ -10,24 +10,34 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <fcntl.h>
+#include <unistd.h>
+#include <cerrno>
+#include <cstdlib>
+#include <cstring>
 #include <algorithm>
-#include <random>
+#include <limits>
+#include <new>
+#include <vector>
 #include "ubsio_kvc_log.h"
-#include "ubsio_kvc_types.h"
-#include "ubsio_kvc_str_util.h"
 #include "dl_biosdk_api.h"
 #include "ubsio_nds_manager.h"
 
 using namespace ock::ubsio;
 using namespace ock::ubsio::nds;
 
-constexpr int MAX_LAYER_NUM = 255;
-constexpr int MAX_BATCH_SIZE = 512;
-constexpr int MAX_KEY_LEN = 256;
-constexpr int MAX_THREAD_CNT = 256;
-constexpr int DEFAULT_THREAD_CNT = 32;
-constexpr int TALENT_ID = 1;
+constexpr int NDS_IO_TIMEOUT_SEC = 30;
+constexpr size_t NDS_FILE_ALIGNMENT = 512;
+
+static bool IsDirectUnavailable(int64_t result) noexcept
+{
+    return result == -EOPNOTSUPP || result == -ENOSYS || result == -ENODEV;
+}
+
+static bool NdsEnvEnabled(const char *name) noexcept
+{
+    const char *value = std::getenv(name);
+    return value != nullptr && (std::strcmp(value, "1") == 0 || std::strcmp(value, "true") == 0);
+}
 
 NdsManager &NdsManager::Instance() noexcept
 {
@@ -42,362 +52,411 @@ NdsManager::~NdsManager() noexcept
 
 KvcError NdsManager::Initialize(int device) noexcept
 {
+    std::unique_lock<std::shared_mutex> lock(memoryMutex);
     if (ndsInit) {
         LOG_INFO("Nds has been initialized, which device id is " << deviceId);
         return UBSIO_KVC_OK;
     }
 
-    char *bioDisks = std::getenv("UBSIO_BIO_DISKS");
-    if (bioDisks == nullptr || *bioDisks == '\0') {
-        LOG_WARN("Nds env UBSIO_BIO_DISKS not set or empty, disable the NDS feature.");
+    BioConfigInfo config{};
+    config.structSize = sizeof(config);
+    config.fields = BIO_CONFIG_NDS_ENABLED;
+    auto configRet = DlBioSdkApi::GetConfigInfo(&config);
+    if (configRet != RET_CACHE_OK) {
+        LOG_WARN("Cannot query NDS configuration, ret:" << configRet);
         return UBSIO_KVC_ERR;
     }
-
+    if (config.ndsEnabled == 0) {
+        return UBSIO_KVC_NO_NDS;
+    }
     if (device < 0) {
         LOG_ERROR("Nds get invalid device id " << device);
         return UBSIO_KVC_ERR;
     }
-
-    // Load libnds_file.so dynamically
+    skipMemRegister = NdsEnvEnabled("UBSIO_NDS_SKIP_MEM_REGISTER");
     if (NdsApi::LoadLibrary() != 0) {
-        LOG_WARN("Failed to load libnds_file.so, disable the NDS feature.");
+        LOG_WARN("Failed to load libascend_nds.so, disable the NDS feature.");
         return UBSIO_KVC_ERR;
     }
-
+    ndsLoaded = true;
     deviceId = device;
-    useIOURing = std::getenv("UBSIO_USE_IO_URING") != nullptr;
-    int ret = 0;
-    if (useIOURing) {
-        ret = NdsApi::NdsInitAsync(deviceId);
-    } else {
-        ret = NdsApi::NdsInit(deviceId);
-    }
-    if (ret < 0) {
-        LOG_ERROR("Nds initialize failed with device " << deviceId);
+
+    const int ret = NdsApi::DriverOpen();
+    int version = 0;
+    if (ret != 0 || NdsApi::GetVersion(&version) != 0 || version != NDS_DRIVER_UAPI_VERSION) {
+        LOG_ERROR("Nds initialize failed or version mismatch, device:" << deviceId <<
+            ", ret:" << ret << ", version:" << version);
+        if (ret == 0) {
+            NdsApi::DriverClose();
+        }
+        NdsApi::CleanupLibrary();
+        ndsLoaded = false;
         return UBSIO_KVC_ERR;
     }
 
-    std::set<std::string> diskPaths;
-    StrUtil::Split(bioDisks, ",", diskPaths);
-
-    for (const auto &diskPath: diskPaths) {
-        int fd = NdsApi::NdsOpen(diskPath.c_str(), O_RDONLY | O_DIRECT);
-        if (fd < 0) {
-            LOG_ERROR("Nds open failed with device " << deviceId << ", errno: " << errno << ":" << strerror(errno));
-            UnInitialize();
-            return UBSIO_KVC_ERR;
-        }
-        diskFdMap[diskPath] = { fd, deviceId };
-    }
-
-    long threadCnt = DEFAULT_THREAD_CNT;
-    char *threadEnv = std::getenv("UBSIO_NDS_READ_THREAD");
-    if (threadEnv != nullptr) {
-        auto threadCntValid = StrUtil::StrToLong(threadEnv, threadCnt);
-        if (!threadCntValid || threadCnt <= 0 || threadCnt > MAX_THREAD_CNT) {
-            LOG_ERROR("Nds env is invalid, UBSIO_NDS_READ_THREAD range is (0, " << MAX_THREAD_CNT << "]");
-            UnInitialize();
-            return UBSIO_KVC_ERR;
-        }
-    }
-
-    threadCnt = useIOURing ? 1L : threadCnt;
-    ndsReadPool = ExecutorService::Create(threadCnt);
-    if (UNLIKELY(ndsReadPool == nullptr)) {
-        LOG_ERROR("Nds thread pool init failed.");
-        UnInitialize();
-        return UBSIO_KVC_ERR;
-    }
-    auto success = ndsReadPool->Start();
-    if (UNLIKELY(!success)) {
-        LOG_ERROR("Nds thread pool start failed.");
-        ndsReadPool = nullptr;
-        UnInitialize();
+    // Close the pooled contexts before the dynamically loaded facade's static objects are destroyed.
+    if (InitializeIoContextPool(1) != UBSIO_KVC_OK ||
+        std::atexit([] { NdsManager::Instance().UnInitialize(); }) != 0) {
+        LOG_ERROR("Nds io context pool initialization or exit registration failed.");
+        DestroyIoContextPool();
+        NdsApi::DriverClose();
+        NdsApi::CleanupLibrary();
+        ndsLoaded = false;
         return UBSIO_KVC_ERR;
     }
 
     ndsInit = true;
-    LOG_INFO("Nds init success, use ioURing:" << (useIOURing ? "true" : "false") << ", threadCnt:" << threadCnt);
+    readsEnabled = skipMemRegister;
+    if (skipMemRegister) {
+        LOG_INFO("NDS uses unregistered scatter-gather reads; memory registration is skipped.");
+    }
+    LOG_INFO("Nds init success, device:" << deviceId << ", submitMode:batch, maxIoNr:" << NDS_MAX_IO_DEPTH);
     return UBSIO_KVC_OK;
 }
 
 KvcError NdsManager::UnInitialize() noexcept
 {
-    if (ndsReadPool.Get() != nullptr) {
-        ndsReadPool = nullptr;
+    std::unique_lock<std::shared_mutex> lock(memoryMutex);
+    DestroyIoContextPool();
+    if (ndsInit) {
+        registeredDevices.clear();
+        NdsApi::DriverClose();
+        ndsInit = false;
     }
-    NdsApi::NdsUninit();
-    for (const auto &[diskPath, fid]: diskFdMap) {
-        close(fid.fd);
+    if (ndsLoaded) {
+        NdsApi::CleanupLibrary();
+        ndsLoaded = false;
     }
-    diskFdMap.clear();
-    NdsApi::CleanupLibrary();
-    ndsInit = false;
-    ndsNormal = false;
+    registeredRanges.clear();
+    readsEnabled = false;
+    skipMemRegister = false;
     return UBSIO_KVC_OK;
+}
+
+KvcError NdsManager::InitializeIoContextPool(size_t count) noexcept
+{
+    ioContextPool.reserve(count);
+
+    for (size_t i = 0; i < count; ++i) {
+        auto slot = std::unique_ptr<IoContextSlot>(new (std::nothrow) IoContextSlot());
+        if (slot == nullptr) {
+            DestroyIoContextPool();
+            return UBSIO_KVC_ERR;
+        }
+        const int ret = NdsApi::SetUpBatch(&slot->ctx, NDS_MAX_IO_DEPTH);
+        if (ret != 0 || slot->ctx == nullptr) {
+            LOG_ERROR("Nds io context pool create failed, index:" << i << ", ret:" << ret);
+            if (slot->ctx != nullptr) {
+                NdsApi::DestroyBatch(slot->ctx);
+            }
+            DestroyIoContextPool();
+            return UBSIO_KVC_ERR;
+        }
+        ioContextPool.emplace_back(std::move(slot));
+    }
+    return UBSIO_KVC_OK;
+}
+
+void NdsManager::DestroyIoContextPool() noexcept
+{
+    std::lock_guard<std::mutex> guard(ioContextPoolMutex);
+    for (auto &slot : ioContextPool) {
+        if (slot != nullptr && slot->ctx != nullptr) {
+            NdsApi::DestroyBatch(slot->ctx);
+            slot->ctx = nullptr;
+        }
+    }
+    ioContextPool.clear();
+}
+
+NdsManager::IoContextSlot *NdsManager::AcquireIoContext() noexcept
+{
+    std::unique_lock<std::mutex> lock(ioContextPoolMutex);
+    IoContextSlot *selected = nullptr;
+    for (auto &slot : ioContextPool) {
+        if (slot != nullptr && !slot->busy) {
+            slot->busy = true;
+            selected = slot.get();
+            break;
+        }
+    }
+    if (selected == nullptr) {
+        auto slot = std::unique_ptr<IoContextSlot>(new (std::nothrow) IoContextSlot());
+        if (slot == nullptr) {
+            return nullptr;
+        }
+        slot->busy = true;
+        selected = slot.get();
+        ioContextPool.emplace_back(std::move(slot));
+    }
+    lock.unlock();
+    if (selected == nullptr || selected->ctx != nullptr) {
+        return selected;
+    }
+
+    const int ret = NdsApi::SetUpBatch(&selected->ctx, NDS_MAX_IO_DEPTH);
+    if (ret != 0 || selected->ctx == nullptr) {
+        LOG_ERROR("Nds io context lazy rebuild failed, ret:" << ret);
+        ReleaseIoContext(selected);
+        return nullptr;
+    }
+    return selected;
+}
+
+void NdsManager::ReleaseIoContext(IoContextSlot *slot) noexcept
+{
+    if (slot == nullptr) {
+        return;
+    }
+    {
+        std::lock_guard<std::mutex> guard(ioContextPoolMutex);
+        slot->busy = false;
+    }
 }
 
 KvcError NdsManager::RegisterMemory(const void *addr, size_t length) noexcept
 {
-    for (const auto &[diskPath, fid]: diskFdMap) {
-        int ret = NdsApi::NdsRegmem(fid, addr, length);
-        if (ret < 0) {
-            LOG_ERROR("Nds register memory failed with device " << fid.deviceID << ", length " << length);
-            return UBSIO_KVC_ERR;
+    std::unique_lock<std::shared_mutex> lock(memoryMutex);
+    if (!ndsInit) {
+        LOG_ERROR("NDS not initialized, register memory rejected. "
+                  "Call UbsioKvCacheInit with ubsio.nds.enabled=true first.");
+        return UBSIO_KVC_NO_NDS;
+    }
+    if (addr == nullptr || length == 0) {
+        return UBSIO_KVC_ERR;
+    }
+    if (skipMemRegister) {
+        return UBSIO_KVC_OK;
+    }
+    const auto address = reinterpret_cast<uintptr_t>(addr);
+    if (length > std::numeric_limits<uintptr_t>::max() - address) {
+        return UBSIO_KVC_INVALID_PARAM;
+    }
+    const auto end = address + length;
+    for (const auto &range : registeredRanges) {
+        if (range.addr == address && range.size == length) {
+            return UBSIO_KVC_OK;
+        }
+        if (address < range.addr + range.size && range.addr < end) {
+            LOG_ERROR("NDS memory registration overlaps an existing range");
+            return UBSIO_KVC_INVALID_PARAM;
         }
     }
-    ndsNormal = true;
+    if (registeredRanges.size() >= NDS_FILE_MAX_MEM_RANGES) {
+        LOG_ERROR("NDS memory registration exceeds " << NDS_FILE_MAX_MEM_RANGES << " ranges");
+        return UBSIO_KVC_ERR;
+    }
+    registeredRanges.push_back({address, length});
+    const int ret = NdsApi::RegisterMem(const_cast<void *>(addr), length);
+    if (ret != 0) {
+        registeredRanges.pop_back();
+        LOG_ERROR("NDS memory registration failed, length:" << length << ", ret:" << ret);
+        return UBSIO_KVC_ERR;
+    }
+    readsEnabled = true;
     return UBSIO_KVC_OK;
 }
 
 KvcError NdsManager::UnRegisterMemory(const void *addr, size_t length) noexcept
 {
-    for (const auto &[diskPath, fid]: diskFdMap) {
-        if (NdsApi::NdsUnregmem(fid, addr, length) < 0) {
-            LOG_ERROR("Nds unregister memory failed.");
-            return UBSIO_KVC_ERR;
-        }
+    std::unique_lock<std::shared_mutex> lock(memoryMutex);
+    if (!ndsInit) {
+        LOG_ERROR("NDS not initialized, unregister memory rejected.");
+        return UBSIO_KVC_NO_NDS;
     }
+    if (addr == nullptr || length == 0) {
+        return UBSIO_KVC_ERR;
+    }
+    if (skipMemRegister) {
+        return UBSIO_KVC_OK;
+    }
+    const auto address = reinterpret_cast<uintptr_t>(addr);
+    auto entry = std::find_if(registeredRanges.begin(), registeredRanges.end(),
+        [address](const MemoryRange &range) { return range.addr == address; });
+    if (entry == registeredRanges.end()) {
+        return UBSIO_KVC_ERR;
+    }
+    if (entry->size != length) {
+        return UBSIO_KVC_INVALID_PARAM;
+    }
+    const int ret = NdsApi::UnregisterMem(const_cast<void *>(addr));
+    if (ret != 0) {
+        LOG_ERROR("NDS memory unregistration failed, length:" << length << ", ret:" << ret);
+        return UBSIO_KVC_ERR;
+    }
+    registeredRanges.erase(entry);
+    readsEnabled = !registeredRanges.empty();
     return UBSIO_KVC_OK;
 }
 
-ssize_t NdsManager::SingleRead(const KeyAddrInfo &addrInfo,
-                                  const std::vector<uintptr_t> &buffers,
-                                  const std::vector<size_t> &sizes,
-                                  TaskResults &taskResults) noexcept
+void NdsManager::RebuildIoContext(IoContextSlot *slot) noexcept
 {
-    auto diskPath = addrInfo.path;
-    auto fileOffsets = addrInfo.offset;
-    auto readLens = addrInfo.length;
-    auto blkCnt = addrInfo.count;
-    if (UNLIKELY(addrInfo.result != RET_CACHE_OK)) {
-        LOG_ERROR("Bio get keyAddrInfo failed, ret: " << addrInfo.result);
-        return -1;
+    if (slot->ctx != nullptr) {
+        NdsApi::DestroyBatch(slot->ctx);
+        slot->ctx = nullptr;
     }
-    if (UNLIKELY(diskFdMap.find(diskPath) == diskFdMap.end())) {
-        LOG_ERROR("Bio get invalid disk path: " << diskPath << ", env UBSIO_BIO_DISKS may not be set correctly.");
-        return -1;
+    const int ret = NdsApi::SetUpBatch(&slot->ctx, NDS_MAX_IO_DEPTH);
+    if (ret != 0 || slot->ctx == nullptr) {
+        LOG_ERROR("Nds io context rebuild failed, ret:" << ret);
+        if (slot->ctx != nullptr) {
+            NdsApi::DestroyBatch(slot->ctx);
+            slot->ctx = nullptr;
+        }
+    }
+}
+
+void NdsManager::SubmitReads(std::vector<NDSfileIOParams_t> &requests, int *results)
+{
+    const size_t count = requests.size();
+    if (count == 0) {
+        return;
+    }
+    std::vector<size_t> cbKeys;
+    cbKeys.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        cbKeys.push_back(reinterpret_cast<uintptr_t>(requests[i].cookie));
+        requests[i].cookie = reinterpret_cast<void *>(i);
+    }
+    std::vector<bool> completed(count, false);
+    // Allocate before leasing a context; requests and buffers stay alive until all
+    // accepted operations are reaped, or destroy_ctx drains a failed context.
+    const size_t windowCapacity = std::min<size_t>(count, NDS_MAX_IO_DEPTH);
+    std::vector<NDSfileIOEvents_t> events(windowCapacity);
+    auto *slot = AcquireIoContext();
+    if (slot == nullptr || slot->ctx == nullptr) {
+        ReleaseIoContext(slot);
+        LOG_ERROR("Nds batch io context acquire failed");
+        return;
     }
 
-    auto blkIdx = 0;
-    auto recordReadSize = 0UL;
-    auto bioBlkLeftLen = readLens[blkIdx];
-    auto fileOffset = fileOffsets[blkIdx];
-    for (int i = 0; i < buffers.size(); ++i) {
-        auto leftReadBytes = sizes[i];
-        auto bufferOffset = 0UL;
-        while (leftReadBytes > 0) {
-            auto needReadBytes = std::min(bioBlkLeftLen, leftReadBytes);
-            TaskInfo info {
-                diskPath,
-                reinterpret_cast<void*>(buffers[i]),
-                needReadBytes,
-                static_cast<off_t>(bufferOffset),
-                static_cast<off_t>(fileOffset)
-            };
-            ndsReadPool->Execute([this, info, &taskResults]() -> void {
-                auto readBytes = NdsApi::NdsRead(diskFdMap[info.path], info.buffer,
-                    info.bufferOffset, info.size, info.fileOffset);
-                if (UNLIKELY(readBytes < 0 || readBytes != info.size)) {
-                    taskResults.failed.fetch_add(1UL);
-                } else {
-                    taskResults.succeed.fetch_add(1UL);
+    bool healthy = true;
+    const unsigned flags = skipMemRegister ? 0 : NDS_FILE_IO_REGISTERED_MEM;
+    size_t submitted = 0;
+    size_t inflight = 0;
+    while (inflight != 0 || (healthy && submitted < count)) {
+        // Bound accepted-but-unreaped IOCBs, not just the size of one submit.
+        // After a partial reap, fill the freed slots without draining the ctx.
+        if (healthy && submitted < count && inflight < windowCapacity) {
+            const int window = static_cast<int>(std::min(count - submitted, windowCapacity - inflight));
+            const int accepted = NdsApi::SubmitBatch(slot->ctx, window, &requests[submitted], flags);
+            if (IsDirectUnavailable(accepted)) {
+                results[cbKeys[submitted]] = UBSIO_KVC_NO_NDS;
+                completed[submitted++] = true;
+                continue;
+            }
+            if (accepted < 0 || accepted > window) {
+                LOG_ERROR("Nds batch submit failed, expected:" << window << ", ret:" << accepted);
+                healthy = false;
+                break;  // Destroy drains any operations whose acceptance is uncertain.
+            }
+            submitted += static_cast<size_t>(accepted);
+            inflight += static_cast<size_t>(accepted);
+            if (accepted == 0) {
+                LOG_ERROR("Nds batch partial submit, expected:" << window << ", ret:" << accepted);
+                healthy = false;  // Reap the accepted prefix; do not retry unknown failures.
+            }
+        }
+        if (inflight == 0) {
+            break;
+        }
+        struct timespec timeout{NDS_IO_TIMEOUT_SEC, 0};
+        const int reaped = NdsApi::GetBatchEvents(slot->ctx, 1, static_cast<unsigned>(inflight), events.data(), &timeout);
+        if (reaped <= 0 || static_cast<size_t>(reaped) > inflight) {
+            LOG_ERROR("Nds batch getevents failed or timed out, inflight:" << inflight << ", ret:" << reaped);
+            healthy = false;
+            break;
+        }
+        bool invalidEvent = false;
+        for (int i = 0; i < reaped; ++i) {
+            const auto cookie = reinterpret_cast<uintptr_t>(events[i].cookie);
+            if (cookie >= submitted || completed[cookie]) {
+                LOG_ERROR("Nds batch completion has invalid or duplicate cb index:" << cookie);
+                healthy = false;
+                invalidEvent = true;
+                continue;
+            }
+            completed[cookie] = true;
+            auto &result = results[cbKeys[cookie]];
+            if (events[i].ret == 0) {
+                result = UBSIO_KVC_OK;
+            } else if (IsDirectUnavailable(events[i].ret)) {
+                result = UBSIO_KVC_NO_NDS;
+            } else {
+                LOG_ERROR("Nds batch completion failed, cb index:" << cookie << ", ret:" << events[i].ret);
+                healthy = false;
+            }
+        }
+        if (invalidEvent) {
+            break;
+        }
+        inflight -= static_cast<size_t>(reaped);
+    }
+    if (!healthy) {
+        RebuildIoContext(slot);
+    }
+    ReleaseIoContext(slot);
+}
+
+void NdsManager::ReadLocalFiles(const LocalFileRead *items, const int *fds, const uint64_t *devices,
+                                size_t count, int *results)
+{
+    std::shared_lock<std::shared_mutex> lock(memoryMutex);
+    using FileHandle = std::unique_ptr<void, decltype(&NdsApi::DeregisterFileHandle)>;
+    std::vector<FileHandle> handles;
+    handles.reserve(count);
+    std::vector<NDSfileIOVec_t> iovs;
+    std::vector<NDSfileIOParams_t> requests;
+    requests.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        if (fds[i] < 0 || results[i] != UBSIO_KVC_OK) {
+            continue;
+        }
+        results[i] = UBSIO_KVC_NO_NDS;
+        if (!ndsInit || !readsEnabled.load()) {
+            continue;
+        }
+        const auto &item = items[i];
+        bool aligned = true;
+        for (uint32_t j = 0; j < item.iovCount; ++j) {
+            const auto addr = reinterpret_cast<uintptr_t>(item.buffers[j]);
+            const size_t length = item.lengths[j];
+            aligned = aligned && ((addr | length) % NDS_FILE_ALIGNMENT == 0);
+        }
+        if (!aligned) {
+            continue;
+        }
+        {
+            std::lock_guard<std::mutex> guard(topologyMutex);
+            if (!registeredDevices.count(devices[i])) {
+                const NDSfileFsDesc_t fs{&fds[i], 1, 0};
+                const int rc = NdsApi::RegisterFs(&fs);
+                if (rc != 0) {
+                    if (!IsDirectUnavailable(rc)) {
+                        results[i] = UBSIO_KVC_ERR;
+                    }
+                    continue;
                 }
-            });
-            fileOffset += needReadBytes;
-            bufferOffset += static_cast<ssize_t>(needReadBytes);
-            leftReadBytes -= needReadBytes;
-            bioBlkLeftLen -= needReadBytes;
-            recordReadSize += needReadBytes;
-            taskResults.total++;
-            if (bioBlkLeftLen == 0 && blkIdx < blkCnt - 1) {
-                blkIdx++;
-                bioBlkLeftLen = readLens[blkIdx];
-                fileOffset = fileOffsets[blkIdx];
+                registeredDevices.insert(devices[i]);
             }
         }
-    }
-    return static_cast<ssize_t>(recordReadSize);
-}
-
-ssize_t NdsManager::IOURingSingleRead(const KeyAddrInfo &addrInfo,
-                                         const std::vector<uintptr_t> &buffers,
-                                         const std::vector<size_t> &sizes) noexcept
-{
-    auto diskPath = addrInfo.path;
-    auto fileOffsets = addrInfo.offset;
-    auto readLens = addrInfo.length;
-    auto blkCnt = addrInfo.count;
-    if (UNLIKELY(addrInfo.result != RET_CACHE_OK)) {
-        LOG_ERROR("Bio get keyAddrInfo failed, ret: " << addrInfo.result);
-        return -1;
-    }
-    if (UNLIKELY(diskFdMap.find(diskPath) == diskFdMap.end())) {
-        LOG_ERROR("Bio get invalid disk path: " << diskPath << ", env UBSIO_BIO_DISKS may not be set correctly.");
-        return -1;
-    }
-
-    auto blkIdx = 0;
-    auto totalReadBytes = 0UL;
-    auto iovecReadBytes = 0UL;
-    auto bioBlkLeftLen = readLens[blkIdx];
-    auto fileOffset = fileOffsets[blkIdx];
-
-    iovec vecs[IO_URING_MAX_DEPTH];
-    memset(vecs, 0, sizeof(vecs));
-    uint32_t count = 0;
-    for (int i = 0; i < buffers.size(); ++i) {
-        auto leftReadBytes = sizes[i];
-        auto bufferOffset = 0UL;
-        while (leftReadBytes > 0) {
-            auto needReadBytes = std::min(bioBlkLeftLen, leftReadBytes);
-            vecs[count++] = { reinterpret_cast<void*>(buffers[i] + bufferOffset), needReadBytes };
-            bufferOffset += static_cast<ssize_t>(needReadBytes);
-            leftReadBytes -= needReadBytes;
-            bioBlkLeftLen -= needReadBytes;
-            iovecReadBytes += needReadBytes;
-            totalReadBytes += needReadBytes;
-
-            if (bioBlkLeftLen == 0 && blkIdx < blkCnt - 1) {
-                auto readRet = NdsApi::NdsReadvBatch(diskFdMap[diskPath], vecs, count, static_cast<off_t>(fileOffset));
-                UBSIO_KVC_ASSERT_RETURN(readRet >= 0, -1);
-                blkIdx++;
-                bioBlkLeftLen = readLens[blkIdx];
-                fileOffset = fileOffsets[blkIdx];
-                iovecReadBytes = 0UL;
-                memset(vecs, 0, sizeof(vecs));
-                count = 0;
-            }
-
-            if (count == IO_URING_MAX_DEPTH - 1) {
-                auto readRet = NdsApi::NdsReadvBatch(diskFdMap[diskPath], vecs, count, static_cast<off_t>(fileOffset));
-                UBSIO_KVC_ASSERT_RETURN(readRet >= 0, -1);
-                fileOffset += iovecReadBytes;
-                iovecReadBytes = 0UL;
-                memset(vecs, 0, sizeof(vecs));
-                count = 0;
-            }
+        NDSfileHandle_t handle = nullptr;
+        const int handleRet = NdsApi::RegisterFileHandle(&handle, fds[i]);
+        if (handleRet != 0) {
+            LOG_ERROR("Nds file handle registration failed, ret:" << handleRet);
+            results[i] = IsDirectUnavailable(handleRet) ? UBSIO_KVC_NO_NDS : UBSIO_KVC_ERR;
+            continue;
         }
-    }
-    return static_cast<ssize_t>(totalReadBytes);
-}
-
-KvcError NdsManager::DirectRead(const std::string &key,
-                                   const std::vector<uintptr_t> &buffers,
-                                   const std::vector<size_t> &sizes) noexcept
-{
-    if (!ndsInit || !ndsNormal) {
-        return UBSIO_KVC_NO_NDS;
-    }
-    if (UNLIKELY(key.empty() || key.length() > MAX_KEY_LEN)) {
-        LOG_ERROR("Invalid param, key's len (" << key.length() << ") is not between 1 and " << MAX_KEY_LEN);
-        return UBSIO_KVC_ERR;
-    }
-
-    auto layerCnt = buffers.size();
-    if (UNLIKELY(layerCnt == 0 || layerCnt > MAX_LAYER_NUM)) {
-        LOG_ERROR("Layer number is 0 or exceeds the limit of " << MAX_LAYER_NUM);
-        return UBSIO_KVC_ERR;
-    }
-
-    if (UNLIKELY(sizes.size() != layerCnt)) {
-        LOG_ERROR("Unmatched number of layers, offsets and sizes");
-        return UBSIO_KVC_ERR;
-    }
-
-    std::vector<const char*> cKeys = { key.c_str() };
-    std::shared_ptr<ObjLocation> location = std::make_shared<ObjLocation>();
-    CResult status = DlBioSdkApi::CalcLocation(
-        TALENT_ID, static_cast<uint64_t>(std::hash<std::string>{}(key)), location.get());
-    if (UNLIKELY(status != CResult::RET_CACHE_OK)) {
-        LOG_ERROR("CalcLocation failed with returned status " << status);
-        return UBSIO_KVC_ERR;
-    }
-    KeyAddrInfo addrInfo{};
-    auto ret = DlBioSdkApi::BatchGetKeyDiskAddr(1, cKeys.data(), location.get(), 1, &addrInfo);
-    if (UNLIKELY(ret != 0 || addrInfo.result != RET_CACHE_OK)) {
-        LOG_ERROR("Bio get disk addr info failed, key@" << key << ", ret: " << ret);
-        return UBSIO_KVC_ERR;
-    }
-
-    TaskResults results{};
-    auto recordReadSize = SingleRead(addrInfo, buffers, sizes, results);
-    if (UNLIKELY(recordReadSize < 0)) {
-        LOG_ERROR("Nds read key@" << key << " failed, device: " << deviceId);
-        return UBSIO_KVC_ERR;
-    }
-    results.WaitFinish();
-    if (UNLIKELY(results.failed.load(std::memory_order_relaxed) > 0)) {
-        LOG_ERROR("Nds batch read failed.");
-        return UBSIO_KVC_ERR;
-    }
-    return UBSIO_KVC_OK;
-}
-
-KvcError NdsManager::BatchDirectRead(const std::vector<std::string> &keys,  
-                                        const std::vector<std::vector<uintptr_t>> &buffers,
-                                        const std::vector<std::vector<size_t>> &sizes) noexcept
-{
-    if (!ndsInit || !ndsNormal) {
-        return UBSIO_KVC_NO_NDS;
-    }
-    const size_t batchSize = keys.size();
-    if (UNLIKELY(batchSize == 0 || batchSize > MAX_BATCH_SIZE)) {
-        LOG_ERROR("Batch size is 0 or exceeds the limit of " << MAX_BATCH_SIZE);
-        return UBSIO_KVC_ERR;
-    }
-    if (UNLIKELY(buffers.size() != batchSize || sizes.size() != batchSize)) {
-        LOG_ERROR("Unmatched batch dimensions, keys:" << batchSize << ", buffers:" << buffers.size() <<
-            ", sizes:" << sizes.size());
-        return UBSIO_KVC_ERR;
-    }
-
-    std::vector<const char*> cKeys;
-    std::vector<ObjLocation> locationVec;
-    std::vector<KeyAddrInfo> addrInfo(batchSize);
-    cKeys.reserve(batchSize);
-    locationVec.reserve(batchSize);
-    for (const auto &key : keys) {
-        std::shared_ptr<ObjLocation> location = std::make_shared<ObjLocation>();
-        CResult status = DlBioSdkApi::CalcLocation(
-            TALENT_ID, static_cast<uint64_t>(std::hash<std::string>{}(key)), location.get());
-        if (UNLIKELY(status != CResult::RET_CACHE_OK)) {
-            LOG_ERROR("CalcLocation failed with returned status " << status);
-            return UBSIO_KVC_ERR;
+        handles.emplace_back(handle, NdsApi::DeregisterFileHandle);
+        for (uint32_t j = 0; j < item.iovCount; ++j) {
+            iovs.push_back({item.buffers[j], item.lengths[j]});
         }
-        locationVec.emplace_back(*location);
-        cKeys.emplace_back(key.c_str());
+        requests.push_back({nullptr, 0, 0, item.iovCount, handle, NDS_FILE_READ, reinterpret_cast<void *>(i)});
+        results[i] = UBSIO_KVC_ERR;
     }
-    auto ret = DlBioSdkApi::BatchGetKeyDiskAddr(
-        TALENT_ID, cKeys.data(), locationVec.data(), batchSize, addrInfo.data());
-    if (UNLIKELY(ret != 0)) {
-        LOG_ERROR("Bio get key disk addr info failed, ret: " << ret);
-        return UBSIO_KVC_ERR;
+    size_t firstIov = 0;
+    for (auto &request : requests) {
+        request.bufPtr_bases = iovs.data() + firstIov;
+        firstIov += request.iov_count;
     }
-
-    TaskResults results{};
-    uint64_t recordReadSize = 0UL;
-    for (int i = 0; i < batchSize; i++) {
-        if (useIOURing) {
-            recordReadSize = IOURingSingleRead(addrInfo[i], buffers[i], sizes[i]);
-        } else {
-            recordReadSize = SingleRead(addrInfo[i], buffers[i], sizes[i], results);
-        }
-        if (UNLIKELY(recordReadSize < 0)) {
-            LOG_ERROR("Nds read key@" << keys[i] << " failed, device: " << deviceId);
-            if (!useIOURing) {
-                results.WaitFinish();
-            }
-            return UBSIO_KVC_ERR;
-        }
-    }
-    if (!useIOURing) {
-        results.WaitFinish();
-        if (UNLIKELY(results.failed.load(std::memory_order_relaxed) > 0)) {
-            LOG_ERROR("Nds batch read failed.");
-            return UBSIO_KVC_ERR;
-        }
-    }
-
-    return UBSIO_KVC_OK;
+    SubmitReads(requests, results);
 }

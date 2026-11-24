@@ -33,6 +33,15 @@ typedef enum {
 } UbsioUnderFsType;
 #endif
 
+#ifndef UBSIO_INIT_INFO_DEFINED
+#define UBSIO_INIT_INFO_DEFINED
+typedef struct {
+    UbsioUnderFsType underFsType;
+    uint8_t slot;      /* LocalFS slot ID (1..16); 0 if there is no file route. */
+    uint8_t ndsEnable; /* 1 if the initialized backend offers an NDS read path; 0 otherwise. */
+} UbsioInitInfo;
+#endif
+
 #define UBSIO_RESOURCE_DISK_PATH_MAX_SIZE (256)
 #define UBSIO_RESOURCE_MAX_DISK_NUM (16)
 
@@ -100,12 +109,8 @@ typedef void (*UbsioMetaEventCallbackC)(void *context, const UbsioMetaEventC *ev
  */
 int32_t UbsioKvCacheInit(int32_t devId);
 
-/**
- * @brief Query the initialized UnderFS type.
- * @param type [out] Initialized UbsioUnderFsType value; unchanged on failure.
- * @return Zero on success; nonzero if the runtime or query interface is unavailable, or the pointer is invalid.
- */
-int32_t UbsioGetUnderFsType(UbsioUnderFsType *type);
+/** Query the initialized storage backend. On error, info is unchanged. */
+int32_t UbsioGetInitInfo(UbsioInitInfo *info);
 
 /**
  * @brief Get write cache and disk resource information managed by the local process.
@@ -157,6 +162,38 @@ void UbsioKvCacheFreeScanKeyResult(const UbsioKvKeyInfo **items);
  * @brief Exit UBS-IO KV Cache
  */
 void UbsioKvCacheExit(void);
+
+/**
+ * @brief Register a KV-cache HBM region with the NDS module for P2P direct-to-HBM reads.
+ *
+ * Call after UbsioKvCacheInit (which initializes NDS when ubsio.nds.enabled=true).
+ * By default, this call registers the region with XDS before returning. Repeating
+ * a successful registration of the same address and length is idempotent.
+ * Each IOV in a registered read must fit inside one registered region.
+ * Set UBSIO_NDS_SKIP_MEM_REGISTER=1 before initialization to skip registration.
+ * In registered mode addr and length must be 512-byte aligned and the region must
+ * remain accessible until successful UbsioKvCacheUnregisterMem. In either mode, read buffers
+ * must remain accessible until the synchronous read returns.
+ *
+ * @param addr    [in] HBM region base (caller-owned)
+ * @param length  [in] region size in bytes
+ * @return 0 if successful, non-zero if NDS is unavailable/not-initialized or params invalid
+ */
+int32_t UbsioKvCacheRegisterMem(void *addr, size_t length);
+
+/**
+ * @brief Unregister a previously registered KV-cache HBM region from the NDS module.
+ *
+ * With UBSIO_NDS_SKIP_MEM_REGISTER=1, validates addr/length and returns success
+ * without calling NDS unregistration.
+ * In registered mode, unregisters the exact address and length with XDS. Other
+ * regions stay registered. On failure the caller can retry the same unregister.
+ *
+ * @param addr    [in] base address previously passed to UbsioKvCacheRegisterMem
+ * @param length  [in] region size, must match the registered length
+ * @return 0 if successful
+ */
+int32_t UbsioKvCacheUnregisterMem(void *addr, size_t length);
 
 /**
  * @brief Put data of object with key into UBS-IO KV Cache
@@ -222,33 +259,20 @@ int32_t UbsioKvCacheBatchGet(const char **keys,
                              uint32_t flags);
 
 /**
- * @brief Get multiple data objects by keys from UBS-IO KV Cache
- * This data operation default supports async
+ * @brief Read LocalFS values into HBM. UBSIO can fall back to pread and H2D on the same file.
  *
- * @param keys           [in] Array of keys for the data objects
- * @param keysCount      [in] Number of keys in the array
- * @param bufs           [out] Array of npu data buffers to be get
-    bufs：{
-            {key1_npu_buflayer_0, key1_npu_buflayer_1, ..., {key1_npu_buflayer_N}},
-            {key2_npu_buflayer_0, key2_npu_buflayer_1},..., {key2_npu_buflayer_N}},
-            ...,
-            {keyM_npu_buflayer_0, keyM_npu_buflayer_1},..., {keyM_npu_buflayer_N}}
-          }
- * @param length         [in] Size of data buf in data buffers
- * @param lengthsRows    [in] Number of rows in the lengths matrix
- * @param lengthsCols    [in] Number of columns in the lengths matrix
- * @param results        [out] result of data to be get in data buffers
- * @param flags          [in] Optional flags, reserved
- * @return 0 if successful
+ * @param keys        [in] Array of cache keys
+ * @param keysCount   [in] Number of keys in the batch (1-16384)
+ * @param ownerSlots  [in] Owner slot per key (1-16, as reported by UbsioGetInitInfo)
+ * @param buffers     [in] HBM buffer addresses per key
+ * @param lengths     [in] Read length in bytes per buffer. The sum for a key is read from file offset 0.
+ * @param iovCounts   [in] Number of buffers and lengths for each key
+ * @param results     [out] One BoostIO CResult per key when the call succeeds
+ * @return 0 if the batch was processed
  */
-int32_t UbsioKvCacheBatchGetDirect(const char **keys,
-                                   uint32_t keysCount,
-                                   void ***bufs,
-                                   size_t **lengths,
-                                   uint32_t lengthsRows,
-                                   uint32_t lengthsCols,
-                                   int *results,
-                                   uint32_t flags);
+int32_t UbsioKvCacheBatchGetDirect(const char *const *keys, uint32_t keysCount, const uint8_t *ownerSlots,
+                                 void *const *const *buffers, const size_t *const *lengths,
+                                 const uint32_t *iovCounts, int *results);
 
 /**
  * @brief Determine whether the key is within the UBS-IO KV Cache

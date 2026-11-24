@@ -45,7 +45,6 @@ constexpr size_t SHA256_SIZE = 32;
 constexpr size_t SHA256_HEX_SIZE = SHA256_SIZE * 2;
 constexpr size_t LEVEL_ONE_HEX_SIZE = 2;
 constexpr size_t LEVEL_TWO_HEX_SIZE = 3;
-constexpr uintptr_t DIRECT_IO_ALIGN_SIZE = 512UL;
 constexpr char LAYOUT_DIRECTORY[] = "v1";
 constexpr char FILE_SUFFIX[] = ".kv";
 constexpr char CORRUPT_FILE_PREFIX[] = ".corrupt.";
@@ -61,6 +60,56 @@ constexpr size_t EVICTION_KEY_COUNT_DIVISOR = 10;
 constexpr size_t MAX_BACKGROUND_EVICTION_BATCH_FILES = 128;
 constexpr size_t MAX_WRITE_EVICTION_BATCH_FILES = 1024;
 constexpr uint32_t MAX_WRITE_ATTEMPTS = 2;
+
+int32_t WriteAll(int32_t fd, const char *value, size_t len, off_t offset) noexcept
+{
+    size_t written = 0;
+    while (written < len) {
+        const ssize_t n = pwrite(fd, value + written, len - written, offset + static_cast<off_t>(written));
+        if (UNLIKELY(n < 0 && errno == EINTR)) {
+            continue;
+        }
+        if (UNLIKELY(n <= 0)) {
+            return n < 0 ? errno : EIO;
+        }
+        written += static_cast<size_t>(n);
+    }
+    return 0;
+}
+
+int32_t SyncFileData(int32_t fd) noexcept
+{
+    int32_t ret;
+    do {
+        ret = fdatasync(fd);
+    } while (ret != 0 && errno == EINTR);
+    return ret == 0 ? 0 : errno;
+}
+
+int32_t WriteAlignedFile(int32_t fd, const char *buffer, size_t fileSize, size_t alignedSize) noexcept
+{
+    const int32_t flags = fcntl(fd, F_GETFL);
+    if (UNLIKELY(flags < 0)) {
+        return errno;
+    }
+    const bool direct = fcntl(fd, F_SETFL, flags | O_DIRECT) == 0;
+    int32_t ret = direct ? WriteAll(fd, buffer, alignedSize, 0) : errno;
+    if (ret == EINVAL || ret == EOPNOTSUPP) {
+        if (direct && fcntl(fd, F_SETFL, flags) != 0) {
+            return errno;
+        }
+        ret = WriteAll(fd, buffer, fileSize, 0);
+    }
+    if (ret == 0 && alignedSize != fileSize && ftruncate(fd, static_cast<off_t>(fileSize)) != 0) {
+        ret = errno;
+    }
+    return ret;
+}
+
+std::string SlotDirectory(const std::string &root, uint32_t slot)
+{
+    return root + "/slot_" + std::to_string(slot);
+}
 
 class ScopedFd {
 public:
@@ -133,8 +182,8 @@ bool ExceedsLimit(uint64_t used, uint64_t additional, uint64_t limit) noexcept
 bool IsDirectIoAligned(const char *value, size_t len, uint64_t off) noexcept
 {
     uintptr_t address = reinterpret_cast<uintptr_t>(value);
-    return address % DIRECT_IO_ALIGN_SIZE == 0 && len % DIRECT_IO_ALIGN_SIZE == 0 &&
-        off % DIRECT_IO_ALIGN_SIZE == 0;
+    return address % LOCAL_FILE_IO_ALIGNMENT == 0 && len % LOCAL_FILE_IO_ALIGNMENT == 0 &&
+        off % LOCAL_FILE_IO_ALIGNMENT == 0;
 }
 
 BResult AddRecoveryFile(FileIndex &index, std::string &key, const std::string &firstName,
@@ -227,6 +276,27 @@ BResult LocalSystem::Init() noexcept
     return BIO_OK;
 }
 
+BResult LocalSystem::ResolvePath(const char *key, uint32_t slot, char *path, size_t capacity) noexcept
+{
+    ReadLocker<ReadWriteLock> guard(&mLifecycleLock);
+    const auto &config = UnderFsConfig::Instance()->GetUnderFsConfig().localConfig;
+    if (!mInited || path == nullptr || slot >= config.deviceCount) {
+        return BIO_INVALID_PARAM;
+    }
+    std::string hash;
+    auto ret = BuildHash(key, hash);
+    if (ret != BIO_OK) {
+        return ret;
+    }
+    const auto root = SlotDirectory(mStorageRoot, slot);
+    const auto file = BuildFilePath(BuildLeafPath(root, hash), hash);
+    if (file.size() >= capacity) {
+        return BIO_INVALID_PARAM;
+    }
+    std::memcpy(path, file.c_str(), file.size() + 1);
+    return BIO_OK;
+}
+
 BResult LocalSystem::InitializeFileSystem() noexcept
 {
     const auto &underFs = UnderFsConfig::Instance()->GetUnderFsConfig();
@@ -241,14 +311,15 @@ BResult LocalSystem::InitializeFileSystem() noexcept
         LOG_ERROR("Resolve local underfs root path failed, errno:" << errno << ".");
         return BIO_UFS_IOERR;
     }
-    std::string dataRoot = canonicalPath;
+    mStorageRoot = canonicalPath;
+    std::string dataRoot = mStorageRoot;
     const bool local = underFs.underFsType == BIO_UNDERFS_LOCAL;
     if (local) {
         if (UNLIKELY(config.deviceCount == 0 || config.deviceCount > DEVICE_SIZE ||
             config.slotIndex >= config.deviceCount)) {
             return BIO_INVALID_PARAM;
         }
-        dataRoot += "/slot_" + std::to_string(config.slotIndex);
+        dataRoot = SlotDirectory(mStorageRoot, config.slotIndex);
     } else {
         dataRoot += "/";
         dataRoot += LAYOUT_DIRECTORY;
@@ -329,49 +400,35 @@ void LocalSystem::StopFileSystem() noexcept
 
 BResult LocalSystem::Put(const char *key, const char *value, const size_t len) noexcept
 {
-    struct iovec buffer{const_cast<char *>(value), len};
-    return PutV(key, &buffer, 1);
+    return PutValue(key, value, len, nullptr, 0);
 }
 
-BResult LocalSystem::PutV(const char *key, const struct iovec *iov, size_t iovcnt) noexcept
+BResult LocalSystem::Put(const char *key, char *buffer, size_t len, size_t capacity) noexcept
+{
+    if (UNLIKELY(buffer == nullptr || reinterpret_cast<uintptr_t>(buffer) % LOCAL_FILE_IO_ALIGNMENT != 0)) {
+        return BIO_INVALID_PARAM;
+    }
+    return PutValue(key, buffer, len, buffer, capacity);
+}
+
+BResult LocalSystem::PutValue(const char *key, const char *value, size_t len, char *buffer, size_t capacity) noexcept
 {
     ReadLocker<ReadWriteLock> lifecycle(&mLifecycleLock);
     if (UNLIKELY(!mInited)) {
         return BIO_NOT_READY;
     }
-    return PutValue(key, iov, iovcnt);
-}
-
-BResult LocalSystem::ValidateWriteBuffers(const struct iovec *iov, size_t iovcnt, size_t &len) noexcept
-{
-    len = 0;
-    if (UNLIKELY(iov == nullptr || iovcnt == 0 || iovcnt > INT_MAX)) {
-        return BIO_INVALID_PARAM;
-    }
-    for (size_t i = 0; i < iovcnt; ++i) {
-        if (UNLIKELY((iov[i].iov_base == nullptr && iov[i].iov_len != 0) ||
-            iov[i].iov_len > IO_MAX_LEN - len)) {
-            return BIO_INVALID_PARAM;
-        }
-        len += iov[i].iov_len;
-    }
-    return BIO_OK;
-}
-
-BResult LocalSystem::PutValue(const char *key, const struct iovec *iov, size_t iovcnt) noexcept
-{
-    size_t len = 0;
-    BResult ret = ValidateWriteBuffers(iov, iovcnt, len);
-    if (UNLIKELY(ret != BIO_OK)) {
-        return ret;
-    }
     const size_t keySize = key == nullptr ? 0 : strnlen(key, LOCAL_FILE_MAX_KEY_SIZE + 1);
-    if (UNLIKELY(keySize == 0 || keySize > LOCAL_FILE_MAX_KEY_SIZE || len > LOCAL_FILE_MAX_VALUE_SIZE)) {
+    if (UNLIKELY(keySize == 0 || keySize > LOCAL_FILE_MAX_KEY_SIZE ||
+        (value == nullptr && len != 0) || len > LOCAL_FILE_MAX_VALUE_SIZE)) {
         LOG_ERROR("Invalid local underfs put size, keySize:" << keySize << ", valueSize:" << len <<
             ", maxKeySize:" << LOCAL_FILE_MAX_KEY_SIZE << ", maxValueSize:" << LOCAL_FILE_MAX_VALUE_SIZE << ".");
         return BIO_INVALID_PARAM;
     }
-    const uint64_t fileBytes = len + keySize + LOCAL_FILE_FOOTER_SIZE;
+    const size_t fileBytes = len + keySize + LOCAL_FILE_FOOTER_SIZE;
+    const size_t alignedSize = LocalFilePack::AlignedWriteSize(fileBytes);
+    if (UNLIKELY(buffer != nullptr && alignedSize > capacity)) {
+        return BIO_INVALID_PARAM;
+    }
     EvictionCandidate committed{std::string(key, keySize), {"", fileBytes}};
     std::string temporaryPath;
     struct WriteReservation {
@@ -390,7 +447,7 @@ BResult LocalSystem::PutValue(const char *key, const struct iovec *iov, size_t i
         }
     } reservation{nullptr, committed.key, fileBytes, temporaryPath};
     BIO_TRACE_START(UFS_TRACE_PUT_RESERVE);
-    ret = ReserveWriteSpace(committed.key, fileBytes);
+    BResult ret = ReserveWriteSpace(committed.key, fileBytes);
     BIO_TRACE_END(UFS_TRACE_PUT_RESERVE, ret == BIO_ALREADY_EXISTS ? BIO_OK : ret);
     if (ret == BIO_ALREADY_EXISTS) {
         return BIO_OK;
@@ -399,12 +456,23 @@ BResult LocalSystem::PutValue(const char *key, const struct iovec *iov, size_t i
         return ret;
     }
     reservation.owner = this;
-    char metadata[LOCAL_FILE_MAX_METADATA_SIZE];
+    void *allocation = nullptr;
+    if (buffer == nullptr && posix_memalign(&allocation, LOCAL_FILE_IO_ALIGNMENT, alignedSize) != 0) {
+        return BIO_ALLOC_FAIL;
+    }
+    const std::unique_ptr<void, decltype(&free)> storage(allocation, free);
+    if (buffer == nullptr) {
+        buffer = static_cast<char *>(allocation);
+        if (len != 0) {
+            std::memcpy(buffer, value, len);
+        }
+    }
     size_t metadataSize = 0;
-    ret = LocalFilePack::Serialize(key, len, metadata, metadataSize);
+    ret = LocalFilePack::Serialize(key, len, buffer + len, metadataSize);
     if (UNLIKELY(ret != BIO_OK)) {
         return ret;
     }
+    std::memset(buffer + fileBytes, 0, alignedSize - fileBytes);
     std::string hashHex;
     ret = BuildHash(key, hashHex);
     if (UNLIKELY(ret != BIO_OK)) {
@@ -415,7 +483,7 @@ BResult LocalSystem::PutValue(const char *key, const struct iovec *iov, size_t i
     std::string finalPath;
     for (uint32_t attempt = 0; attempt < MAX_WRITE_ATTEMPTS; ++attempt) {
         bool outOfSpace = false;
-        ret = WriteTemporaryValue(hashHex, iov, iovcnt, metadata, metadataSize, temporaryPath, finalPath, outOfSpace);
+        ret = WriteTemporaryValue(hashHex, buffer, fileBytes, alignedSize, temporaryPath, finalPath, outOfSpace);
         if (ret == BIO_OK) {
             const std::function<BResult()> publish = [&]() noexcept {
                 return PublishFile(temporaryPath, finalPath, outOfSpace);
@@ -726,7 +794,12 @@ BResult LocalSystem::BuildFilePath(const char *key, std::string &filePath) const
 
 std::string LocalSystem::BuildLeafPath(const std::string &hashHex) const noexcept
 {
-    return mRootPath + "/" + hashHex.substr(0, LEVEL_ONE_HEX_SIZE) + "/" +
+    return BuildLeafPath(mRootPath, hashHex);
+}
+
+std::string LocalSystem::BuildLeafPath(const std::string &root, const std::string &hashHex)
+{
+    return root + "/" + hashHex.substr(0, LEVEL_ONE_HEX_SIZE) + "/" +
         hashHex.substr(LEVEL_ONE_HEX_SIZE, LEVEL_TWO_HEX_SIZE);
 }
 
@@ -812,9 +885,8 @@ BResult LocalSystem::EnsureDirectory(const std::string &path, bool &outOfSpace) 
     return BIO_OK;
 }
 
-BResult LocalSystem::WriteTemporaryValue(const std::string &hashHex, const struct iovec *iov, size_t iovcnt,
-    const char *metadata, size_t metadataSize, std::string &temporaryPath, std::string &finalPath,
-    bool &outOfSpace) const noexcept
+BResult LocalSystem::WriteTemporaryValue(const std::string &hashHex, const char *value, size_t fileSize,
+    size_t alignedSize, std::string &temporaryPath, std::string &finalPath, bool &outOfSpace) const noexcept
 {
     outOfSpace = false;
     std::string leafPath;
@@ -825,15 +897,19 @@ BResult LocalSystem::WriteTemporaryValue(const std::string &hashHex, const struc
         return ret;
     }
     finalPath = BuildFilePath(leafPath, hashHex);
-    if (iovcnt == 1 && metadataSize == 0) {
-        BIO_TRACE_START(UFS_TRACE_PUT_WRITE);
-        ret = WriteAll(fd, static_cast<const char *>(iov[0].iov_base), iov[0].iov_len, 0, outOfSpace);
-        BIO_TRACE_END(UFS_TRACE_PUT_WRITE, ret);
-    } else {
-        BIO_TRACE_START(UFS_TRACE_PUT_WRITEV);
-        ret = WriteAllV(fd, iov, iovcnt, metadata, metadataSize, outOfSpace);
-        BIO_TRACE_END(UFS_TRACE_PUT_WRITEV, ret);
+    BIO_TRACE_START(UFS_TRACE_PUT_WRITE);
+    int32_t writeError = alignedSize == 0 ? WriteAll(fd, value, fileSize, 0) :
+        WriteAlignedFile(fd, value, fileSize, alignedSize);
+    if (writeError == 0 && alignedSize != 0) {
+        // Publish the file only after its data and extent metadata are ready for XDS.
+        writeError = SyncFileData(fd);
     }
+    if (UNLIKELY(writeError != 0)) {
+        outOfSpace = writeError == ENOSPC;
+        ret = BIO_UFS_IOERR;
+        LOG_ERROR("Write underfs temporary file failed, errno:" << writeError << ".");
+    }
+    BIO_TRACE_END(UFS_TRACE_PUT_WRITE, ret);
     const int32_t closeRet = close(fd);
     const int32_t closeError = closeRet != 0 ? errno : 0;
     if (UNLIKELY(closeRet != 0 && ret == BIO_OK)) {
@@ -871,72 +947,6 @@ BResult LocalSystem::DeleteFile(const std::string &filePath) const noexcept
     return HandleOpenError("Delete local underfs value file", errorCode);
 }
 
-BResult LocalSystem::WriteAll(int32_t fd, const char *value, size_t len, uint64_t offset,
-    bool &outOfSpace) const noexcept
-{
-    size_t written = 0;
-    while (written < len) {
-        ssize_t writeLen = pwrite(fd, value + written, len - written, static_cast<off_t>(offset + written));
-        if (UNLIKELY(writeLen < 0 && errno == EINTR)) {
-            continue;
-        }
-        if (UNLIKELY(writeLen <= 0)) {
-            const int32_t errorCode = writeLen < 0 ? errno : EIO;
-            outOfSpace = errorCode == ENOSPC;
-            LOG_ERROR("Write local underfs value failed, errno:" << errorCode << ", written:" << written <<
-                ", total:" << len << ".");
-            return BIO_UFS_IOERR;
-        }
-        written += static_cast<size_t>(writeLen);
-    }
-    return BIO_OK;
-}
-
-BResult LocalSystem::WriteAllV(int32_t fd, const struct iovec *iov, size_t iovcnt,
-    const char *metadata, size_t metadataSize, bool &outOfSpace) const noexcept
-{
-    const size_t suffixCount = metadataSize == 0 ? 0 : 1;
-    const size_t count = iovcnt + suffixCount;
-    std::unique_ptr<struct iovec[]> pending(new (std::nothrow) struct iovec[count]);
-    if (UNLIKELY(pending == nullptr)) {
-        return BIO_ALLOC_FAIL;
-    }
-    std::copy_n(iov, iovcnt, pending.get());
-    if (suffixCount != 0) {
-        pending[iovcnt] = {const_cast<char *>(metadata), metadataSize};
-    }
-    size_t first = 0;
-    off_t offset = 0;
-    while (first < count) {
-        if (pending[first].iov_len == 0) {
-            ++first;
-            continue;
-        }
-        const int vectors = static_cast<int>(std::min(count - first, static_cast<size_t>(IOV_MAX)));
-        ssize_t result = pwritev(fd, pending.get() + first, vectors, offset);
-        if (UNLIKELY(result < 0 && errno == EINTR)) {
-            continue;
-        }
-        if (UNLIKELY(result <= 0)) {
-            const int32_t errorCode = result < 0 ? errno : EIO;
-            outOfSpace = errorCode == ENOSPC;
-            LOG_ERROR("Write local underfs vectors failed, errno:" << errorCode << ", offset:" << offset << ".");
-            return BIO_UFS_IOERR;
-        }
-        offset += result;
-        size_t consumed = static_cast<size_t>(result);
-        while (first < count && consumed >= pending[first].iov_len) {
-            consumed -= pending[first].iov_len;
-            ++first;
-        }
-        if (first < count && consumed != 0) {
-            pending[first].iov_base = static_cast<char *>(pending[first].iov_base) + consumed;
-            pending[first].iov_len -= consumed;
-        }
-    }
-    return BIO_OK;
-}
-
 BResult LocalSystem::ReadAvailable(int32_t fd, char *value, size_t len, uint64_t off, size_t &realLen,
     bool useDirectIo) const noexcept
 {
@@ -956,7 +966,7 @@ BResult LocalSystem::ReadAvailable(int32_t fd, char *value, size_t len, uint64_t
             return realLen == 0 ? BIO_READ_EXCEED : BIO_OK;
         }
         realLen += static_cast<size_t>(readLen);
-        if (useDirectIo && static_cast<size_t>(readLen) % DIRECT_IO_ALIGN_SIZE != 0) {
+        if (useDirectIo && static_cast<size_t>(readLen) % LOCAL_FILE_IO_ALIGNMENT != 0) {
             return BIO_OK;
         }
     }
@@ -1141,6 +1151,11 @@ BResult LocalSystem::CollectLeafFiles(int firstFd, const std::string &firstName,
                 continue;
             }
             if (UNLIKELY(used > UINT64_MAX - bytes)) {
+                return BIO_UFS_IOERR;
+            }
+            const int32_t syncError = cleanupFiles ? SyncFileData(stored.value) : 0;
+            if (UNLIKELY(syncError != 0)) {
+                LOG_ERROR("Sync recovered LocalFS file failed, errno:" << syncError << ".");
                 return BIO_UFS_IOERR;
             }
             ret = AddRecoveryFile(index, key, firstName, secondName, bytes);

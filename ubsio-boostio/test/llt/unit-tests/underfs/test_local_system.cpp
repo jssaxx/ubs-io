@@ -22,26 +22,13 @@ uint64_t mockFileSystemTotalBytes = 0;
 uint64_t mockFileSystemAvailableBytes = 0;
 uint32_t fileSystemSpaceQueries = 0;
 std::thread::id writeThread;
+const void *lastWriteBuffer = nullptr;
 
-ssize_t ObserveWrite(int fd, const struct iovec *iov, int iovcnt, off_t offset) noexcept
+ssize_t ObserveWrite(int fd, const void *value, size_t len, off_t offset) noexcept
 {
     writeThread = std::this_thread::get_id();
-    EXPECT_EQ(fcntl(fd, F_GETFL) & O_DIRECT, 0);
-    size_t written = 0;
-    for (int i = 0; i < iovcnt; ++i) {
-        if (iov[i].iov_len == 0) {
-            continue;
-        }
-        ssize_t result = syscall(SYS_pwrite64, fd, iov[i].iov_base, iov[i].iov_len, offset + written);
-        if (result < 0) {
-            return written == 0 ? result : static_cast<ssize_t>(written);
-        }
-        written += result;
-        if (static_cast<size_t>(result) != iov[i].iov_len) {
-            break;
-        }
-    }
-    return static_cast<ssize_t>(written);
+    lastWriteBuffer = value;
+    return syscall(SYS_pwrite64, fd, value, len, offset);
 }
 
 ReadGate *readGate = nullptr;
@@ -58,7 +45,7 @@ ssize_t BlockingRead(int fd, void *value, size_t len, off_t offset)
     return syscall(SYS_pread64, fd, value, len, offset);
 }
 
-ssize_t OutOfSpaceVectorWrite(int, const struct iovec *, int, off_t) noexcept
+ssize_t OutOfSpaceWrite(int, const void *, size_t, off_t) noexcept
 {
     ++writeAttempts;
     errno = ENOSPC;
@@ -107,41 +94,22 @@ ssize_t ObserveRead(int fd, void *value, size_t len, off_t offset)
     return syscall(SYS_pread64, fd, value, len, offset);
 }
 
-ssize_t InterruptedShortVectorWrite(int fd, const struct iovec *iov, int iovcnt, off_t offset) noexcept
+ssize_t InterruptedShortWrite(int fd, const void *value, size_t len, off_t offset) noexcept
 {
     if (++writeAttempts == 1) {
         errno = EINTR;
         return -1;
     }
-    for (int i = 0; i < iovcnt; ++i) {
-        if (iov[i].iov_len != 0) {
-            return syscall(SYS_pwrite64, fd, iov[i].iov_base, std::min<size_t>(iov[i].iov_len, 4), offset);
-        }
-    }
-    return 0;
+    return syscall(SYS_pwrite64, fd, value, std::min<size_t>(len, NO_4096), offset);
 }
 
-ssize_t FailedVectorWrite(int, const struct iovec *, int, off_t) noexcept
+ssize_t FailedWrite(int, const void *, size_t, off_t) noexcept
 {
     errno = EIO;
     return -1;
 }
 
-ssize_t ShortThenOutOfSpaceVectorWrite(int fd, const struct iovec *iov, int iovcnt, off_t offset) noexcept
-{
-    ++writeAttempts;
-    if (writeAttempts == 1) {
-        return syscall(SYS_pwrite64, fd, iov[0].iov_base, 2, offset);
-    }
-    if (writeAttempts == 2) {
-        errno = ENOSPC;
-        return -1;
-    }
-    EXPECT_EQ(offset, 0);
-    return ObserveWrite(fd, iov, iovcnt, offset);
-}
-
-ssize_t ZeroVectorWriteWithStaleErrno(int, const struct iovec *, int, off_t) noexcept
+ssize_t ZeroWriteWithStaleErrno(int, const void *, size_t, off_t) noexcept
 {
     errno = ENOSPC;
     return 0;
@@ -166,18 +134,18 @@ int PublishAfterNoSpace(const char *source, const char *target) noexcept
     return static_cast<int>(syscall(SYS_renameat, AT_FDCWD, source, AT_FDCWD, target));
 }
 
-ssize_t FailedFooterWrite(int fd, const struct iovec *iov, int iovcnt, off_t offset) noexcept
+ssize_t FailedFooterWrite(int fd, const void *value, size_t len, off_t offset) noexcept
 {
-    if (offset == 0 && iovcnt > 1) {
-        return syscall(SYS_pwrite64, fd, iov[0].iov_base, iov[0].iov_len, offset);
+    if (offset == 0) {
+        return syscall(SYS_pwrite64, fd, value, std::min<size_t>(len, NO_4096), offset);
     }
-    return FailedVectorWrite(fd, iov, iovcnt, offset);
+    return FailedWrite(fd, value, len, offset);
 }
 
 TEST_F(TestLocalEviction, reads_and_writes_execute_on_the_calling_thread)
 {
     Start();
-    MOCKER(pwritev).stubs().will(invoke(ObserveWrite));
+    MOCKER(pwrite).stubs().will(invoke(ObserveWrite));
     MOCKER(pread).stubs().will(invoke(ObserveRead));
     const auto caller = std::this_thread::get_id();
     ASSERT_EQ(system.Put("key", "value", 5), BIO_OK);
@@ -326,35 +294,11 @@ TEST_F(TestLocalEviction, rejects_invalid_storage_slots_and_symlinked_slot_direc
     EXPECT_EQ(system.Init(), BIO_UFS_IOERR);
 }
 
-TEST_F(TestLocalEviction, partial_enospc_write_restarts_from_the_original_vectors)
-{
-    MockFileSystemCapacity(100000);
-    Start();
-    writeAttempts = 0;
-    fileSystemSpaceQueries = 0;
-    MOCKER(pwritev).stubs().will(invoke(ShortThenOutOfSpaceVectorWrite));
-    char first[] = "first";
-    char second[] = "second";
-    const struct iovec vectors[]{{first, 5}, {second, 6}};
-    ASSERT_EQ(system.PutV("key", vectors, 2), BIO_OK);
-    EXPECT_EQ(writeAttempts, 3U);
-    EXPECT_EQ(fileSystemSpaceQueries, 1U);
-    EXPECT_EQ(vectors[0].iov_base, first);
-    EXPECT_EQ(vectors[0].iov_len, 5U);
-    EXPECT_EQ(vectors[1].iov_base, second);
-    EXPECT_EQ(vectors[1].iov_len, 6U);
-    char value[11]{};
-    ASSERT_EQ(system.Get("key", value, sizeof(value), 0), BIO_OK);
-    EXPECT_EQ(std::string(value, sizeof(value)), "firstsecond");
-    EXPECT_EQ(Usage().usedBytes, FileBytes("key", 11));
-    EXPECT_EQ(Usage().reservedBytes, 0U);
-}
-
 TEST_F(TestLocalEviction, non_space_write_errors_do_not_query_capacity_or_retry)
 {
     Start();
     MOCKER(fstatvfs).expects(never());
-    MOCKER(pwritev).expects(once()).will(invoke(FailedVectorWrite));
+    MOCKER(pwrite).expects(once()).will(invoke(FailedWrite));
     EXPECT_EQ(system.Put("key", "value", 5), BIO_UFS_IOERR);
     EXPECT_EQ(Usage().usedBytes, 0U);
     EXPECT_EQ(Usage().reservedBytes, 0U);
@@ -365,7 +309,7 @@ TEST_F(TestLocalEviction, zero_byte_write_does_not_treat_stale_errno_as_enospc)
 {
     Start();
     MOCKER(fstatvfs).expects(never());
-    MOCKER(pwritev).expects(once()).will(invoke(ZeroVectorWriteWithStaleErrno));
+    MOCKER(pwrite).expects(once()).will(invoke(ZeroWriteWithStaleErrno));
     EXPECT_EQ(system.Put("key", "value", 5), BIO_UFS_IOERR);
     EXPECT_EQ(Usage().reservedBytes, 0U);
     EXPECT_EQ(Usage().files, 0U);
@@ -410,14 +354,14 @@ TEST_F(TestLocalEviction, duplicate_put_skips_space_checks_hashing_and_file_writ
     FileReference reader;
     ASSERT_EQ(system.mEvictionPolicy->Lookup("key", record, reader), BIO_OK);
     auto *hash = ock::htracer::HtracerManager::GetPointPtr(UFS_TRACE_HASH_KEY);
-    auto *write = ock::htracer::HtracerManager::GetPointPtr(UFS_TRACE_PUT_WRITEV);
+    auto *write = ock::htracer::HtracerManager::GetPointPtr(UFS_TRACE_PUT_WRITE);
     const auto hashBefore = hash->GetBegin();
     const auto writeBefore = write->GetBegin();
     const auto originalHash = system.mSha256;
     system.mSha256 = nullptr;
     mockFileSystemAvailableBytes = 0;
     fileSystemSpaceQueries = 0;
-    MOCKER(pwritev).stubs().will(invoke(FailedVectorWrite));
+    MOCKER(pwrite).stubs().will(invoke(FailedWrite));
     EXPECT_EQ(system.Put("key", "different", 9), BIO_OK);
     EXPECT_EQ(fileSystemSpaceQueries, 0U);
     EXPECT_EQ(hash->GetBegin(), hashBefore);
@@ -619,7 +563,7 @@ TEST_F(TestLocalEviction, c_configuration_copies_local_values_before_returning)
 TEST_F(TestLocalEviction, aligned_512_byte_io_preserves_value_offsets_and_recovery)
 {
     Start();
-    MOCKER(pwritev).stubs().will(invoke(ObserveWrite));
+    MOCKER(pwrite).stubs().will(invoke(ObserveWrite));
     MOCKER(pread).stubs().will(invoke(ObserveRead));
     void *memory = nullptr;
     ASSERT_EQ(posix_memalign(&memory, 4096, 4096), 0);
@@ -692,97 +636,16 @@ TEST_F(TestLocalEviction, put_retries_interruption_and_short_writes)
 {
     Start();
     writeAttempts = 0;
-    MOCKER(pwritev).stubs().will(invoke(InterruptedShortVectorWrite));
-    ASSERT_EQ(system.Put("short", "abcdefghij", 10), BIO_OK);
-    EXPECT_GT(writeAttempts, 2U);
-    char value[10]{};
-    ASSERT_EQ(system.Get("short", value, sizeof(value), 0), BIO_OK);
-    EXPECT_EQ(std::string(value, sizeof(value)), "abcdefghij");
-    EXPECT_EQ(Usage().usedBytes, FileBytes("short", sizeof(value)));
-}
-
-TEST_F(TestLocalEviction, putv_preserves_aligned_segments_and_recovers_value)
-{
-    Start();
-    alignas(512) char first[512];
-    alignas(512) char second[1024];
-    alignas(512) char value[1536]{};
-    memset(first, 'a', sizeof(first));
-    memset(second, 'b', sizeof(second));
-    const struct iovec buffers[]{{first, sizeof(first)}, {nullptr, 0}, {second, sizeof(second)}};
-    ASSERT_EQ(system.PutV("vectors", buffers, 3), BIO_OK);
-    ASSERT_EQ(system.Get("vectors", value, sizeof(value), 0), BIO_OK);
-    const std::string expected = std::string(sizeof(first), 'a') + std::string(sizeof(second), 'b');
-    EXPECT_EQ(std::string(value, sizeof(value)), expected);
-    EXPECT_EQ(Usage().usedBytes, FileBytes("vectors", sizeof(value)));
-    EXPECT_EQ(Usage().reservedBytes, 0U);
-    system.Stop();
-    Start();
-    ASSERT_EQ(system.Get("vectors", value, sizeof(value), 0), BIO_OK);
-    EXPECT_EQ(std::string(value, sizeof(value)), expected);
-}
-
-TEST_F(TestLocalEviction, putv_retries_short_writes_without_modifying_caller_vectors)
-{
-    Start();
-    char first[] = "abc";
-    char second[] = "defghij";
-    const struct iovec buffers[]{{first, 3}, {second, 7}};
-    writeAttempts = 0;
-    MOCKER(pwritev).stubs().will(invoke(InterruptedShortVectorWrite));
-    ASSERT_EQ(system.PutV("short-vectors", buffers, 2), BIO_OK);
-    EXPECT_GT(writeAttempts, 2U);
-    EXPECT_EQ(buffers[0].iov_base, first);
-    EXPECT_EQ(buffers[0].iov_len, 3U);
-    EXPECT_EQ(buffers[1].iov_base, second);
-    EXPECT_EQ(buffers[1].iov_len, 7U);
-    char value[10]{};
-    ASSERT_EQ(system.Get("short-vectors", value, sizeof(value), 0), BIO_OK);
-    EXPECT_EQ(std::string(value, sizeof(value)), "abcdefghij");
-}
-
-TEST_F(TestLocalEviction, duplicate_putv_succeeds_without_writing_or_changing_the_value)
-{
-    Start();
-    ASSERT_EQ(system.Put("key", "old", 3), BIO_OK);
-    char first[] = "new";
-    char second[] = "value";
-    const struct iovec buffers[]{{first, 3}, {second, 5}};
-    MOCKER(pwritev).stubs().will(invoke(FailedVectorWrite));
-    EXPECT_EQ(system.PutV("key", buffers, 2), BIO_OK);
-    EXPECT_EQ(Usage().reservedBytes, 0U);
-    EXPECT_EQ(Usage().usedBytes, FileBytes("key", 3));
-    char value[3]{};
-    ASSERT_EQ(system.Get("key", value, sizeof(value), 0), BIO_OK);
-    EXPECT_EQ(std::string(value, sizeof(value)), "old");
-}
-
-TEST_F(TestLocalEviction, putv_batches_vectors_above_the_syscall_limit)
-{
-    Start();
-    char byte = 'v';
-    const std::vector<struct iovec> buffers(IOV_MAX + 2, {&byte, 1});
-    ASSERT_EQ(system.PutV("many-vectors", buffers.data(), buffers.size()), BIO_OK);
-    std::string value(buffers.size(), '\0');
-    ASSERT_EQ(system.Get("many-vectors", &value[0], value.size(), 0), BIO_OK);
-    EXPECT_EQ(value, std::string(buffers.size(), byte));
-}
-
-TEST_F(TestLocalEviction, putv_validates_each_segment_and_total_length)
-{
-    Start();
-    MOCKER(pwritev).expects(never());
-    char byte = 'x';
-    const struct iovec invalid[]{{&byte, 1}, {nullptr, 1}};
-    const struct iovec overflow[]{{&byte, IO_MAX_LEN}, {&byte, 1}};
-    const struct iovec unrepresentable[]{{&byte, LOCAL_FILE_MAX_VALUE_SIZE}, {&byte, 1}};
-    EXPECT_EQ(system.PutV("invalid", nullptr, 1), BIO_INVALID_PARAM);
-    EXPECT_EQ(system.PutV("invalid", invalid, 0), BIO_INVALID_PARAM);
-    EXPECT_EQ(system.PutV("invalid", invalid, 2), BIO_INVALID_PARAM);
-    EXPECT_EQ(system.PutV("overflow", overflow, 2), BIO_INVALID_PARAM);
-    EXPECT_EQ(system.PutV("unrepresentable", unrepresentable, 2), BIO_INVALID_PARAM);
-    EXPECT_EQ(Usage().files, 0U);
-    EXPECT_EQ(Usage().reservedBytes, 0U);
+    MOCKER(pwrite).stubs().will(invoke(InterruptedShortWrite));
+    const std::string expected(NO_4096 - 1, 'a');
+    alignas(LOCAL_FILE_IO_ALIGNMENT) char buffer[2 * NO_4096];
+    std::memcpy(buffer, expected.data(), expected.size());
+    ASSERT_EQ(system.Put("short", buffer, expected.size(), sizeof(buffer)), BIO_OK);
+    EXPECT_EQ(writeAttempts, 3U);
+    std::string value(expected.size(), '\0');
+    ASSERT_EQ(system.Get("short", &value[0], value.size(), 0), BIO_OK);
+    EXPECT_EQ(value, expected);
+    EXPECT_EQ(Usage().usedBytes, FileBytes("short", value.size()));
 }
 
 TEST_F(TestLocalEviction, failed_new_value_write_rolls_back_the_index_queue_and_reservation)
@@ -791,7 +654,7 @@ TEST_F(TestLocalEviction, failed_new_value_write_rolls_back_the_index_queue_and_
     ASSERT_EQ(system.Put("existing", "old", 3), BIO_OK);
     unlinkAttempts = 0;
     MOCKER(unlink).stubs().will(invoke(ObserveTemporaryCleanup));
-    MOCKER(pwritev).stubs().will(invoke(FailedVectorWrite));
+    MOCKER(pwrite).stubs().will(invoke(FailedWrite));
     EXPECT_EQ(system.Put("key", "newvalue", 8), BIO_UFS_IOERR);
     EXPECT_EQ(unlinkAttempts, 1U);
     EXPECT_EQ(Usage().reservedBytes, 0U);
@@ -815,8 +678,9 @@ TEST_F(TestLocalEviction, failed_new_value_write_rolls_back_the_index_queue_and_
 TEST_F(TestLocalEviction, failed_footer_write_releases_reservation_and_removes_placeholder)
 {
     Start();
-    MOCKER(pwritev).stubs().will(invoke(FailedFooterWrite));
-    EXPECT_EQ(system.Put("key", "value", 5), BIO_UFS_IOERR);
+    MOCKER(pwrite).stubs().will(invoke(FailedFooterWrite));
+    const std::string value(NO_4096, 'v');
+    EXPECT_EQ(system.Put("key", value.data(), value.size()), BIO_UFS_IOERR);
     EXPECT_EQ(system.Exist("key"), BIO_NOT_EXISTS);
     EXPECT_EQ(Usage().files, 0U);
     EXPECT_EQ(Usage().usedBytes, 0U);
@@ -827,22 +691,63 @@ TEST_F(TestLocalEviction, failed_footer_write_releases_reservation_and_removes_p
 TEST_F(TestLocalEviction, put_validates_buffer_and_value_length)
 {
     Start();
-    MOCKER(pwritev).expects(never());
+    MOCKER(pwrite).expects(never());
     char byte = 'x';
     EXPECT_EQ(system.Put("invalid", nullptr, 1), BIO_INVALID_PARAM);
     EXPECT_EQ(system.Put("invalid", &byte, LOCAL_FILE_MAX_VALUE_SIZE + 1), BIO_INVALID_PARAM);
     EXPECT_EQ(system.Put("invalid", &byte, IO_MAX_LEN + 1), BIO_INVALID_PARAM);
+    alignas(LOCAL_FILE_IO_ALIGNMENT) char buffer[LOCAL_FILE_IO_ALIGNMENT];
+    EXPECT_EQ(system.Put("invalid", buffer, 1, sizeof(buffer) - 1), BIO_INVALID_PARAM);
     EXPECT_EQ(system.Exist("invalid"), BIO_NOT_EXISTS);
     EXPECT_EQ(Usage().usedBytes, 0U);
     EXPECT_EQ(Usage().reservedBytes, 0U);
+}
+
+TEST_F(TestLocalEviction, failed_data_sync_keeps_the_value_unpublished)
+{
+    Start();
+    MOCKER(fdatasync).expects(once()).will(invoke(+[](int) -> int {
+        errno = EIO;
+        return -1;
+    }));
+    EXPECT_EQ(system.Put("key", "value", 5), BIO_UFS_IOERR);
+    EXPECT_EQ(system.Exist("key"), BIO_NOT_EXISTS);
+    EXPECT_EQ(Usage().reservedBytes, 0U);
+}
+
+TEST_F(TestLocalEviction, direct_write_unavailable_falls_back_to_buffered_write_before_sync)
+{
+    Start();
+    MOCKER(pwrite).expects(exactly(2)).will(invoke(+[](int fd, const void *value, size_t len, off_t offset) -> ssize_t {
+        if ((fcntl(fd, F_GETFL) & O_DIRECT) != 0) {
+            errno = EINVAL;
+            return -1;
+        }
+        return syscall(SYS_pwrite64, fd, value, len, offset);
+    }));
+    MOCKER(fdatasync).expects(once()).will(invoke(+[](int fd) -> int { return syscall(SYS_fdatasync, fd); }));
+    ASSERT_EQ(system.Put("key", "value", 5), BIO_OK);
+    char value[5]{};
+    ASSERT_EQ(system.Get("key", value, sizeof(value), 0), BIO_OK);
+    EXPECT_EQ(std::string(value, sizeof(value)), "value");
 }
 
 TEST_F(TestLocalEviction, serialized_file_preserves_full_key_and_value_offset)
 {
     Start();
     const std::string key = "tenant/a:key\\with?symbols";
-    const std::string value = "payload";
-    ASSERT_EQ(system.Put(key.c_str(), value.data(), value.size()), BIO_OK);
+    const std::string value(NO_4096 * 2 - 1, 'v');
+    alignas(NO_4096) char memory[2 * NO_4096 + 2 * LOCAL_FILE_IO_ALIGNMENT];
+    auto *buffer = memory + LOCAL_FILE_IO_ALIGNMENT;
+    std::memcpy(buffer, value.data(), value.size());
+    MOCKER(pwrite).expects(once()).will(invoke(+[](int fd, const void *data, size_t len, off_t offset) -> ssize_t {
+        EXPECT_NE(fcntl(fd, F_GETFL) & O_DIRECT, 0);
+        EXPECT_EQ(len, 2 * NO_4096 + LOCAL_FILE_IO_ALIGNMENT);
+        EXPECT_EQ(offset, 0);
+        return ObserveWrite(fd, data, len, offset);
+    }));
+    ASSERT_EQ(system.Put(key.c_str(), buffer, value.size(), sizeof(memory) - LOCAL_FILE_IO_ALIGNMENT), BIO_OK);
+    EXPECT_EQ(lastWriteBuffer, buffer);
     std::string path;
     ASSERT_EQ(system.BuildFilePath(key.c_str(), path), BIO_OK);
     std::ifstream file(path, std::ios::binary);
@@ -886,29 +791,6 @@ TEST_F(TestLocalEviction, hash_failure_preserves_files_and_capacity_accounting)
     system.mSha256 = originalHash;
     EXPECT_EQ(system.Get("key", &value, 1, 0), BIO_OK);
     EXPECT_EQ(value, 'a');
-}
-
-TEST_F(TestLocalEviction, traces_vector_writes_reads_and_recovery)
-{
-    TraceEnableGuard traceGuard;
-    Start();
-    auto *vectors = ock::htracer::HtracerManager::GetPointPtr(UFS_TRACE_PUT_WRITEV);
-    auto *recover = ock::htracer::HtracerManager::GetPointPtr(UFS_TRACE_RECOVER);
-    auto *read = ock::htracer::HtracerManager::GetPointPtr(UFS_TRACE_GET_READ);
-    const auto vectorsBefore = vectors->GetGoodEnd();
-    const auto recoverBefore = recover->GetGoodEnd();
-    const auto readBefore = read->GetGoodEnd();
-    ASSERT_EQ(system.Put("scalar", "value", 5), BIO_OK);
-    ASSERT_EQ(system.Put("second", "abcd", 4), BIO_OK);
-    EXPECT_EQ(vectors->GetGoodEnd(), vectorsBefore + 2);
-    char output[6]{};
-    EXPECT_EQ(system.Get("scalar", output, sizeof(output), 0), BIO_READ_EXCEED);
-    EXPECT_EQ(read->GetGoodEnd(), readBefore + 1);
-    EXPECT_EQ(recover->GetGoodEnd(), recoverBefore);
-    system.Stop();
-    Start();
-    EXPECT_EQ(recover->GetGoodEnd(), recoverBefore + 1);
-    EXPECT_EQ(read->GetGoodEnd(), readBefore + 1);
 }
 
 }

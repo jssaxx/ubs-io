@@ -459,29 +459,56 @@ int PyKvcNdsUninit()
 int PyKvcNdsRegmem(uintptr_t addr, size_t length)
 {
     py::gil_scoped_release release;
-    return g_ndsManager.RegisterMemory(reinterpret_cast<const void *>(addr), length);
+    return UbsioKvCacheRegisterMem(reinterpret_cast<void *>(addr), length);
 }
 
 int PyKvcNdsUnregmem(uintptr_t addr, size_t length)
 {
     py::gil_scoped_release release;
-    return g_ndsManager.UnRegisterMemory(reinterpret_cast<const void *>(addr), length);
+    return UbsioKvCacheUnregisterMem(reinterpret_cast<void *>(addr), length);
 }
 
-int PyKvcNdsRead(const std::string &key,
-                 const std::vector<uintptr_t> &buffers,
+std::vector<int> PyKvcNdsBatchRead(const std::vector<std::string> &keys, const std::vector<uint8_t> &ownerSlots,
+                                     const std::vector<std::vector<uintptr_t>> &buffers,
+                                     const std::vector<std::vector<size_t>> &sizes)
+{
+    py::gil_scoped_release release;
+    const size_t count = keys.size();
+    if (count == 0 || count > MAX_BATCH_OP_COUNT || ownerSlots.size() != count || buffers.size() != count ||
+        sizes.size() != count) {
+        throw py::value_error("NDS keys, owner slots, buffers and sizes must have the same batch size (1-16384)");
+    }
+    std::vector<const char *> keyPtrs(count);
+    std::vector<std::vector<void *>> addresses(count);
+    std::vector<void *const *> bufferRows(count);
+    std::vector<const size_t *> lengthRows(count);
+    std::vector<uint32_t> iovCounts(count);
+    for (size_t i = 0; i < count; ++i) {
+        if (buffers[i].size() != sizes[i].size() || buffers[i].size() > NDS_FILE_MAX_IOV) {
+            throw py::value_error("Invalid NDS buffer and size counts for a key");
+        }
+        keyPtrs[i] = keys[i].c_str();
+        addresses[i].reserve(buffers[i].size());
+        for (auto buffer : buffers[i]) {
+            addresses[i].push_back(reinterpret_cast<void *>(buffer));
+        }
+        bufferRows[i] = addresses[i].data();
+        lengthRows[i] = sizes[i].data();
+        iovCounts[i] = static_cast<uint32_t>(addresses[i].size());
+    }
+    std::vector<int> results(count);
+    const auto ret = UbsioKvCacheBatchGetDirect(keyPtrs.data(), static_cast<uint32_t>(count), ownerSlots.data(),
+                                               bufferRows.data(), lengthRows.data(), iovCounts.data(), results.data());
+    if (ret != UBSIO_KVC_OK) {
+        throw std::runtime_error("NDS batch read failed, ret=" + std::to_string(ret));
+    }
+    return results;
+}
+
+int PyKvcNdsRead(const std::string &key, uint8_t ownerSlot, const std::vector<uintptr_t> &buffers,
                  const std::vector<size_t> &sizes)
 {
-    py::gil_scoped_release release;
-    return g_ndsManager.DirectRead(key, buffers, sizes);
-}
-
-int PyKvcNdsBatchRead(const std::vector<std::string> &keys,
-                      const std::vector<std::vector<uintptr_t>> &buffers,
-                      const std::vector<std::vector<size_t>> &sizes)
-{
-    py::gil_scoped_release release;
-    return g_ndsManager.BatchDirectRead(keys, buffers, sizes);
+    return PyKvcNdsBatchRead({key}, {ownerSlot}, {buffers}, {sizes}).front();
 }
 
 PYBIND11_MODULE(c2python_sdk, m)
@@ -506,6 +533,6 @@ PYBIND11_MODULE(c2python_sdk, m)
     m.def("NdsUninit", &PyKvcNdsUninit);
     m.def("NdsRegmem", &PyKvcNdsRegmem, py::arg("addr"), py::arg("length"));
     m.def("NdsUnregmem", &PyKvcNdsUnregmem, py::arg("addr"), py::arg("length"));
-    m.def("NdsRead", &PyKvcNdsRead, py::arg("key"), py::arg("buffers"), py::arg("sizes"));
-    m.def("NdsBatchRead", &PyKvcNdsBatchRead, py::arg("keys"), py::arg("buffers"), py::arg("sizes"));
+    m.def("NdsRead", &PyKvcNdsRead, py::arg("key"), py::arg("owner_slot"), py::arg("buffers"), py::arg("sizes"));
+    m.def("NdsBatchRead", &PyKvcNdsBatchRead, py::arg("keys"), py::arg("owner_slots"), py::arg("buffers"), py::arg("sizes"));
 }
