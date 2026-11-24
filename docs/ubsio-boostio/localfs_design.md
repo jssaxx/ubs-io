@@ -63,7 +63,7 @@ shared 文件存放于共享目录，通过 SHA-256 两级分片及完整哈希�
 | 7 | 4 | `value_len`（uint32），value 的字节长度 |
 
 尾部恰好 11 字节，仅包含 magic、key_len 和 value_len。
-单个 local value 的长度范围为 0–4294967295 字节；超过 UINT32_MAX 的 Put/PutV 在文件写入前返回 `BIO_INVALID_PARAM`。
+单个 local value 的长度范围为 0–4294967295 字节；超过 UINT32_MAX 的 Put 在文件写入前返回 `BIO_INVALID_PARAM`。
 文件长度为 `value_len + key_len + 11`，无头部、独立 version 字段或对齐填充。
 LocalFilePack 的长度参数、索引中的完整文件长度和容量记账使用 64 位表示，支持 value 与追加元数据的长度之和。
 Get 的偏移相对于 value；Stat 和 key 扫描返回 value_len。
@@ -86,7 +86,7 @@ LocalFS 同样在文件中保留完整 key，通过 value 在前、元数据在�
 | 项目 | Mooncake FilePerKey | LocalFS |
 | --- | --- | --- |
 | 文件内容 | KVEntry 的 protobuf 编码，包含 key 与 value | 原始 value、完整 key、11 字节固定尾部 |
-| 写入数据准备 | ConcatSlicesToString 合并 slices，再 to_pb 生成编码缓冲区 | 仅编码 key 与固定尾部，pwritev 直接引用各段 value |
+| 写入数据准备 | ConcatSlicesToString 合并 slices，再 to_pb 生成编码缓冲区 | 多片 value 合并到对齐缓冲区，key 和固定尾部按块对齐写入 |
 | 正常读取 | BatchLoad 读取编码内容，from_pb 解析，memcpy 将 value 复制到目标 slice | 按索引确定 value 长度，pread 直接读入调用方缓冲区 |
 | Direct I/O 适配 | use_uring 开启时读文件使用 O_DIRECT；UringFile::read 通过 4096 字节对齐临时缓冲区读取后复制到字符串 | 请求缓冲区、实际读取长度和偏移均按 512 字节对齐时使用 O_DIRECT，文件偏移直接等于 value 内偏移 |
 | 元数据恢复 | ScanMeta 读取完整编码文件并 from_pb 解析 | 每个文件读取尾部至多 266 字节，重建 key、value 长度和容量记账 |
@@ -139,8 +139,8 @@ LocalSystem 初始化按以下顺序恢复：
 
 ## 写入与读取
 
-SDK 下刷 local/shared 时，单片数据通过 UfsPut 传递连续 value，多片数据通过 UfsPutV 传递 iovec。
-多片路径仅构建缓冲区描述符，直接使用各片数据地址。
+WCache 的 LocalFS 下刷与 bypass 使用同一写入入口。WCache 按 value、key 和 11 字节尾部的总长度申请一块
+512 字节对齐的缓冲区，将 value 拷入后通过 UfsPut 将原始长度和缓冲区容量传给 UnderFS。SharedFS 通过 UfsPut 写入连续的原始 value。
 LocalSystem 的写入过程如下：
 
 1. 校验 key、缓冲区与总长度，在容量锁内调用 Insert。
@@ -149,10 +149,10 @@ LocalSystem 的写入过程如下：
    使用缓存额度、已用量和在途预留完成准入，预留整个新文件长度。
    超过缓存水位或剩余额度不足时，先计入本次预留，释放容量锁后调用 CheckAndEvict 查询实际空间并按需回收；
    准入失败时回滚新条目及本次预留。
-3. 编码完整 key 和固定尾部，计算哈希路径，在容量锁和策略锁外以缓冲 I/O 写同目录临时文件。
-   pwritev 顺序写入各段 value、完整 key 和固定尾部。
-   单片 value 同样使用该向量路径，value 保留在调用方缓冲区。
-4. 临时文件写入、关闭成功后，LocalSystem 将 PublishFile 作为回调传入 CommitWrite，
+3. 在 WCache 缓冲区的 value 末尾原地编码 key 和固定尾部，补零到对齐长度。
+   计算哈希路径，在容量锁和策略锁外以 `O_DIRECT` 写同目录临时文件，再将文件截回实际长度。
+   文件系统不支持该直写时，以缓冲 I/O 写同一块缓冲区中的实际数据。
+4. 临时文件写入、`fdatasync` 和关闭成功后，LocalSystem 将 PublishFile 作为回调传入 CommitWrite，
    策略在元数据锁内调用该回调完成 rename，
    将文件位置和长度转入已插入的条目并释放写入引用。
    LocalSystem 增加已用字节并释放写入预留。提交保留 Insert 后的队列位置。
@@ -173,7 +173,7 @@ sequenceDiagram
     participant C as Client
     participant L as LocalSystem
     participant P as LRU / 元数据
-    C->>L: Put / PutV
+    C->>L: Put
     L->>P: Insert(key)
     alt map 已有 key
         P->>P: Promote，保持 value 和引用数
@@ -184,7 +184,7 @@ sequenceDiagram
         P-->>L: BIO_OK
         L->>L: 按缓存额度准入，压力路径查询与回收，预留文件字节
         Note over L,P: 首次 ENOSPC 清理后复查空间，成功后保留原占位与预留重试一次
-        L->>L: 编码尾部、计算哈希、写入并关闭临时文件
+        L->>L: 编码尾部、计算哈希、写入并同步临时文件
         L->>P: CommitWrite(key, file, publish)
         P->>L: rename 发布文件
         L-->>P: 发布结果
@@ -215,14 +215,15 @@ local 将读取范围限制在 value_len 内，追加的 key 与尾部不返回�
 非空请求从 value 末尾或其后开始时返回 BIO_READ_EXCEED；跨越 value 末尾时，Get 返回 BIO_READ_EXCEED，
 GetWithRealLen 返回 BIO_OK 并输出剩余 value 长度。
 
-写入文件以缓冲 I/O 打开，使用 pwrite/pwritev，不设置 O_DIRECT。
+LocalFS 用 `pwrite` 提交 512 字节对齐的直接写入。SharedFS 用 `pwrite` 写原始 value。
 读取在缓冲区地址、实际读取长度和 value 内偏移均满足 512 字节对齐时使用 O_DIRECT，其他请求使用缓冲 I/O。
 local 和 shared 的实际文件偏移均等于 value 内偏移；local 按 value 边界截断后的实际长度参与对齐判断。
 O_DIRECT 依赖底层文件系统支持对应对齐要求；文件打开或读取失败时返回相应错误码。
-向量写入按单次 pwritev 的数量上限分批提交；短写推进内部 iovec 副本，EINTR 重试。
+写入使用返回的实际字节数推进偏移，收到 EINTR 时重试。
 调用返回后，调用方可以复用缓冲区。
 
-文件发布的完成条件为同步写入、close 和 rename，不包含 fsync/fdatasync。
+LocalFS 每个文件在发布前完成一次 `fdatasync`，恢复时同步有效文件后再纳入索引。
+NDS 按已发布文件定位数据。SharedFS 文件发布在写入和关闭完成后执行 rename。
 WRITE_BACK Put 的完成条件为内存写入完成。
 
 ## 引用计数与锁
@@ -411,7 +412,7 @@ local 文件最终淘汰成功或确认已不存在时，UfsHelper 将事件转�
 ## 接口与返回码
 
 SDK、server、UnderFS 和 bio_common 使用配套构建，libbio_underfs 显式链接 bio_common 与 htracer。
-通用加载接口包含 UfsPut 和 UfsPutV；UfsPutV 接受 local/shared 类型，其他类型返回 BIO_INVALID_PARAM。
+通用加载接口使用 UfsPut 写入，LocalFS 根据调用方提供的缓冲区容量在原地追加尾部。
 UfsInitUnderFsConfig 通过 UnderFsConfigInfo.localConfig 一次传入 rootPath、slotIndex、deviceCount、
 evictionPolicy 和 checkIntervalSeconds，复制路径并将策略字符串转换为内部枚举，不保留调用方字符串指针。
 配置在初始化前传入，调用顺序为 UfsInitUnderFsConfig、注册 local 元数据回调、UfsInit。
@@ -470,7 +471,7 @@ UfsTracerType 统一定义入口与核心操作，在实际耗时操作前后使
 | --- | --- |
 | UnderFS 入口 | UFS_TRACE_PUT、UFS_TRACE_GET、UFS_TRACE_DEL、UFS_TRACE_STAT、UFS_TRACE_EXIST、UFS_TRACE_LIST |
 | 写入准入 | UFS_TRACE_PUT_RESERVE |
-| 临时文件创建与写入 | UFS_TRACE_PUT_CREAT、UFS_TRACE_PUT_WRITE、UFS_TRACE_PUT_WRITEV 分别统计 mkostemp、WriteAll、WriteAllV |
+| 临时文件创建与写入 | UFS_TRACE_PUT_CREAT 统计 mkostemp，UFS_TRACE_PUT_WRITE 统计写入及 LocalFS 文件同步 |
 | 文件发布 | UFS_TRACE_PUT_RENAME 统计 rename |
 | 索引定位与候选选择 | UFS_TRACE_LOOKUP、UFS_TRACE_EVICT_SELECT |
 | key 哈希 | UFS_TRACE_HASH_KEY 仅统计 SHA256 调用 |
@@ -488,7 +489,7 @@ trace 输出开始次数、成功与失败次数，以及成功调用的平均�
 | 验证目标 | 可复现入口 |
 | --- | --- |
 | LRU 提升、引用释放、候选摘除、重插及并发一致性 | `test_file_eviction_policy.cpp` |
-| 本地读写、PutV、参数校验与生命周期 | `test_local_system.cpp` |
+| 本地读写、参数校验与生命周期 | `test_local_system.cpp` |
 | 实例容量、水位、空间回收和文件删除 | `test_local_system_eviction.cpp` |
 | 文件格式、启动恢复、损坏文件隔离和元数据事件 | `test_local_system_recovery.cpp` |
 | 共享文件系统的读写及错误处理 | `test_shared_system.cpp` |

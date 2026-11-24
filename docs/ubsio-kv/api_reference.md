@@ -27,38 +27,21 @@ int32_t UbsioKvCacheInit(int32_t devId);
 
 返回值：`0` 表示初始化成功，非 `0` 表示失败。
 
-## `UbsioGetUnderFsType`
+## `UbsioGetInitInfo`
 
-作用：查询初始化后的 UnderFS 文件系统类型枚举。调用前应先成功完成 `UbsioKvCacheInit`。
-
-初始化要求 BoostIO SDK 提供 `BioGetUnderFsType`，并由 server 提供 `GetUnderFsType`；任意符号缺失都会
-导致初始化失败。应用、UBSIO-KV、BoostIO SDK 和 server 使用配套的枚举查询接口。
+作用：查询当前存储后端的初始化信息。
 
 ```c
-typedef enum {
-    UBSIO_UNDERFS_NONE = 0,
-    UBSIO_UNDERFS_CEPH = 1,
-    UBSIO_UNDERFS_HDFS = 2,
-    UBSIO_UNDERFS_LOCAL = 3,
-    UBSIO_UNDERFS_SHARED = 4,
-    UBSIO_UNDERFS_BUTT
-} UbsioUnderFsType;
-
-int32_t UbsioGetUnderFsType(UbsioUnderFsType *type);
+int32_t UbsioGetInitInfo(UbsioInitInfo *info);
 ```
 
-| 参数 | 类型/取值范围 | 参数说明 |
+| 字段 | 取值 | 含义 |
 | --- | --- | --- |
-| `type` | `UbsioUnderFsType *`；非 `NULL` | 出参。接收生效的文件系统类型枚举；查询失败时保持原值。`UBSIO_UNDERFS_BUTT` 为范围占位符，不是有效后端类型。 |
+| `underFsType` | `UbsioUnderFsType` | 生效的 UnderFS 类型。 |
+| `slot` | `uint8_t`，`0`–`16` | `1`–`16` 对应 LocalFS 目录索引 `0`–`15`。`0` 表示当前无 LocalFS 文件直读路由。 |
+| `ndsEnable` | `uint8_t`，`0` 或 `1` | `1` 表示当前后端启用了 NDS 读路径。 |
 
-配置项 `ubsio.underfs.file_system_type` 使用 `none`、`ceph`、`hdfs`、`local` 或 `shared` 字符串，
-分别对应上述五个有效枚举值。`UBSIO_UNDERFS_NONE` 表示默认的不使用 UnderFS；`UBSIO_UNDERFS_LOCAL` 表示节点本地文件系统，
-`UBSIO_UNDERFS_SHARED` 表示所有相关存储 rank 均可访问的共享文件系统。`local` 与 `shared` 共用文件后端实现，类型查询保留各自的枚举值。
-文件系统后端的配置与部署条件见
-[单机模式配置参考](../standalone_mode_configuration.md#ubsio-underfs-file-system-type)。
-
-返回值：`0`（`UBSIO_KVC_OK`）表示查询成功；指针为空时返回 `3`（`UBSIO_KVC_INVALID_PARAM`）；
-运行库未就绪、查询接口不可用、查询失败或返回的枚举值无效时返回 `1`（`UBSIO_KVC_ERR`）。
+返回值：`0` 表示查询成功。查询失败时保留出参原值。
 
 ## `UbsioGetResourceInfo`
 
@@ -134,6 +117,36 @@ int32_t UbsioKvCacheRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, 
 事件缓冲区和 `key` 指针只在回调期间有效，调用方如需长期保存应自行拷贝。
 
 返回值：`0` 表示注册成功，非 `0` 表示失败。
+
+## `UbsioKvCacheScanKey`
+
+作用：扫描当前实例已落盘的有效 KV Cache key。
+
+```c
+int32_t UbsioKvCacheScanKey(const UbsioKvKeyInfo **items, uint64_t *count, bool *hasMore);
+```
+
+| 参数 | 类型/取值范围 | 参数说明 |
+| --- | --- | --- |
+| `items` | `const UbsioKvKeyInfo **` | 输出本次扫描的只读结果数组，无结果时为 `NULL`。 |
+| `count` | `uint64_t *` | 输出本次返回的条目数。 |
+| `hasMore` | `bool *` | 输出是否还有结果，值为 `true` 时释放本次结果后继续扫描。 |
+
+返回值：`0` 表示扫描成功，非 `0` 表示失败。
+
+## `UbsioKvCacheFreeScanKeyResult`
+
+作用：释放 `UbsioKvCacheScanKey` 返回的结果。
+
+```c
+void UbsioKvCacheFreeScanKeyResult(const UbsioKvKeyInfo **items);
+```
+
+| 参数 | 类型/取值范围 | 参数说明 |
+| --- | --- | --- |
+| `items` | `const UbsioKvKeyInfo **` | 扫描结果指针的地址，释放后将结果指针置为 `NULL`。 |
+
+返回值：无。
 
 ## `UbsioKvCacheExit`
 
@@ -625,39 +638,41 @@ nds_unregmem(addr, length) -> int
 
 ### nds_read
 
-作用：按 key 将数据直接读取到一组目标 buffer。
+作用：将单个 LocalFS key 对应的 KV Cache 读入 HBM。
 
 ```python
-nds_read(key: str, buffers: list[int], sizes: list[int]) -> int
+nds_read(key: str, owner_slot: int, buffers: list[int], sizes: list[int]) -> int
 ```
 
 | 参数 | 类型/取值范围 | 参数说明 |
 | --- | --- | --- |
-| `key` | `str`；长度 `1-255` | 待读取数据的 key。 |
-| `buffers` | `list[int]` | 目标 buffer 地址列表。 |
-| `sizes` | `list[int]` | 每段目标 buffer 的长度，单位为字节。 |
+| `key` | `str`，长度为 1–255 字节 | 待读取的 key。 |
+| `owner_slot` | `int`，范围为 1–16 | 该 key 的写入方 slot。 |
+| `buffers` | `list[int]` | 目标 HBM 缓冲区地址列表。 |
+| `sizes` | `list[int]` | 各缓冲区对应的读取字节数，与 `buffers` 逐项对应。 |
 
-返回值：`0` 表示成功，`-1` 表示失败。
+返回值：该 key 的 BoostIO `CResult`。
 
 ### nds_batch_read
 
-作用：批量按 key 将数据直接读取到多组目标 buffer。
+作用：将多个 LocalFS key 对应的 KV Cache 批量读入 HBM。
 
 ```python
-nds_batch_read(keys: list[str], buffers: list[list[int]], sizes: list[list[int]]) -> list[int]
+nds_batch_read(keys: list[str], owner_slots: list[int], buffers: list[list[int]], sizes: list[list[int]]) -> list[int]
 ```
 
 | 参数 | 类型/取值范围 | 参数说明 |
 | --- | --- | --- |
-| `keys` | `list[str]`；长度 `1-16384` | key 列表，每个 key 长度 `1-255`。 |
-| `buffers` | `list[list[int]]` | 每个 key 对应的目标 buffer 地址列表。 |
-| `sizes` | `list[list[int]]` | 每个 key 对应的目标 buffer 长度列表，单位为字节。 |
+| `keys` | `list[str]`，长度为 1–16384 | 待读取的 key 列表，每个 key 长度为 1–255 字节。 |
+| `owner_slots` | `list[int]`，每项范围为 1–16 | 每个 key 的写入方 slot，与 `keys` 逐项对应。 |
+| `buffers` | `list[list[int]]` | 每个 key 对应的目标 HBM 缓冲区地址列表。外层列表与 `keys` 逐项对应。 |
+| `sizes` | `list[list[int]]` | 每个 key 的各缓冲区对应的读取字节数，内外层均与 `buffers` 逐项对应。 |
 
-返回值：结果列表，列表长度与 `keys` 一致；每项 `0` 表示对应 key 读取成功，`-1` 表示失败。
+返回值：BoostIO `CResult` 列表，与 `keys` 逐项对应。参数列表长度不符合要求时抛出 `ValueError`，调用级错误抛出 `RuntimeError`。
 
 ## Python SDK 对应关系
 
-以下为 KV Python 接口与 `UbsioKvCache*` C API 的对应关系；NDS 辅助接口对应 `c2python_sdk.Nds*` 绑定，不对应 `UbsioKvCache*` C ABI。
+以下为 KV Python 接口与 `UbsioKvCache*` C API 的对应关系；
 
 | Python 接口 | 对应 C API |
 | --- | --- |
