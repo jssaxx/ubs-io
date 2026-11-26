@@ -1,6 +1,6 @@
 # Ascend NDS API
 
-> 本文档描述 `libascend_nds.so` 对外公开的 C 接口。该库将厂商 NDS 异步原语（`libnds.so`）封装为
+> 本文档描述 `libascend_nds.so` 对外公开的 C 接口。该库将 XDS 异步原语封装为
 > GPUDirect Storage（cuFile）语义形态的公开接口，命名采用昇腾风味前缀 `ndsFile*` / `NDSfile*_t`，
 > 使 GDS 用户迁移成本最小、且与原生 GDS 同进程无符号冲突。
 >
@@ -19,12 +19,12 @@
 
 ## 1. 设计要点
 
-- **独立交付**：`libascend_nds.so` 仅链接 `pthread`/`dl`/`libstdc++`，运行时 `dlopen` `libnds.so`，不依赖 `libubsio_kvc`。
+- **独立交付**：`libascend_nds.so` 静态链接 XDS 用户态实现，可独立部署和调用。
 - 批上下文使用 `NDSfileBatchHandle_t`。批请求和同步读写均使用 `NDSfileHandle_t` 文件句柄。
 - 接口以 `-errno` 返回错误。`ndsFileBatchIOSubmit` 返回实际接收的请求数。`ndsFileRead/Write` 和 `NDSfileIOEvents_t.ret` 返回 `0` 表示整项 I/O 完成。
 - **拓扑注册用户侧**：`ndsFileDriverOpen` 零参（仅 `nds_init`），拓扑 fd 由用户使用 `ndsFileRegisterFs` 显式注册并保持到驱动关闭。当前 XDS 的 `ndsFileDeregisterFs` 只清理封装库中的登记，内核拓扑在关闭驱动时释放。
 - **同步便利**：NDS 仅异步；`ndsFileRead/Write` 在内部用临时上下文做 submit+阻塞收割，提供同步语义。
-- `ndsFileBufRegister` 在返回前向 XDS 注册传入的地址和长度。同步 I/O 自动识别已注册内存，批提交通过 `NDS_FILE_IO_REGISTERED_MEM` 选择已注册内存。`ndsFileBufDeregister` 只注销指定 buffer，注销成功后即可释放该 buffer。
+- `ndsFileBufRegister` 在返回前向 XDS 注册传入的地址和长度。同步 I/O 自动识别已注册内存，批提交通过 `NDS_FILE_IO_REGISTERED_MEM` 选择已注册内存。每个向量须完整落在一个已注册区间内，横跨多个区间的请求使用一次性 I/O。`ndsFileBufDeregister` 只注销指定 buffer，注销成功后即可释放该 buffer。
 
 ## 2. 接口列表
 

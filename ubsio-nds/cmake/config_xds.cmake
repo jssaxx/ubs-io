@@ -20,14 +20,8 @@ FetchContent_Declare(xds
 )
 FetchContent_MakeAvailable(xds)
 
-find_program(XDS_MAKE NAMES gmake make)
-if(NOT XDS_MAKE)
-    message(FATAL_ERROR "Building XDS requires GNU Make")
-endif()
 set(xds_runtime "${xds_SOURCE_DIR}/tools/lib/nds/file_p2p")
-if(NOT EXISTS "${xds_runtime}/Makefile")
-    message(FATAL_ERROR "XDS source directory must contain tools/lib/nds/file_p2p/Makefile: ${xds_SOURCE_DIR}")
-endif()
+set(xds_uapi "${xds_SOURCE_DIR}/tools/include/uapi")
 
 function(preprocess_xds_abi name header)
     add_custom_command(OUTPUT "${name}.i"
@@ -39,10 +33,18 @@ endfunction()
 preprocess_xds_abi(xds-upstream "${xds_runtime}/nds_api.h")
 preprocess_xds_abi(xds-abi "${PROJECT_SOURCE_DIR}/src/nds_api.h")
 
-add_custom_target(xds_runtime ALL
+add_custom_target(xds_abi_check
     COMMAND "${CMAKE_COMMAND}" -E compare_files xds-upstream.i xds-abi.i
-    COMMAND "${XDS_MAKE}" -C "${xds_runtime}" "CC=${CMAKE_C_COMPILER}"
     DEPENDS xds-upstream.i xds-abi.i
     VERBATIM)
-install(CODE "file(INSTALL \"${xds_runtime}/libnds.so\" DESTINATION \"${OUTPUT_PATH}/lib\"
-    FOLLOW_SYMLINK_CHAIN)")
+
+add_library(xds_runtime STATIC
+    "${xds_runtime}/nds_api.c"
+    "${xds_runtime}/p2p_common.c"
+)
+add_dependencies(xds_runtime xds_abi_check)
+set_target_properties(xds_runtime PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_include_directories(xds_runtime PRIVATE "${xds_uapi}")
+target_compile_options(xds_runtime PRIVATE
+    -Wall -Wextra -Werror -fstack-protector-strong -fno-omit-frame-pointer -ftrapv
+)

@@ -12,7 +12,7 @@ Examples:
   bash scripts/build.sh -t release --components kv
 
 The selected components are built in dependency order. Libraries are copied to
-output/lib and executables to output/bin. Existing output files are not removed.
+output/lib and executables to output/bin. The NDS build refreshes its libraries in output/lib.
 EOF
 }
 
@@ -135,8 +135,8 @@ if [[ "$build_nds" -eq 1 ]]; then
     bash "$repo_root/ubsio-nds/build.sh" -t "$build_type" --bench "$nds_bench" --origin_runpath ON
     nds_dist="$repo_root/ubsio-nds/dist"
     require_artifact "$nds_dist/lib/libascend_nds.so"
-    require_artifact "$nds_dist/lib/libnds.so"
     copy_libraries "$nds_dist/lib"
+    rm -f -- "$output_lib"/libnds.so "$output_lib"/libnds.so.*
     if [[ "$nds_bench" == ON ]]; then
         require_artifact "$nds_dist/bin/test_nds"
         copy_executables "$nds_dist/bin"
