@@ -8,7 +8,7 @@
 |---|---|---|---|---|---|---|:---|---|---|---|---|---|
 | 计算服务器         | 计算服务器IP地址 | 随机分配（由操作系统自动分配） | BoostIO Server | BoostIO Server自配置IP | 7201-7800| ROCE| BoostIO SDK与BoostIO Server之间的通信交互；BoostIO Server和BoostIO Server之间的通信交互 | 是| 证书双向认证 | TLS1.3 | 业务面 | 无|
 | 计算服务器| 计算服务器IP地址 | 随机分配（由操作系统自动分配） | BoostIO Server | BoostIO Server自配置IP |7201-7800| TCP | BoostIO SDK与BoostIO Server之间的通信交互；BoostIO Server和BoostIO Server之间的通信交互 | 是 | 证书双向认证 | TLS1.3 | 业务面 | 无|
-| 计算服务器 | 计算服务器IP地址 | 随机分配（由操作系统自动分配） | Zookeeper运行服务器 | Zookeeper配置 | 客户配置| TCP| Zookeeper业务端口，用于BoostIO集群管理的消息交互| 否| Zookeeper配置 | Zookeeper配置 | 业务面 | Zookeeper为开源组件，由客户自己安装在环境上安装。配置参考Zookeeper的官网[安全配置](https://zookeeper.apache.org/doc/current/zookeeperProgrammers.html#sc_Security)。 |
+| 计算服务器 | 计算服务器IP地址 | 随机分配（由操作系统自动分配） | Zookeeper运行服务器 | Zookeeper配置 | 客户配置| TCP| Zookeeper业务端口，用于BoostIO集群管理的消息交互| 否| Zookeeper配置 | Zookeeper配置 | 业务面 | Zookeeper为开源组件，由客户自己安装在环境上安装。配置参考Zookeeper的官网[安全配置](https://zookeeper.apache.org/doc/r3.10.0/)。 |
 | 计算服务器 | 计算服务器IP地址 | 随机分配（由操作系统自动分配） | Ceph运行服务器 | Ceph配置| 客户配置| TCP| Ceph业务端口，用于BoostIO集群数据交互| 否 | Ceph配置 | Ceph配置 | 业务面 | 用户将后端存储类型配置为Ceph时才会存在此通信链路，配置参考Ceph的官网[安全配置](https://docs.ceph.com/en/latest/security/)。 |
 | 计算服务器 | 计算服务器IP地址 | 随机分配（由操作系统自动分配） | HDFS运行服务器 | HDFS配置| 客户配置| TCP| HDFS业务端口，用于BoostIO集群数据交互| 否 | HDFS配置 | HDFS配置 | 业务面 | 用户将后端存储类型配置为HDFS时才会存在此通信链路，配置参考HDFS的官网[安全配置](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/SecureMode.html)。 |
 
