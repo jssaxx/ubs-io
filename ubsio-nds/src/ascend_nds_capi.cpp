@@ -23,7 +23,6 @@ extern "C" {
 #include "nds_api.h"
 }
 #include "ascend_nds.h"
-#include "ascend_nds_dl.h"
 #include "ascend_nds_log.h"
 
 namespace {
@@ -58,9 +57,12 @@ bool gDriverOpen = false;
 std::mutex gFsMtx;
 std::unordered_set<int> gFsRegs; /* registered topology fd values */
 
-inline ascend_nds::NdsLib &Lib()
+int LogNdsError(int ret, const char *operation)
 {
-    return ascend_nds::NdsLib::Instance();
+    if (ret < 0) {
+        LogErr("%s failed ret=%d: %s", operation, ret, strerror(-ret));
+    }
+    return ret;
 }
 
 bool Contains(const MemoryRange &range, const nds_io_vec &iov)
@@ -87,7 +89,7 @@ int RegisteredIoFlags(const nds_io_vec *iov, uint32_t count)
         }
         crossesRanges = true;
     }
-    return crossesRanges && !Lib().SupportsRegisteredIoAcrossRanges() ? 0 : NDS_IO_F_REGISTERED_MEM;
+    return crossesRanges ? 0 : NDS_IO_F_REGISTERED_MEM;
 }
 
 int SubmitIo(nds_io_ctx *ctx, unsigned nr, nds_io_cb *cbs)
@@ -102,7 +104,7 @@ int SubmitIo(nds_io_ctx *ctx, unsigned nr, nds_io_cb *cbs)
             cbs[i].rw_flags = NDS_IO_F_REGISTERED_MEM;
         }
     }
-    return Lib().Submit(ctx, static_cast<int>(nr), cbs);
+    return LogNdsError(nds_io_submit(ctx, static_cast<int>(nr), cbs), "nds_io_submit");
 }
 
 int SyncXfer(NDSfileHandle_t fh, void *buf, size_t size, off_t file_offset,
@@ -146,7 +148,7 @@ int SyncXfer(NDSfileHandle_t fh, void *buf, size_t size, off_t file_offset,
     struct nds_io_ctx *ctx = nullptr;
     struct nds_io_ctx_param ctxParam{};
     ctxParam.max_io_cnt = NDS_IO_MAX_IO_CNT;
-    int r = Lib().NewCtx(&ctxParam, &ctx);
+    int r = LogNdsError(nds_io_new_ctx(&ctxParam, &ctx), "nds_io_new_ctx");
     if (r != 0 || ctx == nullptr) {
         if (r == 0) {
             LogErr("SyncXfer: new_ctx returned null ctx");
@@ -165,7 +167,7 @@ int SyncXfer(NDSfileHandle_t fh, void *buf, size_t size, off_t file_offset,
     } else {
         struct nds_io_event ev{};
         struct timespec ts{ NDS_SYNC_TIMEOUT_SEC, 0 };
-        int m = Lib().Getevents(ctx, 1, 1, &ev, &ts);
+        int m = LogNdsError(nds_io_getevents(ctx, 1, 1, &ev, &ts), "nds_io_getevents");
         if (m != 1) {
             result = (m < 0) ? m : -ETIMEDOUT;
             if (m >= 0) {
@@ -177,7 +179,7 @@ int SyncXfer(NDSfileHandle_t fh, void *buf, size_t size, off_t file_offset,
                    static_cast<long long>(ev.res), strerror(-result));
         }
     }
-    Lib().DestroyCtx(ctx);
+    LogNdsError(nds_io_destroy_ctx(ctx), "nds_io_destroy_ctx");
     return result;
 }
 
@@ -192,21 +194,14 @@ int ndsFileDriverOpen(void)
         LogWarn("ndsFileDriverOpen: driver already open");
         return -EBUSY;
     }
-    int r = Lib().Load();
-    if (r != 0) {
-        return r;
-    }
     struct nds_init_param ip{};
-    r = Lib().Init(&ip);
+    int r = LogNdsError(nds_init(&ip), "nds_init");
     if (r != 0) {
-        Lib().Unload();
         return r;
     }
-    if (ip.version != ascend_nds::NDS_DRIVER_UAPI_VERSION) {
-        LogErr("ndsFileDriverOpen: libnds.so version=%u, expected=%u",
-            ip.version, ascend_nds::NDS_DRIVER_UAPI_VERSION);
-        Lib().Exit();
-        Lib().Unload();
+    if (ip.version != NDS_API_VERSION) {
+        LogErr("ndsFileDriverOpen: XDS API version=%u, expected=%u", ip.version, NDS_API_VERSION);
+        LogNdsError(nds_exit(), "nds_exit");
         return -EPROTONOSUPPORT;
     }
     gVersion.store(ip.version, std::memory_order_relaxed);
@@ -226,8 +221,7 @@ int ndsFileDriverClose(void)
         return -ENODEV;
     }
     gDriverOpen = false;
-    Lib().Exit();
-    Lib().Unload();
+    LogNdsError(nds_exit(), "nds_exit");
     gMemRegs.clear();
     gFsRegs.clear();
     for (auto *h : gHandles) {
@@ -253,7 +247,7 @@ int ndsFileRegisterFs(const NDSfileFsDesc_t *desc)
     struct nds_fs_desc fs{};
     fs.fs_fd = const_cast<int32_t *>(desc->fs_fd);
     fs.fs_fd_cnt = desc->fs_fd_cnt;
-    int r = Lib().RegisterFs(&fs);
+    int r = LogNdsError(nds_register_fs(&fs), "nds_register_fs");
     if (r != 0) {
         return r;
     }
@@ -279,7 +273,7 @@ int ndsFileDeregisterFs(const NDSfileFsDesc_t *desc)
         struct nds_fs_desc fs{};
         fs.fs_fd = const_cast<int32_t *>(desc->fs_fd);
         fs.fs_fd_cnt = desc->fs_fd_cnt;
-        r = Lib().UnregisterFs(&fs);
+        r = LogNdsError(nds_unregister_fs(&fs), "nds_unregister_fs");
     } else {
         LogWarn("ndsFileDeregisterFs: driver not open, skip native unregister");
     }
@@ -359,7 +353,7 @@ int ndsFileBufRegister(void *buf, size_t length, int flags)
         return -ENOSPC;
     }
     gMemRegs.push_back({ addr, length });
-    const int ret = Lib().RegisterMem(buf, length);
+    const int ret = LogNdsError(nds_register_mem(buf, length, 0), "nds_register_mem");
     if (ret != 0) {
         gMemRegs.pop_back();
     }
@@ -383,7 +377,7 @@ int ndsFileBufDeregister(void *buf)
     if (it == gMemRegs.end()) {
         return -ENOENT;
     }
-    int r = Lib().UnregisterMem(buf, it->size);
+    int r = LogNdsError(nds_unregister_mem(buf, it->size, 0), "nds_unregister_mem");
     if (r == 0) {
         gMemRegs.erase(it);
     }
@@ -404,7 +398,7 @@ int ndsFileBatchIOSetUp(NDSfileBatchHandle_t *batch, unsigned nr)
     struct nds_io_ctx_param p{};
     p.max_io_cnt = static_cast<uint32_t>(nr);
     struct nds_io_ctx *ctx = nullptr;
-    int r = Lib().NewCtx(&p, &ctx);
+    int r = LogNdsError(nds_io_new_ctx(&p, &ctx), "nds_io_new_ctx");
     if (r != 0 || ctx == nullptr) {
         if (r == 0) {
             LogErr("ndsFileBatchIOSetUp: new_ctx returned null ctx");
@@ -427,7 +421,7 @@ int ndsFileBatchIODestroy(NDSfileBatchHandle_t batch)
     if (!gDriverOpen) {
         return -ENODEV;
     }
-    const int ret = Lib().DestroyCtx(static_cast<struct nds_io_ctx *>(batch));
+    const int ret = LogNdsError(nds_io_destroy_ctx(static_cast<struct nds_io_ctx *>(batch)), "nds_io_destroy_ctx");
     // XDS releases a valid context even when draining or closing reports an error.
     gBatchCount.fetch_sub(1, std::memory_order_relaxed);
     return ret;
@@ -497,7 +491,7 @@ int ndsFileBatchIOSubmit(NDSfileBatchHandle_t batch, unsigned nr,
         cb.offset = static_cast<uint64_t>(p.file_offset);
         cb.user_data = reinterpret_cast<uintptr_t>(p.cookie);
     }
-    return Lib().Submit(static_cast<nds_io_ctx *>(batch), static_cast<int>(nr), cbs.get());
+    return LogNdsError(nds_io_submit(static_cast<nds_io_ctx *>(batch), static_cast<int>(nr), cbs.get()), "nds_io_submit");
 }
 
 int ndsFileBatchIOGetStatus(NDSfileBatchHandle_t batch, unsigned min_nr,
@@ -525,8 +519,8 @@ int ndsFileBatchIOGetStatus(NDSfileBatchHandle_t batch, unsigned min_nr,
         *nr = 0;
         return -ENOMEM;
     }
-    int n = Lib().Getevents(ctx, static_cast<int>(min_nr), static_cast<int>(cap),
-                            ev.get(), timeout);
+    int n = LogNdsError(nds_io_getevents(ctx, static_cast<int>(min_nr), static_cast<int>(cap), ev.get(), timeout),
+                        "nds_io_getevents");
     if (n < 0) {
         *nr = 0;
         return n;
@@ -560,7 +554,7 @@ int ndsFileGetVersion(int *version)
     }
     uint32_t v = gVersion.load(std::memory_order_relaxed);
     if (v == 0) {
-        v = ascend_nds::NDS_DRIVER_UAPI_VERSION;
+        v = NDS_API_VERSION;
     }
     *version = static_cast<int>(v);
     return 0;

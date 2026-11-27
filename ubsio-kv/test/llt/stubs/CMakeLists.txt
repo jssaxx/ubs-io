@@ -38,10 +38,9 @@ set_target_properties(kv_nds_stub PROPERTIES
 
 add_library(kv_nds_facade SHARED
     ${NDS_SOURCE_DIR}/ascend_nds_capi.cpp
-    ${NDS_SOURCE_DIR}/ascend_nds_dl.cpp
 )
 target_include_directories(kv_nds_facade PRIVATE ${UBSIO_ASCEND_NDS_INCLUDE_DIR})
-target_link_libraries(kv_nds_facade PRIVATE pthread dl)
+target_link_libraries(kv_nds_facade PRIVATE kv_nds_stub pthread)
 target_link_options(kv_nds_facade PRIVATE "-Wl,--version-script=${NDS_SOURCE_DIR}/ascend_nds.map")
 set_target_properties(kv_nds_facade PROPERTIES
     OUTPUT_NAME ascend_nds

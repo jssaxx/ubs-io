@@ -1,6 +1,6 @@
 # UBSIO NDS facade
 
-`ubsio-nds` 构建 `libascend_nds.so`，提供 `ndsFile*` C 接口，并在运行时加载 XDS 的 `libnds.so`。
+`ubsio-nds` 构建 `libascend_nds.so`，提供 `ndsFile*` C 接口，并静态链接 XDS 用户态实现。
 
 接口定义见 [`include/ascend_nds.h`](include/ascend_nds.h)，使用说明见 [Ascend NDS API](../docs/ubsio-nds/ascend_nds_api.md)，底层原语见 [NDS API 原语](../docs/ubsio-nds/nds_api.md)。
 
@@ -12,7 +12,7 @@
 bash ubsio-nds/build.sh -t release
 ```
 
-CMake 通过 FetchContent 浅拉取 openEuler 内核仓的 `openEuler-26.09` 分支，仅检出 XDS 用户态源码及所需的 UAPI 头文件，默认缓存于 `ubsio-nds/Build/_deps/xds-openeuler-src/`。构建核对用户态 ABI 声明后，通过 `tools/lib/nds/file_p2p/Makefile` 编译 XDS。[openEuler XDS 源码](https://atomgit.com/openeuler/kernel/tree/openEuler-26.09/tools/lib/nds)
+CMake 通过 FetchContent 浅拉取 openEuler 内核仓的 `openEuler-26.09` 分支，仅检出 XDS 用户态源码及所需的 UAPI 头文件，默认缓存于 `ubsio-nds/Build/_deps/xds-openeuler-src/`。构建核对用户态 ABI 声明，并将 `tools/lib/nds/file_p2p` 中的 XDS 源码编译为内部静态库。[openEuler XDS 源码](https://atomgit.com/openeuler/kernel/tree/openEuler-26.09/tools/lib/nds)
 
 离线构建可将 `openEuler-26.09` 分支源码预置到本地，并将 `FETCHCONTENT_SOURCE_DIR_XDS` 指向内核源码根目录。构建使用 `tools/lib/nds/file_p2p` 和 `tools/include/uapi`。
 
@@ -20,11 +20,13 @@ CMake 通过 FetchContent 浅拉取 openEuler 内核仓的 `openEuler-26.09` 分
 FETCHCONTENT_SOURCE_DIR_XDS=/path/to/openeuler-kernel bash ubsio-nds/build.sh -t release
 ```
 
-`ubsio-nds/dist/lib/` 包含 `libascend_nds.so.1.0.0` 及其 `libascend_nds.so.1`、`libascend_nds.so` 符号链接，也包含 XDS 库及其 `libnds.so` 符号链接。公开头文件位于 `ubsio-nds/dist/include/`。通过 `bash scripts/build.sh --components nds` 构建时，两套库会同时收集到 `output/lib/`。
+`ubsio-nds/dist/lib/` 包含 `libascend_nds.so.1.0.0` 及其 `libascend_nds.so.1`、`libascend_nds.so` 符号链接。公开头文件位于 `ubsio-nds/dist/include/`。通过 `bash scripts/build.sh --components nds` 构建时，NDS 库及其版本链接汇总到 `output/lib/`。
 
-UBSIO-KV 启用 NDS 时动态加载 `libascend_nds.so`，该库再加载 XDS 的 `libnds.so`。部署时将同一版本构建的两套库加入动态库搜索路径。
+UBSIO-KV 启用 NDS 时动态加载 `libascend_nds.so`。部署时将该库所在目录加入动态库搜索路径。
 
 部署时使用对应 openEuler 内核构建中的 `p2p_dev` 和兼容的 Ascend 驱动。用户态库与内核模块须使用配套的 ABI。
+
+XDS 用户态源码采用 GPL-2.0 许可证。分发静态链接后的 NDS 库时，须满足组合产物的许可证及对应源码要求。
 
 ## 使用示例
 

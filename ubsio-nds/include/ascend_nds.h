@@ -16,7 +16,7 @@
 /*
  * Ascend NPU Direct Storage — public C facade (GDS-shaped).
  *
- * This header wraps the vendor NDS async primitives (libnds.so) behind a
+ * This header wraps the statically linked XDS async primitives behind a
  * surface modelled on NVIDIA GPUDirect Storage (cuFile) so that GDS users can
  * migrate with minimal effort. All names are Ascend-flavoured (ndsFile* /
  * NDSfile*_t) to avoid symbol collisions when both libraries coexist.
@@ -53,14 +53,13 @@
  *     -ENODEV  (19)  driver not open — call ndsFileDriverOpen() first.
  *     -EBUSY   (16)  driver already open (duplicate ndsFileDriverOpen).
  *                   Driver close also returns this when calls or batches are active.
- *     -EPROTONOSUPPORT  libnds.so reports an unsupported user-space API version.
+ *     -EPROTONOSUPPORT  XDS reports an unsupported user-space API version.
  *     -ENOMEM  (12)  out of memory (handle allocation).
  *     -EIO      (5)  I/O failure (including synchronous submission failure).
  *     -ETIMEDOUT (110) synchronous reap timeout — getevents did not return
  *                    the expected count within 30 s (ndsFileRead/Write).
- *     -ENOENT   (2)  libnds.so not found (dlopen failed on all paths).
- *     -ENOSYS  (38)  NDS symbol missing (dlsym failed / not loaded).
- *     other -errno   passed through from libnds.so (e.g. -EACCES, -EFAULT,
+ *     -ENOSYS  (38)  XDS did not return an I/O context on success.
+ *     other -errno   passed through from XDS (e.g. -EACCES, -EFAULT,
  *                    -EBADF for permission / bad address / bad fd).
  *
  * Per-completion event: NDSfileIOEvents_t.ret uses the same 0/-errno
@@ -221,8 +220,7 @@ int ndsFileBatchIODestroy(NDSfileBatchHandle_t batch);
  * Reap accepted entries with ndsFileBatchIOGetStatus. The file handle, fd and
  * buffers must remain valid until completion. With NDS_FILE_IO_REGISTERED_MEM,
  * each iov must fit inside one registered range. An IOCB spanning multiple
- * ranges stays registered with multi-range XDS and uses one-shot I/O with
- * single-range XDS. Pass 0 to use one-shot I/O for all requests.
+ * ranges uses one-shot I/O. Pass 0 to use one-shot I/O for all requests.
  */
 int ndsFileBatchIOSubmit(NDSfileBatchHandle_t batch, unsigned nr,
                          const NDSfileIOParams_t *params, unsigned flags);
