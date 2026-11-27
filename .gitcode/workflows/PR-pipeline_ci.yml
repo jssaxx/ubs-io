@@ -24,13 +24,6 @@ defaults:
   run:
     shell: bash
 
-permissions:
-  repository: read
-  pr: none
-  issue: none
-  note: none
-  project: none
-
 stages:
   checks_stage:
     name: Checks
@@ -104,6 +97,7 @@ stages:
             with:
               name: ci-result-pre-commit
               path: .ci-results/pre-commit
+              overwrite: true
 
       build_x86_64:
         name: Build_x86-64
@@ -168,6 +162,7 @@ stages:
             with:
               name: ubsio-boostio-release-x86_64
               path: ubsio-boostio/BoostIO_*.tar.gz
+              overwrite: true
 
           - name: Save result
             if: ${{ always() }}
@@ -189,6 +184,7 @@ stages:
             with:
               name: ci-result-x86-64
               path: .ci-results/x86_64
+              overwrite: true
 
       build_aarch64:
         name: Build_aarch64
@@ -253,6 +249,7 @@ stages:
             with:
               name: ubsio-boostio-release-aarch64
               path: ubsio-boostio/BoostIO_*.tar.gz
+              overwrite: true
 
           - name: Save result
             if: ${{ always() }}
@@ -274,6 +271,7 @@ stages:
             with:
               name: ci-result-aarch64
               path: .ci-results/aarch64
+              overwrite: true
 
       ut:
         name: UT
@@ -346,6 +344,7 @@ stages:
             with:
               name: ubsio-kv-dt
               path: ubsio-kv/coverage_report/
+              overwrite: true
 
           - name: Upload UBSIO-BoostIO DT reports
             if: ${{ always() }}
@@ -353,6 +352,7 @@ stages:
             with:
               name: ubsio-boostio-dt
               path: ubsio-boostio/coverage_report/
+              overwrite: true
 
           - name: Save result
             if: ${{ always() }}
@@ -374,3 +374,4 @@ stages:
             with:
               name: ci-result-dt
               path: .ci-results/DT
+              overwrite: true
